@@ -36,6 +36,10 @@ from your `.env` (change the example password before exposing the app). The API 
 development; for a production-like run use
 `docker compose -f docker-compose.yml up -d --build`.
 
+## Documentation
+
+- [Secrets and key rotation](docs/security.md)
+
 ## Roadmap
 
 The roadmap lives in the

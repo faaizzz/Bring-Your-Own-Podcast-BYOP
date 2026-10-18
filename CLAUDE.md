@@ -53,7 +53,7 @@ New directories or modules must follow these names; update this section if the l
 - pydantic v2 models for all request/response and settings; never return ORM objects from routers.
 - Money is `Decimal`/`Numeric`, never float. Timestamps are timezone-aware UTC.
 - Routers are thin: parse input → call a service → return a schema. Every service query filters by `user_id`.
-- Provider keys are read only through `CredentialResolver`; never log secrets (redact), never return them from the API.
+- Provider keys are read only through `CredentialResolver` (`services/credentials.py`: user override encrypted with Fernet from `BYOP_SECRET_KEY` → `.env` → `ProviderNotConfigured`; enforced by `tests/test_provider_key_access.py`). Providers receive a resolved `ProviderConfig`. API responses mask secrets (`sk-…1234`); `logging.py` redacts secret-looking keys/values. Rotating `BYOP_SECRET_KEY`: `docs/security.md`.
 - Structured logging via structlog; no `print`.
 - Models (`byop/models/`, one module per aggregate; `columns.py` has the id/timestamp/`user_id` helpers): UUID `id`, tz-aware `created_at`/`updated_at`, `user_id` FK on every owned table. Enums are `StrEnum`s in `models/enums.py` stored as VARCHAR + CHECK via `enum_type()` (never free text, never native PG enums). Children of a show cascade at the DB level (`ondelete="CASCADE"` + `passive_deletes=True`); `usage_events` deliberately outlive shows/runs (SET NULL) so cost history survives.
 - Migrations: autogenerate, then review by hand (no duplicate enum constraints, working `downgrade`). `tests/test_migrations.py` checks upgrade, no model drift and downgrade to base. Tests recreate the `byop_test` DB from migrations each session. The api container runs `alembic upgrade head` before starting; the admin user is seeded at startup from `BYOP_ADMIN_*` (never overwritten once it exists).
@@ -68,6 +68,9 @@ New directories or modules must follow these names; update this section if the l
 - Every story adds tests for its new behaviour. API: pytest + pytest-asyncio against a real Postgres (transaction rollback per test); external HTTP is mocked with `respx`. Web: vitest + @testing-library/react.
 - Do not call real paid APIs in tests. Assert behaviour, not implementation details.
 - `make check` = lint + typecheck + tests for every part of the repo that exists. It must pass before each commit.
+
+## Infra notes
+`docker/nginx.conf` resolves `api` at request time (Docker resolver + variable `proxy_pass`) so recreating the api container never leaves the web proxy on a stale IP; keep that pattern for any new upstream.
 
 ## CI
 `.github/workflows/ci.yml` runs on push and PR: `api` (ruff, mypy, pytest with postgres+redis services), `web` (eslint, tsc, vitest, build on Node 22), `compose` (repo checks + `docker compose build`). Keep it in step with `make check`; GitHub-hosted runners only.

@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     elevenlabs_api_key: SecretStr | None = None
+    # Local Kokoro text-to-speech (OpenAI-compatible), e.g. http://kokoro:8880/v1
+    kokoro_base_url: str | None = None
 
     # Langfuse tracing (optional)
     langfuse_public_key: SecretStr | None = None

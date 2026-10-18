@@ -41,6 +41,6 @@ def test_tokens_without_required_claims_are_rejected() -> None:
 
 
 def test_alg_none_tokens_are_rejected() -> None:
-    forged = jwt.encode({"sub": str(uuid.uuid4()), "pv": "x"}, key=None, algorithm="none")
+    forged = jwt.encode({"sub": str(uuid.uuid4()), "pv": "x"}, key=None, algorithm="none")  # type: ignore[arg-type]  # deliberately unsigned
 
     assert decode_session_token(forged, SECRET) is None

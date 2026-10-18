@@ -3,19 +3,32 @@ import os
 from collections.abc import AsyncIterator
 
 # Settings are validated at import time, so the test environment must exist first.
-os.environ["BYOP_SECRET_KEY"] = "test-secret-key-0123456789abcdef"
+os.environ["BYOP_SECRET_KEY"] = "test-secret-key-0123456789abcdef"  # keep in sync with TEST_SECRET
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
+# Keep tests hermetic: a developer's real provider keys must never leak into settings.
+os.environ.pop("OPENROUTER_API_KEY", None)
+os.environ.pop("OPENAI_API_KEY", None)
+os.environ.pop("ELEVENLABS_API_KEY", None)
+os.environ.pop("LANGFUSE_PUBLIC_KEY", None)
+os.environ.pop("LANGFUSE_SECRET_KEY", None)
+os.environ.pop("LANGFUSE_HOST", None)
+os.environ.pop("KOKORO_BASE_URL", None)
+os.environ.pop("BYOP_ADMIN_PASSWORD", None)
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from byop.db import get_session
 from byop.main import create_app
+from byop.models import User
 from byop.redis_client import get_redis_client
 from byop.security import passwords
+from byop.security.tokens import COOKIE_NAME, create_session_token
 from tests.db_utils import TEST_DATABASE_URL, migrate, recreate_database
+from tests.models.factories import make_user
 
 
 @pytest.fixture(autouse=True)
@@ -76,3 +89,24 @@ def app(db_session: AsyncSession) -> FastAPI:
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+
+
+TEST_SECRET = "test-secret-key-0123456789abcdef"
+
+
+@pytest.fixture
+async def admin_user(db_session: AsyncSession) -> User:
+    user = await make_user(db_session, "admin@example.com")
+    user.password_hash = passwords.hash_password("correct-horse-battery")
+    await db_session.flush()
+    return user
+
+
+@pytest.fixture
+async def authed(client: AsyncClient, admin_user: User) -> AsyncClient:
+    """The shared client with a valid session cookie for `admin_user`."""
+    token = create_session_token(
+        admin_user.id, admin_user.password_hash, SecretStr(TEST_SECRET), ttl_hours=1
+    )
+    client.cookies.set(COOKIE_NAME, token)
+    return client
