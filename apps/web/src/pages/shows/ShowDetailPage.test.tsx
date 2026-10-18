@@ -20,6 +20,7 @@ function showApi(initial: Partial<Show> = {}, extra: Record<string, Handler> = {
     'GET /api/shows/s1': () => ({ body: state.show }),
     'GET /api/shows/s1/speakers': () => ({ body: state.speakers }),
     'GET /api/shows/s1/sources': () => ({ body: [] }),
+    'GET /api/shows/s1/episodes': () => ({ body: [] }),
     'PATCH /api/shows/s1': ({ body }) => {
       state.show = {
         ...state.show,
@@ -57,7 +58,7 @@ describe('show detail page', () => {
     expect(screen.getByText(/Sam/)).toBeInTheDocument();
   });
 
-  it('has the five tabs, with placeholders for what comes later', async () => {
+  it('has the five tabs, with a placeholder for what comes later', async () => {
     const user = userEvent.setup();
     const { handlers } = showApi();
     await renderApp('/shows/s1', { handlers });
@@ -74,7 +75,7 @@ describe('show detail page', () => {
     await user.click(tabs.getByRole('link', { name: 'Sources' }));
     expect(await screen.findByRole('button', { name: /Add source/ })).toBeInTheDocument();
     await user.click(tabs.getByRole('link', { name: 'Episodes' }));
-    expect(await screen.findByText(/Generated episodes will appear here/)).toBeInTheDocument();
+    expect(await screen.findByText('No episodes yet')).toBeInTheDocument();
     expect(tabs.getByRole('link', { name: 'Episodes' })).toHaveAttribute('aria-current', 'page');
   });
 

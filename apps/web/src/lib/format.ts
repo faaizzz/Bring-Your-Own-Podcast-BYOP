@@ -46,3 +46,12 @@ export function describeSchedule(
       return `Monthly on the ${ordinal(show.schedule_monthday ?? 1)} ${time}`.trim();
   }
 }
+
+/** 75 → "1:15", 3725 → "1:02:05"; "—" when unknown. */
+export function formatDuration(seconds: number | null): string {
+  if (seconds === null) return '—';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, '0');
+  return h > 0 ? `${String(h)}:${String(m).padStart(2, '0')}:${s}` : `${String(m)}:${s}`;
+}

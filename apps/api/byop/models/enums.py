@@ -31,6 +31,7 @@ class SourceOrigin(enum.StrEnum):
 class RunTrigger(enum.StrEnum):
     MANUAL = "manual"
     SCHEDULE = "schedule"
+    RESYNTH = "resynth"  # voice and mix an edited draft again
 
 
 class RunStatus(enum.StrEnum):

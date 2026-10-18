@@ -11,6 +11,7 @@ from byop.pipeline.errors import StageFailed
 from byop.pipeline.workdir import reset_dir, work_dir
 from byop.providers.tts import TTSProvider, UnsupportedTTSProvider, get_tts
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
+from byop.services.script_revision import revision_of
 from byop.services.synthesis import (
     ChunkAudio,
     ChunkFailed,
@@ -91,10 +92,11 @@ async def _close(pool: dict[CredentialProvider, TTSProvider]) -> None:
         await provider.aclose()
 
 
-def _manifest(audio: list[ChunkAudio], base: anyio.Path) -> dict[str, object]:
+def _manifest(audio: list[ChunkAudio], base: anyio.Path, revision: int) -> dict[str, object]:
     total_cost = sum((a.cost_usd for a in audio if a.cost_usd is not None), Decimal(0))
     return {
         "version": MANIFEST_VERSION,
+        "script_revision": revision,  # which version of the script this audio was voiced from
         "format": {"codec": "pcm_s16le", "sample_rate": 24000, "channels": 1},
         "characters": sum(a.characters for a in audio),
         "cost_usd": str(total_cost) if any(a.cost_usd is not None for a in audio) else None,
@@ -124,7 +126,7 @@ async def run(ctx: RunContext) -> None:
         select(Episode).where(Episode.run_id == ctx.run.id, Episode.user_id == ctx.user_id)
     )
     raw = (episode.script or {}).get("segments") if episode else None
-    if not isinstance(raw, list) or not raw:
+    if episode is None or not isinstance(raw, list) or not raw:
         raise StageFailed("There is no script to voice.")
     segments = [
         Segment(str(s["speaker"]), str(s["text"]), str(s.get("kind", "story"))) for s in raw
@@ -168,7 +170,7 @@ async def run(ctx: RunContext) -> None:
     finally:
         await _close(pool)
 
-    manifest = _manifest(audio, anyio.Path(base))
+    manifest = _manifest(audio, anyio.Path(base), revision_of(episode.script))
     await anyio.Path(base / MANIFEST).write_text(json.dumps(manifest, indent=2))
     fallbacks = sum(1 for a in audio if a.used_fallback)
     await ctx.log(

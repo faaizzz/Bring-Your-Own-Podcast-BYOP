@@ -77,6 +77,10 @@ def _script_json(
 ) -> dict[str, object]:
     return {
         "version": SCRIPT_VERSION,
+        # Edits bump `revision`; the audio records which revision it was voiced from, and an
+        # episode can only be approved while the two match.
+        "revision": 1,
+        "audio_revision": None,
         "title": written.script.title.strip(),
         "description": written.script.description.strip(),
         "segments": [

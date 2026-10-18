@@ -25,8 +25,12 @@ from byop.pipeline.orchestrator import (
     run_stage,
 )
 from byop.pipeline.stages import finalize
+from byop.schemas.episode import EpisodeUpdate
+from byop.services import episodes as episodes_service
 from byop.services import runs as run_service
 from byop.services.ranking import reserve_items
+from byop.services.script_revision import audio_revision_of, revision_of
+from byop.tasks.pipeline import RESYNTH_STAGES
 from tests.helpers import make_settings
 from tests.models.factories import make_show
 from tests.providers.llm.helpers import OPENROUTER_URL, completion
@@ -125,11 +129,13 @@ async def test_progress_follows_the_stage_ranges_and_never_goes_backwards(
     assert seen == [40, 50, 80]
 
 
-async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
-    db_session: AsyncSession, admin_user: User, tmp_path: Path
-) -> None:
+async def full_run(
+    db_session: AsyncSession, admin_user: User, tmp_path: Path, *, auto_publish: bool = False
+) -> tuple[Show, Run, Settings]:
+    """Every real stage over two feed stories and a stubbed model and voice."""
     show = await make_show(db_session, admin_user)
     show.target_minutes = 1
+    show.auto_publish = auto_publish
     voice = {"tts_provider": "kokoro", "user_id": admin_user.id, "show_id": show.id}
     db_session.add_all(
         [
@@ -188,8 +194,16 @@ async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
         results = await execute(db_session, cfg, run, STAGES)
 
     assert results == [StageResult.DONE] * len(STAGES)
-    run = await reload(db_session, run)
-    assert run.status is RunStatus.SUCCEEDED and run.progress == 100
+    return show, await reload(db_session, run), cfg
+
+
+async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
+    db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    show, run, _ = await full_run(db_session, admin_user, tmp_path)
+
+    # The show does not publish by itself, so the finished draft waits for review.
+    assert run.status is RunStatus.AWAITING_REVIEW and run.progress == 100
     assert run.selection is not None and len(run.selection["stories"]) == 2  # type: ignore[arg-type]
     log = await events(db_session, run)
     assert any(e.message.startswith("Collected 2 new items") for e in log)
@@ -204,10 +218,61 @@ async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
     assert episode.status is EpisodeStatus.DRAFT and episode.script is not None
     assert episode.audio_key is not None and (tmp_path / episode.audio_key).is_file()
     assert episode.duration_s and episode.duration_s > 0 and episode.size_bytes
+    assert revision_of(episode.script) == 1 and audio_revision_of(episode.script) == 1
     # The stories now belong to the draft episode, and nothing is left reserved.
     items = list(await db_session.scalars(select(Item).where(Item.show_id == show.id)))
     assert {i.used_in_episode_id for i in items} == {episode.id}
     assert {i.reserved_run_id for i in items} == {None}
+
+
+async def test_a_show_that_publishes_automatically_publishes_the_finished_episode(
+    db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    _, run, _ = await full_run(db_session, admin_user, tmp_path, auto_publish=True)
+
+    assert run.status is RunStatus.SUCCEEDED and run.progress == 100
+    episode = await db_session.scalar(select(Episode).where(Episode.run_id == run.id))
+    assert episode is not None and episode.status is EpisodeStatus.PUBLISHED
+    assert episode.published_at is not None and episode.audio_key is not None
+    log = await events(db_session, run)
+    assert any(e.message == "Run finished and the episode was published" for e in log)
+
+
+async def test_an_edited_draft_is_voiced_and_mixed_again_and_stays_in_review(
+    db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    # auto_publish is on, but a draft that someone is reviewing is never published behind them
+    show, first, cfg = await full_run(db_session, admin_user, tmp_path, auto_publish=True)
+    episode = await db_session.scalar(select(Episode).where(Episode.run_id == first.id))
+    assert episode is not None
+    episode.status = EpisodeStatus.DRAFT
+    episode.published_at = None
+    first.status = RunStatus.AWAITING_REVIEW
+    await db_session.flush()
+    edit = EpisodeUpdate(segments=episodes_service.segments_of(episode))
+    edit.segments[0].text = "A brand new opening line."  # type: ignore[index]
+    await episodes_service.update_episode(db_session, admin_user.id, episode.id, edit)
+    assert revision_of(episode.script) == 2
+    assert audio_revision_of(episode.script) == 1  # the audio is of the old script
+
+    again = await episodes_service.resynthesize(db_session, admin_user.id, episode.id)
+    assert again.trigger is RunTrigger.RESYNTH and episode.run_id == again.id
+    stages = [s for s in STAGES if s.name in RESYNTH_STAGES]
+    with respx.mock:
+        spoken = respx.post("http://kokoro:8880/v1/audio/speech").respond(200, content=pcm_bytes())
+        results = await execute(db_session, cfg, again, stages)
+
+    assert results == [StageResult.DONE] * 3
+    assert spoken.call_count == 3  # only speech was redone: no feed, no model
+    again = await reload(db_session, again)
+    assert again.status is RunStatus.AWAITING_REVIEW and again.progress == 100
+    await db_session.refresh(episode)
+    assert episode.status is EpisodeStatus.DRAFT and episode.published_at is None
+    assert audio_revision_of(episode.script) == 2
+    assert episodes_service.is_audio_current(episode)
+    assert (await reload(db_session, first)).status is RunStatus.SUCCEEDED
+    items = list(await db_session.scalars(select(Item).where(Item.show_id == show.id)))
+    assert {i.used_in_episode_id for i in items} == {episode.id}  # still held by the draft
 
 
 # --- failure ---------------------------------------------------------------------------------

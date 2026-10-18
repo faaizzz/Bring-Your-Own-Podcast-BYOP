@@ -174,3 +174,45 @@ async def test_file_keys_are_validated_too(storage: Storage, tmp_path: Path) -> 
         await storage.put_file("../escape", source)
     with pytest.raises(ValueError):
         await storage.get_file("/abs", tmp_path / "out")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "expected"),
+    [
+        (0, 9, bytes(range(10))),  # the first bytes
+        (100, 199, bytes(range(100, 200))),  # the middle
+        (250, None, bytes(range(250, 256)) + bytes(range(256))[:0]),  # to the end
+        (5, 5, bytes([5])),  # a single byte
+    ],
+)
+async def test_a_byte_range_can_be_streamed(
+    storage: Storage, start: int, end: int | None, expected: bytes
+) -> None:
+    payload = bytes(range(256))
+    await storage.put("shows/a/episode.mp3", payload)
+
+    chunks = [
+        chunk
+        async for chunk in storage.get_stream(
+            "shows/a/episode.mp3", start=start, end=end, chunk_size=7
+        )
+    ]
+
+    assert b"".join(chunks) == expected
+    assert all(len(chunk) <= 7 for chunk in chunks)
+
+
+async def test_a_range_of_a_large_object_reads_only_that_part(storage: Storage) -> None:
+    payload = bytes(range(256)) * 2000  # 512,000 bytes
+    await storage.put("shows/a/big.bin", payload)
+
+    middle = b"".join(
+        [c async for c in storage.get_stream("shows/a/big.bin", start=200_000, end=200_999)]
+    )
+
+    assert middle == payload[200_000:201_000]
+
+
+async def test_a_range_of_a_missing_object_raises(storage: Storage) -> None:
+    with pytest.raises(StorageKeyNotFound):
+        _ = [c async for c in storage.get_stream("shows/a/none.bin", start=10, end=20)]

@@ -11,6 +11,7 @@ from byop.pipeline.errors import StageFailed, TransientStageError
 from byop.pipeline.workdir import work_dir
 from byop.services.audio_mix import ChunkRef, MixOptions, mix_episode
 from byop.services.ffmpeg import FFmpegError
+from byop.services.script_revision import revision_of
 from byop.services.show_audio import key_of
 from byop.storage import Storage, StorageError, build_storage, show_prefix
 
@@ -112,6 +113,11 @@ async def run(ctx: RunContext) -> None:
     except StorageError as exc:
         raise TransientStageError(f"Could not store the episode audio: {exc}") from exc
     episode.audio_key = key
+    # The audio is of the script revision that was voiced, whatever the script says now.
+    episode.script = {
+        **(episode.script or {}),
+        "audio_revision": manifest.get("script_revision", revision_of(episode.script)),
+    }
     episode.duration_s = round(result.duration_s)
     episode.size_bytes = result.size_bytes
     await ctx.session.commit()

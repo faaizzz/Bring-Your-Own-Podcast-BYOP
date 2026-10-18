@@ -42,8 +42,17 @@ class Storage(Protocol):
         """The whole object, or None when it does not exist. For small objects only."""
         ...
 
-    def get_stream(self, key: str, *, chunk_size: int = DEFAULT_CHUNK_SIZE) -> AsyncIterator[bytes]:
-        """The object in chunks; raises `StorageKeyNotFound` if it does not exist."""
+    def get_stream(
+        self,
+        key: str,
+        *,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        start: int = 0,
+        end: int | None = None,
+    ) -> AsyncIterator[bytes]:
+        """The object in chunks, or bytes `start` to `end` inclusive (as in an HTTP range).
+
+        Raises `StorageKeyNotFound` if it does not exist."""
         ...
 
     async def head(self, key: str) -> ObjectInfo | None:

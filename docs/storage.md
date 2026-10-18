@@ -1,7 +1,7 @@
 # Media storage
 
 Covers, previews and (later) episode audio live in object storage behind one interface,
-`byop.storage.Storage` (`put`, `get`, `get_stream`, `head`, `exists`, `delete`,
+`byop.storage.Storage` (`put`, `get`, `get_stream` (whole object or an inclusive byte range), `head`, `exists`, `delete`,
 `delete_prefix`, `url_for`). Keys are paths; everything a show owns is under
 `shows/<show id>/`, so deleting a show removes that prefix on any backend.
 

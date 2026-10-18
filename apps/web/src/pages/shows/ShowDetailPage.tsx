@@ -6,6 +6,7 @@ import { ApiError } from '../../lib/api';
 import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
 import { PROVIDER_LABELS } from '../../lib/voices';
+import { EpisodesTab } from '../episodes/EpisodesTab';
 import { ShowSettings } from './ShowSettings';
 import { SourcesTab } from './sources/SourcesTab';
 
@@ -163,9 +164,7 @@ export default function ShowDetailPage(): React.JSX.Element {
         </Nav>
         {active === 'overview' && <Overview show={data} />}
         {active === 'sources' && <SourcesTab show={data} />}
-        {active === 'episodes' && (
-          <Placeholder title="Episodes">Generated episodes will appear here.</Placeholder>
-        )}
+        {active === 'episodes' && <EpisodesTab showId={data.id} />}
         {active === 'runs' && (
           <Placeholder title="Runs">
             Each generation run and its progress will appear here.

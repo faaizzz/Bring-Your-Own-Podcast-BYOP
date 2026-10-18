@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from collections.abc import Sequence
 
 import structlog
 from celery import Task, chain
@@ -12,6 +13,8 @@ from byop.worker import celery_app
 
 log = structlog.get_logger(__name__)
 
+# What a re-synthesis of an edited draft runs: the stories and the script are already there.
+RESYNTH_STAGES = ("tts", "mix", "finalize")
 RETRY_BACKOFF_S = 5
 MAX_RETRY_DELAY_S = 120
 
@@ -68,12 +71,14 @@ def reap_runs_task() -> list[str]:
     return reaped
 
 
-def build_chain(run_id: uuid.UUID):  # type: ignore[no-untyped-def]  # celery's chain is untyped
-    """ingest -> rank -> script -> tts -> mix -> finalize, each as an independent task."""
-    return chain(*(run_stage_task.si(str(run_id), stage.name) for stage in STAGES))
+def build_chain(run_id: uuid.UUID, names: Sequence[str] | None = None):  # type: ignore[no-untyped-def]  # celery's chain is untyped
+    """ingest -> rank -> script -> tts -> mix -> finalize, each as an independent task; or just
+    the given stages (a re-synthesis runs tts -> mix -> finalize)."""
+    wanted = list(names) if names is not None else [stage.name for stage in STAGES]
+    return chain(*(run_stage_task.si(str(run_id), name) for name in wanted))
 
 
-def enqueue_run(run_id: uuid.UUID) -> str:
+def enqueue_run(run_id: uuid.UUID, names: Sequence[str] | None = None) -> str:
     """Start the chain; returns the id of its last task."""
-    result = build_chain(run_id).apply_async()
+    result = build_chain(run_id, names).apply_async()
     return str(result.id)

@@ -22,7 +22,8 @@ curl -b cookies.txt http://localhost:8080/api/runs/<run id>      # status, stage
 `queued` → `running` → `succeeded` | `awaiting_review` | `failed` | `cancelled`. A show can have
 only one run that is `queued` or `running`; the database enforces it (a partial unique index), so
 two requests at the same moment cannot both win. A run `awaiting_review` is waiting for a person,
-not working, and does not block the next one.
+not working, and does not block the next one (see [reviewing](review.md)). The `trigger` is
+`manual`, `schedule`, or `resynth` for the run that voices an edited draft again.
 
 ## Stages
 
@@ -31,7 +32,9 @@ not working, and does not block the next one.
 `RunContext` (the run, its show, a session, settings and a credential resolver); the wiring is
 `byop/pipeline/orchestrator.py`. Today `ingest`, `rank`, `script` (the script becomes a draft episode, see
 [scripts](scripts.md)), `tts` (see [voicing](tts.md)) and `mix` (see [audio](audio.md)) are real, and
-`finalize` ends the run, marks the stories as used by the draft and deletes the run's scratch files.
+`finalize` ends the run, marks the stories as used by the draft, deletes the run's scratch files and
+either publishes the draft (`auto_publish`; run `succeeded`) or leaves it for review (run `awaiting_review`).
+A `resynth` run runs only `tts`, `mix` and `finalize` (`byop.tasks.pipeline.RESYNTH_STAGES`).
 
 The chain is one Celery task per stage (`byop.run_stage`), built by
 `byop.tasks.pipeline.build_chain`. Each stage:

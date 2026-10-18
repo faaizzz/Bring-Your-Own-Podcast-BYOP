@@ -58,14 +58,29 @@ class LocalStorage:
             return None
 
     async def get_stream(
-        self, key: str, *, chunk_size: int = DEFAULT_CHUNK_SIZE
+        self,
+        key: str,
+        *,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        start: int = 0,
+        end: int | None = None,
     ) -> AsyncIterator[bytes]:
         try:
             handle = await anyio.open_file(self._path(key), "rb")
         except (FileNotFoundError, IsADirectoryError) as exc:
             raise StorageKeyNotFound(key) from exc
         async with handle:
-            while chunk := await handle.read(chunk_size):
+            if start:
+                await handle.seek(start)
+            remaining = None if end is None else end - start + 1
+            while remaining is None or remaining > 0:
+                chunk = await handle.read(
+                    chunk_size if remaining is None else min(chunk_size, remaining)
+                )
+                if not chunk:
+                    break
+                if remaining is not None:
+                    remaining -= len(chunk)
                 yield chunk
 
     async def head(self, key: str) -> ObjectInfo | None:

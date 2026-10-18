@@ -141,11 +141,21 @@ class S3Storage:
             return None
 
     async def get_stream(
-        self, key: str, *, chunk_size: int = DEFAULT_CHUNK_SIZE
+        self,
+        key: str,
+        *,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        start: int = 0,
+        end: int | None = None,
     ) -> AsyncIterator[bytes]:
         validate_key(key)
+        byte_range = f"bytes={start}-{'' if end is None else end}"
         body = await self._run(
-            lambda: self._client.get_object(Bucket=self._bucket, Key=key)["Body"]
+            lambda: (
+                self._client.get_object(Bucket=self._bucket, Key=key, Range=byte_range)["Body"]
+                if (start or end is not None)
+                else self._client.get_object(Bucket=self._bucket, Key=key)["Body"]
+            )
         )
         chunks = body.iter_chunks(chunk_size)
         done = object()
