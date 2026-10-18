@@ -2,73 +2,114 @@
 
 [![CI](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/actions/workflows/ci.yml/badge.svg)](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/actions/workflows/ci.yml)
 
-Self-hosted, open-source app that turns the sources you care about into a
-recurring, multi-speaker AI podcast with its own RSS feed. Bring your own LLM
-and text-to-speech keys (or run everything locally) and keep full control.
+**Your sources in, a podcast out.** BYOP is a self-hosted, open-source app that turns the feeds,
+pages and searches you care about into a recurring, multi-speaker AI podcast with its own RSS feed.
+Bring your own language-model and voice keys, or run everything locally for free, and keep full
+control of your data.
 
-## Features
+![The dashboard: tiles, latest episodes with a player, what is coming up](docs/images/dashboard.png)
 
-- Create shows with a topic, style, schedule and a cast of named speakers
-- Auto-discover or hand-pick RSS / URL / web-search sources
-- Ingest, de-duplicate, rank and select the stories worth covering
-- LLM-written multi-speaker scripts, synthesised with OpenAI, ElevenLabs,
-  OpenRouter or local Kokoro voices, then mixed with ffmpeg
-- Review drafts before publishing, or auto-publish on a schedule
-- Public RSS feed that works with any podcast app
-- Per-generation cost tracking and optional Langfuse tracing
+## What you get
+
+- **Shows** with a topic, a style (news briefing, conversational, deep dive, interview), a schedule
+  and a cast of named speakers, each with their own voice.
+- **Sources:** RSS feeds, web pages and web-search queries, found for you from just a topic, or
+  hand-picked. Stories are collected, de-duplicated and ranked; the best ones are covered.
+- **Scripts** written by the model of your choice as a natural dialogue between your speakers.
+- **Voices** from OpenAI, ElevenLabs, OpenRouter or local Kokoro, mixed with ffmpeg: gaps,
+  intro/outro, a music bed, -16 LUFS loudness.
+- **Review before you publish:** edit the script, re-voice it, approve or reject. Or auto-publish.
+- **A public RSS feed** that works in Apple Podcasts, Spotify, Pocket Casts and every other app.
+- **On a schedule:** daily, weekly or monthly, in your time zone, with pause and catch-up.
+- **Know the cost:** every call is recorded; per-run, per-show and monthly spend with charts, an
+  estimate before you generate, optional [Langfuse](docs/langfuse.md) tracing.
+
+| Run, live | Episode review |
+| --- | --- |
+| ![A run: stage timeline, live log and cost](docs/images/run.png) | ![Reviewing an episode: player, coloured script, sources](docs/images/episode-review.png) |
+
+| Costs | A show and its feed |
+| --- | --- |
+| ![Costs: tiles, monthly chart, providers](docs/images/costs.png) | ![A show with its feed address](docs/images/show.png) |
+
+*(The pictures show the end-to-end test's mock model and voices.)*
 
 ## Quickstart
 
-Requires Docker with the compose plugin.
+You need Docker with the compose plugin. Three commands:
 
 ```sh
-cp .env.example .env   # optional: `make up` creates it and generates BYOP_SECRET_KEY
-make up                # builds and starts postgres, redis, api, worker, beat, web
+git clone https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP.git
+cd Bring-Your-Own-Podcast-BYOP
+make up        # creates .env, generates BYOP_SECRET_KEY, builds and starts everything
 ```
 
-Open <http://localhost:8080> and sign in with `BYOP_ADMIN_EMAIL` / `BYOP_ADMIN_PASSWORD`
-from your `.env` (change the example password before exposing the app). The API health check is at
-<http://localhost:8080/api/health>. Every variable is documented in
-[`.env.example`](.env.example). Run `make migrate` to apply database migrations. Other targets: `make down`, `make logs`,
-`make migrate`, `make check` (lint + typecheck + tests), `make fmt`.
+Open <http://localhost:8080> and sign in with `admin@example.com` / `change-me-now` (set your own
+`BYOP_ADMIN_EMAIL` and `BYOP_ADMIN_PASSWORD` in `.env` before exposing the app). The dashboard walks
+you through the first episode:
 
-No paid API keys? `make up-kokoro` (or `docker compose --profile kokoro up -d`) also starts a
-local, free [Kokoro](docs/providers.md#local-voices-with-kokoro-no-api-key) text-to-speech
-server that is preselected whenever no paid TTS key is configured.
+1. **Settings › Integrations:** add an OpenRouter or OpenAI key (or a local model, below).
+2. **Shows › New show:** a title and a topic, pick the voices, a model and, optionally, a schedule.
+3. **Sources tab:** *Discover sources* from the topic, or add feeds by hand.
+4. Press **Generate now**, watch the run, review the episode and approve it.
+5. Copy the show's feed address into your podcast app. [Publishing](docs/publishing.md) explains how
+   to put it on the internet and into Apple Podcasts and Spotify.
 
-`docker-compose.override.yml` bind-mounts the API source for hot reload in
-development; for a production-like run use
-`docker compose -f docker-compose.yml up -d --build`.
+### Zero-cost mode
+
+No paid keys? Run the voices locally with [Kokoro](docs/providers.md#local-voices-with-kokoro-no-api-key)
+and the language model with [Ollama](docs/providers.md#zero-cost-mode-kokoro-voices-and-a-local-model):
+
+```sh
+make up-kokoro                 # BYOP plus a free local text-to-speech server
+ollama pull qwen2.5:14b        # on your machine; then add it under Integrations › OpenAI-compatible
+```
+
+### Providers
+
+| | OpenRouter | OpenAI | ElevenLabs | Kokoro (local) | OpenAI-compatible (Ollama…) |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Language models | ✓ | ✓ | | | ✓ |
+| Voices | ✓ | ✓ | ✓ | ✓ | |
+| Cost reported by the provider | ✓ | | | | |
+| Needs a key | ✓ | ✓ | ✓ | | |
+
+Details, and how to add another provider: [providers](docs/providers.md).
+
+## Everyday commands
+
+`make up` · `make down` · `make logs` · `make up-kokoro` · `make up-minio` (S3 storage) ·
+`make up-langfuse` (tracing) · `make check` (lint, types, tests) · `make e2e` (browser test) ·
+`make help` lists them all. In development `docker-compose.override.yml` mounts the API source for
+hot reload; for a production-like run use `docker compose -f docker-compose.yml up -d --build`.
 
 ## Documentation
 
-- [Model providers (OpenRouter, OpenAI, Ollama, Kokoro)](docs/providers.md)
-- [Shows API](docs/shows.md)
-- [Sources (RSS, pages, web search)](docs/sources.md)
-- [Ingest (collecting and de-duplicating stories)](docs/ingest.md)
-- [Choosing stories (ranking and reservation)](docs/ranking.md)
-- [Runs (the generation pipeline)](docs/runs.md)
-- [Scripts (the multi-speaker script writer)](docs/scripts.md)
-- [Voicing the script (text-to-speech stage)](docs/tts.md)
-- [Episode audio (mixing, loudness, intro/outro/music)](docs/audio.md)
-- [Reviewing episodes (edit, re-synthesize, approve, reject)](docs/review.md)
-- [Podcast feed and public audio](docs/feed.md)
-- [Dashboard](docs/dashboard.md)
-- [End-to-end test](docs/e2e.md)
-- [Usage and costs](docs/costs.md)
-- [Langfuse tracing](docs/langfuse.md)
+**Use it**
+
+- [Configuration: every environment variable](docs/configuration.md)
+- [Model providers (OpenRouter, OpenAI, Ollama, Kokoro) and adding one](docs/providers.md)
+- [Shows](docs/shows.md) · [Sources](docs/sources.md) · [Scheduling](docs/scheduling.md)
+- [Reviewing episodes](docs/review.md) · [Dashboard](docs/dashboard.md)
+- [Podcast feed](docs/feed.md) · [Publishing to directories](docs/publishing.md)
+- [Usage and costs](docs/costs.md) · [Langfuse tracing](docs/langfuse.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
-- [Secrets and key rotation](docs/security.md)
+- [Backup and restore](docs/backup.md) · [Secrets and key rotation](docs/security.md)
 
-## Roadmap
+**How it works**
 
-The roadmap lives in the
-[GitHub issues](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/issues)
-and the [project board](https://github.com/users/faaizzz/projects/2).
+- [Architecture](docs/architecture.md)
+- [Runs (the pipeline)](docs/runs.md) · [Ingest](docs/ingest.md) · [Choosing stories](docs/ranking.md) ·
+  [Scripts](docs/scripts.md) · [Voicing](docs/tts.md) · [Episode audio](docs/audio.md)
+- [End-to-end test](docs/e2e.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in
+[SECURITY.md](SECURITY.md). The roadmap lives in the
+[GitHub issues](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/issues) and the
+[project board](https://github.com/users/faaizzz/projects/2).
 
 ## License
 

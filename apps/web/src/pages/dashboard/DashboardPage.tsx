@@ -277,7 +277,7 @@ export default function DashboardPage(): React.JSX.Element {
           caption={
             data.finished_runs_30d === 0
               ? 'No runs in the last 30 days'
-              : `${String(data.finished_runs_30d)} runs in the last 30 days`
+              : `${String(data.finished_runs_30d)} ${data.finished_runs_30d === 1 ? 'run' : 'runs'} in the last 30 days`
           }
           className="bg-c-yellow"
         />

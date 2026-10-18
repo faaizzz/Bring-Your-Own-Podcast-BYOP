@@ -34,24 +34,12 @@ another user's show is a `404`.
 - **`ranking_hints`** (optional, up to 2000 characters) tells the editor model which stories to
   favour; see [choosing stories](ranking.md).
 - **Schedule fields** are stored as sent; `next_run_at` is computed from them (read-only) and
-  recomputed whenever the schedule, the time zone or `paused` changes. See below.
+  recomputed whenever the schedule, the time zone or `paused` changes ([scheduling](scheduling.md)).
 
 ## Scheduling
 
-`schedule_kind` is `manual` (never automatic), `daily`, `weekly` (`schedule_weekday`, 0 = Monday) or
-`monthly` (`schedule_monthday`, 1–31; in a shorter month the last day, so 31 means Feb 28/29, Apr 30).
-`schedule_time` is the wall-clock time in the show's `timezone` (an IANA name such as
-`Europe/Berlin`), so it stays at the same local time across daylight-saving changes. A time the
-clock skips in spring runs right after the jump; one that happens twice in autumn uses the first.
-The maths is `compute_next_run` in `byop/services/schedule.py` (the first moment strictly after
-now).
-
-The `beat` service runs `byop.schedule_tick` every minute. It locks the due shows
-(`next_run_at <= now`, not paused) with `FOR UPDATE SKIP LOCKED`, creates a run with trigger
-`schedule` and moves `next_run_at` ahead in the same transaction, so overlapping ticks never start a
-show twice. Downtime makes at most one catch-up run (the missed slots are not replayed), and a slot
-is skipped when the show still has a run queued or running. A show waiting for review does not block
-the next run. **`beat` must be running** (`docker compose` starts it) for schedules to fire.
+Schedules (`schedule_kind`, `schedule_time`, `timezone`, pause/resume) are described in
+[scheduling](scheduling.md).
 
 ## In the app
 

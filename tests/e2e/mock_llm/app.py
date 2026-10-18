@@ -62,7 +62,7 @@ def _words(count: int) -> str:
 
 def _ranking(prompt: str) -> dict[str, object]:
     wanted = int(m.group(1)) if (m := re.search(r"Choose the (\d+) best stories", prompt)) else 3
-    numbers = [int(n) for n in re.findall(r"^(\d+)\. ", prompt.split("Items:", 1)[-1], re.M)]
+    numbers = [int(n) for n in re.findall(r"^\[(\d+)\] ", prompt.split("Items:", 1)[-1], re.M)]
     return {
         "selections": [
             {

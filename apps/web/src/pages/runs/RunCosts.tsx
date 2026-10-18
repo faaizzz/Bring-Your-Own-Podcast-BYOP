@@ -9,8 +9,8 @@ function detail(line: UsageLine): string {
 }
 
 /** What a run's model and voice calls cost, by stage and model, with unpriced calls marked. */
-export function RunCosts({ runId }: { runId: string }): React.JSX.Element {
-  const usage = useRunUsage(runId);
+export function RunCosts({ runId, status }: { runId: string; status: string }): React.JSX.Element {
+  const usage = useRunUsage(runId, status);
 
   if (usage.isPending) return <Spinner size="sm" animation="border" />;
   if (usage.isError) {

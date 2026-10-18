@@ -67,7 +67,7 @@ export function EpisodeDetails({ episode }: { episode: Episode }): React.JSX.Ele
         {episode.run && (
           <>
             <h6 className="mt-4">Cost</h6>
-            <RunCosts runId={episode.run.id} />
+            <RunCosts runId={episode.run.id} status={episode.run.status} />
           </>
         )}
       </section>

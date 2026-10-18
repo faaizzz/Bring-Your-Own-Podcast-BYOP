@@ -184,6 +184,50 @@ describe('run page', () => {
     expect(screen.getByRole('link', { name: /Open trace in Langfuse/ })).toBeInTheDocument();
   });
 
+  it('fetches the cost again when the run finishes instead of keeping the empty one', async () => {
+    const calls = { n: 0 };
+    const { handlers } = runApi(detail({}, [ev('Run queued', '2026-01-01T10:00:00Z')]), {
+      'GET /api/runs/r1/usage': () => {
+        calls.n += 1;
+        return {
+          body:
+            calls.n === 1
+              ? []
+              : [
+                  {
+                    stage: 'script',
+                    kind: 'llm',
+                    provider: 'openrouter',
+                    model: 'vendor/model',
+                    calls: 1,
+                    unknown_calls: 0,
+                    input_tokens: 10,
+                    output_tokens: 5,
+                    characters: 0,
+                    cost_usd: '0.002',
+                  },
+                ],
+        };
+      },
+    });
+    await renderApp('/runs/r1', { handlers });
+    expect(await screen.findByText('No model or voice calls were recorded.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(FakeEventSource.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      FakeEventSource.last.emit('update', {
+        run: makeRun({ status: 'awaiting_review', stage: 'finalize', progress: 100 }),
+        events: [],
+      });
+      FakeEventSource.last.emit('done', { status: 'awaiting_review' });
+    });
+
+    const table = await screen.findByRole('table', { name: 'Cost by stage and model' });
+    expect(within(table).getByText('vendor/model')).toBeInTheDocument();
+  });
+
   it('shows no trace link for a run that is not traced', async () => {
     const { handlers } = runApi(detail({}, [ev('Run queued', '2026-01-01T10:00:00Z')]));
     await renderApp('/runs/r1', { handlers });

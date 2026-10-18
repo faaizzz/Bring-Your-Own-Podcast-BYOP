@@ -11,7 +11,7 @@ for d in apps/api apps/web docker docs .github .github/ISSUE_TEMPLATE; do
   [ -d "$d" ] || err "missing directory $d"
 done
 
-for f in LICENSE README.md CLAUDE.md CONTRIBUTING.md .editorconfig .gitignore .gitattributes \
+for f in LICENSE README.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .editorconfig .gitignore .gitattributes \
   docs/IMPLEMENTATION_WORKFLOW.md .github/ISSUE_TEMPLATE/bug_report.md \
   .github/ISSUE_TEMPLATE/feature_request.md; do
   [ -f "$f" ] || err "missing file $f"
@@ -42,6 +42,34 @@ if [ -f .env.example ]; then
     grep -qE "^${v}=" .env.example || err ".env.example is missing $v"
   done
 fi
+
+# Every variable in .env.example (set or commented out) must be explained in docs/configuration.md.
+if [ -f .env.example ] && [ -f docs/configuration.md ]; then
+  for v in $(sed -nE 's/^#? ?([A-Z][A-Z0-9_]+)=.*/\1/p' .env.example | sort -u); do
+    grep -q "$v" docs/configuration.md || err "docs/configuration.md does not mention $v"
+  done
+elif [ -f .env.example ]; then
+  err "missing docs/configuration.md"
+fi
+
+# Relative links in the Markdown documentation must point at files that exist.
+python3 - <<'PY' || fail=1
+import pathlib, re, sys
+root = pathlib.Path(".")
+bad = []
+files = [root / "README.md", root / "CONTRIBUTING.md", root / "SECURITY.md", *sorted((root / "docs").glob("*.md"))]
+for path in files:
+    text = re.sub(r"```.*?```", "", path.read_text(encoding="utf-8"), flags=re.S)
+    for target in re.findall(r"\]\(([^)\s]+)\)", text):
+        if re.match(r"^(https?:|mailto:|#)", target):
+            continue
+        file_part = target.split("#", 1)[0]
+        if file_part and not (path.parent / file_part).exists():
+            bad.append(f"{path}: broken link {target}")
+for line in bad:
+    print("FAIL:", line, file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
 
 # The compose file must stay valid and define the core services.
 if [ -f docker-compose.yml ] && command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then

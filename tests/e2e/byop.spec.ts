@@ -5,6 +5,13 @@ const EMAIL = 'e2e@example.com';
 const PASSWORD = 'e2e-password-123';
 const MOCK = 'http://mock-services:8000';
 
+// Set E2E_SCREENSHOTS=<dir> to also save the pictures used in the documentation.
+const SHOTS = process.env.E2E_SCREENSHOTS;
+
+async function shot(page: Page, name: string): Promise<void> {
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
+}
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
   await page.getByPlaceholder('Email address').fill(EMAIL);
@@ -28,6 +35,12 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByLabel('Base URL').fill(`${MOCK}/v1`);
   await page.getByRole('button', { name: /^Save/ }).click();
   await expect(card.getByText(/Connection works|Configured|Your key/i).first()).toBeVisible();
+
+  // The mock model is not in the price table, so give it a price: its calls then have a cost.
+  const price = await page.request.put('/api/pricing/overrides', {
+    data: { kind: 'llm', name: 'mock-model', input_per_million: '0.15', output_per_million: '0.6' },
+  });
+  expect(price.ok()).toBe(true);
 
   // 2. Create a show: Kokoro voices (the defaults), the mock model, the mock news feed.
   await page.goto('/shows/new');
@@ -57,6 +70,8 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByRole('button', { name: 'Generate now: E2E Briefing' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Generate' }).click();
   await expect(page.getByTestId('run-status')).toHaveText('Needs review', { timeout: 180_000 });
+  await expect(page.getByRole('table', { name: 'Cost by stage and model' })).toBeVisible();
+  await shot(page, 'run');
 
   // 4. The episode is there and plays.
   await page.getByRole('link', { name: 'Review episode' }).click();
@@ -71,6 +86,7 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await expect(page.getByRole('list', { name: 'Script' }).or(page.getByLabel('Text of line 1'))).toBeVisible();
 
   // 5. Publish it and find it in the public feed, with its audio.
+  await shot(page, 'episode-review');
   await page.getByRole('button', { name: /Approve/ }).click();
   await expect(page.getByText('Published', { exact: true }).first()).toBeVisible();
   const feed = await request.get('/feeds/e2e-briefing.xml');
@@ -88,6 +104,16 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   // 6. The dashboard and the cost overview know about it.
   await page.goto('/');
   await expect(page.getByText('Episodes this month')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open tools, one step at a time' })).toBeVisible();
+  await shot(page, 'dashboard');
   await page.goto('/history');
   await expect(page.getByRole('link', { name: 'E2E Briefing' }).first()).toBeVisible();
+  await page.goto('/costs');
+  await expect(page.getByText('Average per episode')).toBeVisible();
+  await expect(page.getByText(/unpriced/)).toHaveCount(0); // every call has a known price
+  await shot(page, 'costs');
+  await page.goto('/shows');
+  await page.getByRole('link', { name: 'E2E Briefing' }).first().click();
+  await expect(page.getByLabel('Feed address')).toBeVisible();
+  await shot(page, 'show');
 });

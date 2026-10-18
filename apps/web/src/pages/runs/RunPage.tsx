@@ -198,7 +198,7 @@ export default function RunPage(): React.JSX.Element {
           </div>
         </div>
         <h6 className="mt-4">Cost</h6>
-        <RunCosts key={`${data.id}:${data.status}`} runId={data.id} />
+        <RunCosts runId={data.id} status={data.status} />
       </Card.Body>
     </Card>
   );

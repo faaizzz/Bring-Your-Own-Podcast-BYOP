@@ -146,3 +146,80 @@ stops the profile too.
 **GPU:** the compose file only ships the CPU image. For an NVIDIA GPU use the
 `ghcr.io/remsky/kokoro-fastapi-gpu` image and a `deploy.resources.reservations.devices`
 entry in a `docker-compose.override.yml`; no BYOP code changes are needed.
+
+## Zero-cost mode: Kokoro voices and a local model
+
+You can run BYOP without paying anyone: Kokoro for voices and [Ollama](https://ollama.com) (or LM
+Studio, vLLM, ...) for the language model.
+
+1. `make up-kokoro` starts BYOP with the local Kokoro server; it is preselected as the voice
+   provider whenever no paid voice key exists.
+2. Run Ollama on your machine and pull a model that follows JSON instructions well (a 7-14B
+   instruction model is a sensible minimum): `ollama pull qwen2.5:14b`.
+3. Settings › Integrations › **OpenAI-compatible**: base URL `http://host.docker.internal:11434/v1`
+   (the compose file makes that name work on Linux and Docker Desktop), no key.
+4. Create a show, choose the *OpenAI-compatible* provider and your model.
+
+Expect it to be slower than hosted models (a few minutes for the script, several for voices on a
+CPU), and small models sometimes need a second try; the script writer re-asks once when its
+output is unusable, and the run's log says what happened. Discovery of sources needs a model that
+can search the web, so add feeds by hand.
+
+## Feature matrix
+
+| | OpenRouter | OpenAI | ElevenLabs | Kokoro | OpenAI-compatible |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Language models (scripts, ranking) | yes | yes | | | yes |
+| Web search for source discovery | yes (`:online`) | with a search-capable model | | | model-dependent |
+| Voices | yes | yes | yes | yes (local, free) | |
+| Cost reported by the provider | yes | | | | |
+| Cost from the price table ([costs](costs.md)) | | yes | yes | yes (free) | |
+| Needs an API key | yes | yes | yes | no | usually not |
+
+Langfuse ([tracing](langfuse.md)) and S3 storage ([storage](storage.md)) are optional add-ons.
+
+## Adding a provider
+
+A new language-model or voice service is one small adapter plus a few registrations. Follow the
+existing adapters; every step has a test next to it.
+
+### A language model (an OpenAI-style API)
+
+Most services speak the OpenAI chat API; for those a subclass is a dozen lines.
+
+1. **Name it.** Add a value to `CredentialProvider` (`byop/models/enums.py`) and an Alembic
+   migration that widens the `provider` CHECK constraint of `provider_credentials` (see migration
+   `0007` for how a constraint is replaced). Add the name to the `LLMProviderName` literals in
+   `byop/schemas/` and `LLM_PROVIDERS` in `apps/web/src/lib/voices.ts`.
+2. **Write the adapter**, `byop/providers/llm/<name>.py`, by subclassing `OpenAIChatProvider`
+   (see `openrouter.py`): set `name`, the default base URL, any extra headers or request body
+   fields, and `reports_cost = True` if responses carry a cost. A service with another protocol
+   implements `LLMProvider` (`complete`, `list_models`, `aclose`) and must call `record_usage`
+   after each call so costs and traces work ([costs](costs.md)).
+3. **Register it** in `get_llm` and `LLM_PROVIDERS` (`byop/providers/llm/__init__.py`).
+4. **Credentials.** If it has an environment variable, add the setting to `byop/config.py`, a branch
+   to `_env_config` in `services/credentials.py`, the variable to `.env.example` and
+   [configuration](configuration.md). Add its connection probe to `services/integration_check.py`.
+5. **UI.** Add its card to `PROVIDERS` in `apps/web/src/lib/integrations.ts`.
+6. **Prices.** Add models you know to `byop/pricing.yaml` if the service does not report cost.
+7. **Tests.** Mock the HTTP with `respx` (never call a real API): copy `tests/providers/llm/test_llm.py`
+   and cover a plain call, a structured call, a retry, an error, and the usage report.
+
+### A voice
+
+1. **Name it** as above (`CredentialProvider` + migration) and add it to `TTS_PROVIDERS`.
+2. **Write the adapter**, `byop/providers/tts/<name>_tts.py`: subclass `TTSProvider` and fill in
+   `name` and `quirks`, a `ProviderQuirks` declaring everything that differs (maximum characters per
+   request, the audio formats it can return and the default, the accepted voice `params` with a
+   `ParamSpec` each, the timeout, and `max_concurrency` for servers that handle one request at a
+   time). Implement `build_request` (URL, JSON, headers), `auth_headers` and `list_voices`. The base
+   class does retries, streaming to disk, conversion to the canonical WAV and the usage report.
+   Nothing outside the adapter may branch on the provider name.
+3. **Register it** in `_CLASSES`, `TTS_PROVIDERS` and `get_tts` (`byop/providers/tts/__init__.py`).
+4. **Credentials, UI and prices** as above; also add its voice parameters to `VOICE_PARAMS` in
+   `apps/web/src/pages/shows/form/schema.ts`, which must stay in step with the `ParamSpec`s, and its
+   price per million characters to `pricing.yaml`.
+5. **Tests:** add it to the `CASES` of `tests/providers/tts/test_providers.py`, which already checks
+   normalisation, limits, retries and usage for every provider, and to `test_param_specs.py`.
+
+Run `make check` and a real generation with the new provider before opening the pull request.

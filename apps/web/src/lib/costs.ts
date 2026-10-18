@@ -68,12 +68,16 @@ const usageLineSchema = z.object({
 });
 export type UsageLine = z.infer<typeof usageLineSchema>;
 
-/** What a run's calls used and cost, by stage and model. */
-export function useRunUsage(runId: string) {
+/**
+ * What a run's calls used and cost, by stage and model. `status` is part of the key, so the
+ * numbers are fetched again when the run moves on, and they refresh while it is working.
+ */
+export function useRunUsage(runId: string, status: string) {
   return useQuery({
-    queryKey: [...COSTS_KEY, 'run', runId],
+    queryKey: [...COSTS_KEY, 'run', runId, status],
     queryFn: () =>
       api.get<UsageLine[]>(`/runs/${runId}/usage`, { schema: z.array(usageLineSchema) }),
+    refetchInterval: status === 'queued' || status === 'running' ? 4000 : false,
   });
 }
 
