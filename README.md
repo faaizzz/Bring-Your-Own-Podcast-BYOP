@@ -46,3 +46,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE)
+
+The admin UI theme is derived from the MIT-licensed
+[Gradient Able](https://github.com/codedthemes/gradient-able-free-admin-template)
+free template by CodedThemes; its licence notice is kept in
+[`apps/web/src/theme/LICENSE-gradient-able`](apps/web/src/theme/LICENSE-gradient-able).

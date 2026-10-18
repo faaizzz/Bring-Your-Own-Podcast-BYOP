@@ -1,0 +1,30 @@
+// Dropdown-toggle tweaks for react-bootstrap inside .pcoded-header (from Gradient Able).
+.pcoded-header {
+  .dropdown .dropdown-toggle {
+    margin: -2px 0 0 4px;
+  }
+  .btn {
+    padding: 0;
+    margin-bottom: 0;
+    margin-right: 0;
+    border: none;
+    &:after {
+      right: -12px !important;
+    }
+    &:focus,
+    &:active,
+    &:hover {
+      text-decoration: none;
+    }
+  }
+  .btn > i {
+    margin-right: -12px;
+  }
+}
+
+.tooltip-arrow::before {
+  top: -3px !important;
+}
+.badge {
+  color: $yiq-light-color;
+}

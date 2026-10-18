@@ -37,7 +37,7 @@ apps/api/byop/        FastAPI package
 apps/api/alembic/     migrations
 apps/api/tests/       pytest (mirrors the byop/ tree)
 apps/web/src/
-  theme/              Gradient Able SCSS/variables (+ LICENSE-gradient-able)
+  theme/              Gradient Able SCSS/variables/fonts (+ LICENSE-gradient-able); _overrides.scss holds BYOP additions incl. dark mode
   layout/             sidebar, header, breadcrumb, shell
   pages/<area>/       one folder per area (dashboard, shows, history, costs, settings, auth)
   lib/                api client (api.ts), helpers
@@ -60,7 +60,7 @@ New directories or modules must follow these names; update this section if the l
 - `strict: true`; **no `any`** (use `unknown` + narrowing). Prefer `type` imports.
 - Server state through TanStack Query only (no ad-hoc fetch in components); API calls go through `src/lib/api.ts`.
 - Forms: react-hook-form + zod. Components are function components with explicit prop types.
-- Lint with eslint, format with prettier; `npm run check` runs lint + typecheck + vitest + build.
+- Lint with eslint, format with prettier; `npm run check` runs lint + typecheck + vitest + build. Tests live next to the code as `*.test.ts(x)`; shared test helpers in `src/test/`. Icons come from `react-icons/fi`; page components are default exports, routes in `src/routes.tsx`, sidebar/breadcrumb menu in `src/layout/menu.ts`.
 
 ## Testing expectations
 - Every story adds tests for its new behaviour. API: pytest + pytest-asyncio against a real Postgres (transaction rollback per test); external HTTP is mocked with `respx`. Web: vitest + @testing-library/react.

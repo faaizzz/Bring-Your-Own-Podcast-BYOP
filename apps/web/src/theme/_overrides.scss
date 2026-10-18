@@ -1,0 +1,174 @@
+// BYOP additions on top of the vendored Gradient Able theme.
+
+// Header controls are real buttons (the template uses anchors).
+.pcoded-header {
+  .m-header button {
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .m-header .mobile-menu {
+    cursor: pointer;
+  }
+  .btn-theme-toggle,
+  .btn-user {
+    background: none;
+    border: 0;
+    color: inherit;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    &:after {
+      display: none;
+    }
+  }
+}
+
+.profile-notification .pro-head {
+  padding: 12px 20px;
+  color: #fff;
+}
+
+.profile-notification .dropdown-item svg {
+  margin-right: 8px;
+}
+
+.auth-wrapper .auth-icon {
+  color: $primary-color;
+}
+
+.pcoded-micon svg {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
+// Below the lg breakpoint the sidebar lives inside .nav-outside, so the template's sibling
+// selectors no longer clear the desktop sidebar offset.
+@media only screen and (max-width: 991.98px) {
+  .pcoded-main-container {
+    margin-left: 0;
+    padding-top: $header-height;
+  }
+}
+
+// ---- Dark mode (data-bs-theme="dark") ------------------------------------
+$dark-bg: #12171e;
+$dark-surface: #1a212b;
+$dark-border: #2a3340;
+$dark-text: #c9d1dc;
+$dark-muted: #8b97a8;
+
+[data-bs-theme='dark'] {
+  color-scheme: dark;
+
+  body,
+  .pcoded-main-container {
+    background: $dark-bg;
+    color: $dark-text;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: #e6ebf2;
+  }
+
+  .text-muted {
+    color: $dark-muted !important;
+  }
+
+  .pcoded-navbar.menu-light {
+    background: $dark-surface;
+    color: $dark-text;
+    box-shadow: 1px 0 0 $dark-border;
+
+    .navbar-content {
+      background: $dark-surface;
+    }
+
+    .pcoded-inner-navbar li {
+      > a {
+        color: $dark-text;
+      }
+      &.pcoded-menu-caption {
+        color: $dark-muted;
+      }
+      > a:hover,
+      > a.active {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.06);
+      }
+    }
+  }
+
+  .card {
+    background-color: $dark-surface;
+    border-color: $dark-border;
+    color: $dark-text;
+    box-shadow: 0 1px 14px rgba(0, 0, 0, 0.35);
+
+    .card-header {
+      background: transparent;
+      border-color: $dark-border;
+      color: #e6ebf2;
+      h5 {
+        color: #e6ebf2;
+      }
+    }
+  }
+
+  .order-card {
+    color: #fff;
+  }
+
+  .page-header {
+    background: $dark-surface;
+    border-color: $dark-border;
+    .breadcrumb {
+      background: $dark-bg;
+    }
+    .page-header-title h5 {
+      color: #e6ebf2;
+    }
+  }
+
+  .page-header .breadcrumb-item,
+  .page-header .breadcrumb-item a {
+    color: $dark-muted;
+  }
+
+  .page-header .breadcrumb-item[aria-current='page'] {
+    color: $dark-text;
+  }
+
+  .form-control {
+    background-color: $dark-bg;
+    border-color: $dark-border;
+    color: $dark-text;
+    &::placeholder {
+      color: $dark-muted;
+    }
+  }
+
+  .dropdown-menu {
+    background: $dark-surface;
+    border-color: $dark-border;
+    .dropdown-item {
+      color: $dark-text;
+      &:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+    }
+  }
+
+  .auth-wrapper .card {
+    background: $dark-surface;
+  }
+}

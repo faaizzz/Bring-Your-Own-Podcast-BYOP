@@ -1,0 +1,29 @@
+// BYOP theme: Bootstrap 5 + the Gradient Able look (MIT, see LICENSE-gradient-able).
+@import 'fonts';
+
+@import 'bootstrap/scss/functions';
+@import 'bootstrap/scss/variables';
+@import 'bootstrap/scss/variables-dark';
+@import 'bootstrap/scss/maps';
+@import 'bootstrap/scss/mixins';
+@import 'settings/custom-variables';
+@import 'settings/theme-variables';
+@import 'header-tweaks';
+
+@import 'bootstrap/scss/bootstrap';
+
+@import 'overlay/card';
+@import 'overlay/button';
+@import 'overlay/radiobox-checkbox';
+@import 'overlay/switches';
+@import 'overlay/badge';
+@import 'overlay/popovers';
+
+@import 'general';
+@import 'generic';
+@import 'menu-lite';
+@import 'widget';
+@import 'authentication';
+@import 'custom';
+
+@import 'overrides';

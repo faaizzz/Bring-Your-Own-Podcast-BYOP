@@ -27,9 +27,11 @@ migrate: ## Apply database migrations
 
 lint: ## Lint api and web
 	cd $(API_DIR) && uv run ruff check . && uv run ruff format --check .
+	cd $(WEB_DIR) && { [ -d node_modules ] || npm ci --silent --no-audit --no-fund; } && npm run lint --silent
 
-typecheck: ## Typecheck api
+typecheck: ## Typecheck api and web
 	cd $(API_DIR) && uv run mypy
+	cd $(WEB_DIR) && npm run typecheck --silent
 
 deps: ## Start only postgres and redis (used by the api tests)
 	./scripts/ensure-env.sh
@@ -39,8 +41,10 @@ test: deps ## Run repo checks, api tests and web tests
 	./scripts/check-repo.sh
 	cd $(API_DIR) && uv run pytest -q
 	cd $(WEB_DIR) && npm test --silent
+	cd $(WEB_DIR) && npm run build --silent
 
 check: lint typecheck test ## lint + typecheck + test
 
 fmt: ## Format code
 	cd $(API_DIR) && uv run ruff check --fix . && uv run ruff format .
+	cd $(WEB_DIR) && npm run format --silent
