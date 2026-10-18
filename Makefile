@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down logs migrate test lint typecheck check fmt
+.PHONY: help up down logs migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
@@ -31,7 +31,11 @@ lint: ## Lint api and web
 typecheck: ## Typecheck api
 	cd $(API_DIR) && uv run mypy
 
-test: ## Run repo checks, api tests and web tests
+deps: ## Start only postgres and redis (used by the api tests)
+	./scripts/ensure-env.sh
+	$(COMPOSE) up -d --wait postgres redis
+
+test: deps ## Run repo checks, api tests and web tests
 	./scripts/check-repo.sh
 	cd $(API_DIR) && uv run pytest -q
 	cd $(WEB_DIR) && npm test --silent

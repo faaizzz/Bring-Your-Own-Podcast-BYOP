@@ -26,7 +26,7 @@ make up                # builds and starts postgres, redis, api, worker, beat, w
 
 Open <http://localhost:8080>; the API health check is at
 <http://localhost:8080/api/health>. Every variable is documented in
-[`.env.example`](.env.example). Other targets: `make down`, `make logs`,
+[`.env.example`](.env.example). Run `make migrate` to apply database migrations. Other targets: `make down`, `make logs`,
 `make migrate`, `make check` (lint + typecheck + tests), `make fmt`.
 
 `docker-compose.override.yml` bind-mounts the API source for hot reload in

@@ -1,5 +1,27 @@
-import os
-
 from celery import Celery
 
-celery_app = Celery("byop", broker=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+from byop.config import get_settings
+
+settings = get_settings()
+
+celery_app = Celery(
+    "byop",
+    broker=settings.redis_url,
+    backend=settings.redis_url,
+    include=[],
+)
+celery_app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="UTC",
+    enable_utc=True,
+    # Periodic jobs are registered here by the scheduler story.
+    beat_schedule={},
+)
+
+
+@celery_app.task(name="byop.ping")
+def ping() -> str:
+    """Round-trip check for the worker, broker and result backend."""
+    return "pong"
