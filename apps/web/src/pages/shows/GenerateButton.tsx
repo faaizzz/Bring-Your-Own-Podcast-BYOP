@@ -17,10 +17,15 @@ export function GenerateButton({
   show,
   size,
   className,
+  label = 'Generate now',
+  variant,
 }: {
   show: Pick<Show, 'id' | 'title' | 'last_run_status'>;
   size?: 'sm' | 'lg';
   className?: string;
+  /** The button's text, e.g. "Retry" on the dashboard. */
+  label?: string;
+  variant?: string;
 }): React.JSX.Element {
   const navigate = useNavigate();
   const notify = useToast();
@@ -46,16 +51,17 @@ export function GenerateButton({
     <>
       <Button
         size={size}
+        variant={variant}
         className={className}
         disabled={busy || start.isPending}
         title={busy ? 'A run is already in progress' : undefined}
-        aria-label={`Generate now: ${show.title}`}
+        aria-label={`${label}: ${show.title}`}
         onClick={() => {
           setConfirming(true);
         }}
       >
         <FiPlay aria-hidden="true" className="me-1" />
-        {busy ? 'Running…' : 'Generate now'}
+        {busy ? 'Running…' : label}
       </Button>
       <Modal
         show={confirming}
