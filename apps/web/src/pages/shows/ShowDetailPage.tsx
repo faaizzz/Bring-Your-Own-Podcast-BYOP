@@ -7,6 +7,7 @@ import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
 import { PROVIDER_LABELS } from '../../lib/voices';
 import { ShowSettings } from './ShowSettings';
+import { SourcesTab } from './sources/SourcesTab';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -161,11 +162,7 @@ export default function ShowDetailPage(): React.JSX.Element {
           ))}
         </Nav>
         {active === 'overview' && <Overview show={data} />}
-        {active === 'sources' && (
-          <Placeholder title="Sources">
-            Feeds, pages and searches that feed this show will be managed here.
-          </Placeholder>
-        )}
+        {active === 'sources' && <SourcesTab show={data} />}
         {active === 'episodes' && (
           <Placeholder title="Episodes">Generated episodes will appear here.</Placeholder>
         )}

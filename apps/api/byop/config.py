@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Sources are fetched from user-supplied URLs. By default only public internet addresses are
+    # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).
+    sources_allow_private_networks: bool = False
+
     # Defaults for new shows (a show can override each of them).
     default_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
     default_llm_model: str | None = None

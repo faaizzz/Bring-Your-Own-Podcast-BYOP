@@ -19,6 +19,7 @@ function showApi(initial: Partial<Show> = {}, extra: Record<string, Handler> = {
     'GET /api/shows': () => ({ body: [state.show] }),
     'GET /api/shows/s1': () => ({ body: state.show }),
     'GET /api/shows/s1/speakers': () => ({ body: state.speakers }),
+    'GET /api/shows/s1/sources': () => ({ body: [] }),
     'PATCH /api/shows/s1': ({ body }) => {
       state.show = {
         ...state.show,
@@ -71,7 +72,7 @@ describe('show detail page', () => {
       'Settings',
     ]);
     await user.click(tabs.getByRole('link', { name: 'Sources' }));
-    expect(await screen.findByText(/will be managed here/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Add source/ })).toBeInTheDocument();
     await user.click(tabs.getByRole('link', { name: 'Episodes' }));
     expect(await screen.findByText(/Generated episodes will appear here/)).toBeInTheDocument();
     expect(tabs.getByRole('link', { name: 'Episodes' })).toHaveAttribute('aria-current', 'page');
