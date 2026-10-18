@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # own containers use): the trace links in the app are built from it.
     langfuse_public_url: str | None = None
 
+    # Requests per minute and client address to the public feed and to episode audio (a player
+    # that seeks makes several requests for one episode); 0 switches the limit off.
+    public_feed_rate_per_minute: int = Field(default=120, ge=0)
+    public_media_rate_per_minute: int = Field(default=600, ge=0)
+
     # Sources are fetched from user-supplied URLs. By default only public internet addresses are
     # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).
     sources_allow_private_networks: bool = False

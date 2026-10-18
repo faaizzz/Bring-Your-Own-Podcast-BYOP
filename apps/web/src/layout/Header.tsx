@@ -28,7 +28,7 @@ export function Header({
   const signOut = () => {
     logout.mutate(undefined, {
       onSettled: () => {
-        navigate('/login', { replace: true });
+        void navigate('/login', { replace: true });
       },
     });
   };

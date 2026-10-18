@@ -45,7 +45,7 @@ export default function LoginPage(): React.JSX.Element {
   const onSubmit = (values: LoginForm) => {
     login.mutate(values, {
       onSuccess: () => {
-        navigate(target, { replace: true });
+        void navigate(target, { replace: true });
       },
     });
   };

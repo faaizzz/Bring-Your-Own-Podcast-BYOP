@@ -82,7 +82,7 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
       // The show exists now, so send the user to fix the speakers there instead of re-creating it.
       const message = error instanceof Error ? error.message : 'The speakers were not saved.';
       notify(`Show created, but its speakers were not saved: ${message}`, 'danger');
-      navigate(`/shows/${created.id}/settings`);
+      void navigate(`/shows/${created.id}/settings`);
       return;
     }
     if (cover) {
@@ -113,7 +113,7 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
     }
     for (const warning of created.warnings) notify(warning, 'info');
     notify(`Created "${created.title}"`, 'success');
-    navigate(`/shows/${created.id}`);
+    void navigate(`/shows/${created.id}`);
   };
 
   return (

@@ -17,6 +17,7 @@ The API fails fast at start with a readable message if a required value is missi
 | `BYOP_ADMIN_PASSWORD` | `change-me-now` | Its initial password (hashed into the database; never overwritten once the user exists, change it in the app). **Change it before exposing the app** |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Where the app is reachable from outside. Builds the absolute addresses in the podcast feed ([feed](feed.md)); podcast apps need public https. Secure cookies are used when it starts with `https://` |
 | `BYOP_WEB_PORT` | `8080` | Host port of the web UI |
+| `BYOP_VERSION` | empty | Run a published release (for example `0.1.0`) instead of building from source: [releasing](releasing.md) |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`; logs are JSON with a request id |
 
 ## Infrastructure
@@ -51,6 +52,16 @@ Integrations with its base URL.
 | `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL` | empty | Model given to a new show that does not choose its own (used only as a pair; `openrouter`, `openai` or `openai_compatible`) |
 | `DEFAULT_SHOW_STYLE` | `news_briefing` | `news_briefing`, `conversational`, `deep_dive` or `interview` |
 | `DISCOVERY_LLM_PROVIDER`, `DISCOVERY_LLM_MODEL` | empty | The model that searches the web for sources; empty uses the show's model, then the default above. On OpenRouter `:online` is added to the model id |
+
+## Public routes
+
+| Variable | Default | |
+| --- | --- | --- |
+| `PUBLIC_FEED_RATE_PER_MINUTE` | `120` | Requests per minute and client address to the public feed; over it the answer is `429` with `Retry-After`. `0` switches the limit off |
+| `PUBLIC_MEDIA_RATE_PER_MINUTE` | `600` | The same for episode audio (a player that seeks makes several requests per episode) |
+
+The client address is the last `X-Forwarded-For` entry nginx adds. Login has its own fixed limit of
+5 attempts a minute ([security](security.md)).
 
 ## Sources and ingest
 

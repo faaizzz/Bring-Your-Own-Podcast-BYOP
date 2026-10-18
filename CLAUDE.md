@@ -15,7 +15,7 @@ it, then read the GitHub issue, then implement exactly that issue.
 ## Stack
 - API: Python 3.12, FastAPI, pydantic v2 + pydantic-settings, async SQLAlchemy 2 + asyncpg, Alembic, Celery (+beat) on Redis, structlog, httpx.
 - Data: PostgreSQL 16 (with `pg_trgm`), Redis 7. Audio mixing with ffmpeg.
-- Web: Vite + React 18 + TypeScript (strict), react-bootstrap/Bootstrap 5, react-router 6, TanStack Query, react-hook-form + zod, Gradient Able admin look.
+- Web: Vite + React 18 + TypeScript (strict), react-bootstrap/Bootstrap 5, react-router 7, TanStack Query, react-hook-form + zod, Gradient Able admin look.
 - Runtime: docker compose (`api`, `worker`, `beat`, `web`, `postgres`, `redis`; optional profiles `minio` (S3-compatible object store, image is RustFS), `kokoro`, `langfuse`).
 
 ## Layout
@@ -97,6 +97,9 @@ v0.1 is single-user: one admin seeded from `.env` (bcrypt hash in `users`). Logi
 - Routers take `CurrentUser` (from `byop.api.deps`) and pass `user.id` to services, which filter every query by it.
 - Web: `useMe`/`useLogin`/`useLogout` in `src/lib/auth.ts`, `RequireAuth` wraps the admin routes, and a 401 from any query clears the session so the guard redirects to `/login`.
 - **Multi-user later**: the `users` table and `user_id` on every owned table already exist. Add an invite/signup flow (and per-user settings) that inserts `User` rows; `current_user`, services and tests already scope by `user_id`, so no schema change to owned tables is needed. `is_admin` gates instance-level settings.
+
+## Security and releases
+nginx (`docker/nginx.conf`) sets the security headers (strict CSP: the app may only talk to its own origin, so a new external script/font/API host needs a CSP change and an e2e run), the 1 MB body limit (uploads of covers/audio have their own locations) and keeps the Host port (`$http_host`, not `$host`, or API redirects lose the port). The API has no CORS middleware on purpose. Public routes are rate limited per client (`PUBLIC_*_RATE_PER_MINUTE`, login 5/min). Images are published by `.github/workflows/release.yml` on a `v*` tag (`BYOP_VERSION` selects them in compose; see `docs/releasing.md`); dependency audits run in `audit.yml`. Never push a release tag without the user's go-ahead.
 
 ## Open-source hygiene
 This is a clean open-source project. Do not reference private or internal predecessor projects, organisations, domains or people in code, comments, docs or commits. Third-party code keeps its licence notice (e.g. Gradient Able, MIT).

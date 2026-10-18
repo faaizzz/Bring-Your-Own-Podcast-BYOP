@@ -148,7 +148,7 @@ function ReviewForm({ episode }: { episode: Episode }): React.JSX.Element {
     reject.mutate(undefined, {
       onSuccess: () => {
         notify('Episode rejected; its stories can be used again', 'info');
-        navigate(`/shows/${episode.show_id}/episodes`);
+        void navigate(`/shows/${episode.show_id}/episodes`);
       },
       onError: fail('Could not reject'),
     });

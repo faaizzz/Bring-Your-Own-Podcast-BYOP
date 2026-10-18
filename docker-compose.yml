@@ -3,7 +3,9 @@ x-api: &api
   build:
     context: .
     dockerfile: docker/api.Dockerfile
-  image: byop-api:local
+  # `BYOP_VERSION` selects a published release (`docker compose pull`, see docs/releasing.md); unset,
+  # the image is built from this checkout and tagged `local`.
+  image: ghcr.io/faaizzz/byop-api:${BYOP_VERSION:-local}
   env_file:
     - path: .env
       required: false
@@ -98,7 +100,7 @@ services:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
-    image: byop-web:local
+    image: ghcr.io/faaizzz/byop-web:${BYOP_VERSION:-local}
     ports:
       - "${BYOP_WEB_PORT:-8080}:80"
     depends_on:

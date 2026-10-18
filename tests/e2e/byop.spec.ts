@@ -21,6 +21,13 @@ async function signIn(page: Page): Promise<void> {
 }
 
 test('a clean install makes a published episode that is in the feed', async ({ page, request }) => {
+  // The page runs under a strict Content-Security-Policy (docker/nginx.conf): nothing may be blocked.
+  const blocked: string[] = [];
+  page.on('console', (message) => {
+    if (/content security policy|refused to/i.test(message.text())) blocked.push(message.text());
+  });
+  page.on('pageerror', (error) => blocked.push(error.message));
+
   await signIn(page);
 
   // A fresh instance starts with the getting-started checklist.
@@ -116,4 +123,13 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByRole('link', { name: 'E2E Briefing' }).first().click();
   await expect(page.getByLabel('Feed address')).toBeVisible();
   await shot(page, 'show');
+
+  // 7. The security headers are on, and nothing the app needed was blocked by them.
+  const home = await request.get('/');
+  const headers = home.headers();
+  expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+  expect(headers['x-content-type-options']).toBe('nosniff');
+  expect(headers['x-frame-options']).toBe('DENY');
+  expect(headers['referrer-policy']).toBeTruthy();
+  expect(blocked).toEqual([]);
 });

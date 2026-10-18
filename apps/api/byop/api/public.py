@@ -7,23 +7,47 @@ These live outside `/api` so the addresses stay short and stable (`/feeds/<slug>
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import select
 
 from byop.api.audio_response import audio_response
-from byop.api.deps import SessionDep, SettingsDep, StorageDep
+from byop.api.auth import client_ip
+from byop.api.deps import RedisDep, SessionDep, SettingsDep, StorageDep
 from byop.models import Episode, Show
 from byop.models.enums import EpisodeStatus
 from byop.services.podcast_feed import build_feed, etag_of
+from byop.services.rate_limit import hit
 
 router = APIRouter(tags=["public"])
+
+
+async def _limit(request: Request, redis: RedisDep, name: str, per_minute: int) -> None:
+    """Refuse a client that asks for more than `per_minute` requests a minute (0 = no limit)."""
+    if per_minute <= 0:
+        return
+    result = await hit(redis, f"ratelimit:{name}:{client_ip(request)}", per_minute, 60)
+    if not result.allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many requests. Try again shortly.",
+            headers={"Retry-After": str(result.retry_after)},
+        )
+
+
+async def limit_feed(request: Request, redis: RedisDep, settings: SettingsDep) -> None:
+    await _limit(request, redis, "feed", settings.public_feed_rate_per_minute)
+
+
+async def limit_media(request: Request, redis: RedisDep, settings: SettingsDep) -> None:
+    await _limit(request, redis, "media", settings.public_media_rate_per_minute)
+
 
 FEED_CACHE = "public, max-age=300"
 # A published episode's audio never changes.
 MEDIA_CACHE = "public, max-age=86400"
 
 
-@router.get("/feeds/{slug}.xml")
+@router.get("/feeds/{slug}.xml", dependencies=[Depends(limit_feed)])
 async def feed(
     slug: str,
     request: Request,
@@ -49,8 +73,10 @@ async def feed(
     return Response(body, media_type="application/rss+xml; charset=utf-8", headers=headers)
 
 
-@router.head("/media/episodes/{episode_id}.mp3", include_in_schema=False)
-@router.get("/media/episodes/{episode_id}.mp3")
+@router.head(
+    "/media/episodes/{episode_id}.mp3", include_in_schema=False, dependencies=[Depends(limit_media)]
+)
+@router.get("/media/episodes/{episode_id}.mp3", dependencies=[Depends(limit_media)])
 async def episode_media(
     episode_id: uuid.UUID,
     request: Request,

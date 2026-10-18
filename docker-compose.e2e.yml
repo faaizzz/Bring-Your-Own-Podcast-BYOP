@@ -20,7 +20,7 @@ x-e2e-env: &e2e-env
 
 services:
   mock-services:
-    image: byop-api:local
+    image: ghcr.io/faaizzz/byop-api:${BYOP_VERSION:-local}
     pull_policy: never
     depends_on:
       api:

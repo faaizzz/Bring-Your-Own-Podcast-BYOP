@@ -193,7 +193,7 @@ function DeleteShow({ show }: { show: Show }): React.JSX.Element {
     remove.mutate(show.id, {
       onSuccess: () => {
         notify(`Deleted "${show.title}"`, 'success');
-        navigate('/shows');
+        void navigate('/shows');
       },
     });
   };

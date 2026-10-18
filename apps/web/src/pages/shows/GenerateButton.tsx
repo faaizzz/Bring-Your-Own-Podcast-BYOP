@@ -38,7 +38,7 @@ export function GenerateButton({
     start.mutate(undefined, {
       onSuccess: (started) => {
         setConfirming(false);
-        navigate(`/runs/${started.id}`);
+        void navigate(`/runs/${started.id}`);
       },
       onError: (error) => {
         setConfirming(false);

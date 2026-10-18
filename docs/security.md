@@ -44,3 +44,36 @@ docker compose up -d --force-recreate
 The command is all-or-nothing: if any stored secret cannot be decrypted with the
 old key, nothing is changed and it exits non-zero. If you lost the old key,
 delete the overrides and enter them again (or rely on `.env`).
+
+## Hardening of the web tier
+
+`docker/nginx.conf` is the only thing exposed to the network and sets:
+
+- **Security headers** on every response: a `Content-Security-Policy` that allows only this origin
+  (scripts, styles, fonts, images, audio and API calls; no framing, no plugins),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, a `Referrer-Policy`, a
+  `Permissions-Policy` that turns off camera, microphone and location, and
+  `Strict-Transport-Security` when the request arrived over https (a proxy in front must send
+  `X-Forwarded-Proto: https`). The server version is hidden.
+- **Request size limits:** 1 MB for ordinary requests; only the cover and the intro/outro/music
+  uploads may be larger (up to 26 MB), and the API enforces its own per-file limits too (covers
+  10 MB, audio 25 MB, answered with `413`).
+- **Same origin only:** the API sends no CORS headers, so browsers refuse cross-origin use of it.
+  The session cookie is `httpOnly` and `SameSite=Lax`.
+
+## Rate limits
+
+- Login: 5 attempts a minute per client address.
+- Public feed: `PUBLIC_FEED_RATE_PER_MINUTE` (120) and episode audio:
+  `PUBLIC_MEDIA_RATE_PER_MINUTE` (600) requests a minute per client address; over the limit the
+  answer is `429` with a `Retry-After` header. Podcast apps that share an address (a crawler farm)
+  can be given more room by raising the numbers, or `0` switches a limit off.
+
+The client address is the last `X-Forwarded-For` entry that nginx appends, so a visitor cannot
+choose it. Counters live in Redis; if Redis is down the limits are skipped (fail open) rather than
+locking you out.
+
+## Dependencies
+
+`pip-audit` and `npm audit` run in CI on every push and weekly ([releasing](releasing.md)); the
+images are rebuilt on every release.

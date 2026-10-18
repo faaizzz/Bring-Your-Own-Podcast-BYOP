@@ -1,0 +1,38 @@
+name: Audit
+
+# Known vulnerabilities in the dependencies. Runs on every push and pull request, and weekly,
+# because new advisories appear without a commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: pip-audit (api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Audit the locked runtime dependencies
+        working-directory: apps/api
+        run: |
+          uv export --frozen --no-dev --no-emit-project -o "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/requirements.txt" --no-deps --disable-pip
+
+  node:
+    name: npm audit (web, high and above)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Audit the web app's dependencies
+        working-directory: apps/web
+        run: npm audit --audit-level=high

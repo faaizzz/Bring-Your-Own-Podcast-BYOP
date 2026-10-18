@@ -81,7 +81,8 @@ Details, and how to add another provider: [providers](docs/providers.md).
 `make up` · `make down` · `make logs` · `make up-kokoro` · `make up-minio` (S3 storage) ·
 `make up-langfuse` (tracing) · `make check` (lint, types, tests) · `make e2e` (browser test) ·
 `make help` lists them all. In development `docker-compose.override.yml` mounts the API source for
-hot reload; for a production-like run use `docker compose -f docker-compose.yml up -d --build`.
+hot reload; for a production-like run use `docker compose -f docker-compose.yml up -d --build`, or run a
+published release without building: [releasing](docs/releasing.md).
 
 ## Documentation
 
@@ -94,7 +95,8 @@ hot reload; for a production-like run use `docker compose -f docker-compose.yml 
 - [Podcast feed](docs/feed.md) · [Publishing to directories](docs/publishing.md)
 - [Usage and costs](docs/costs.md) · [Langfuse tracing](docs/langfuse.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
-- [Backup and restore](docs/backup.md) · [Secrets and key rotation](docs/security.md)
+- [Backup and restore](docs/backup.md) · [Secrets, hardening and key rotation](docs/security.md)
+- [Releases and upgrades](docs/releasing.md) · [Changelog](CHANGELOG.md)
 
 **How it works**
 

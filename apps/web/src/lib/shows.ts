@@ -97,6 +97,7 @@ export function useShow(id: string) {
   return useQuery({
     queryKey: [...SHOWS_KEY, id],
     queryFn: () => api.get<Show>(`/shows/${id}`, { schema: showSchema }),
+    enabled: id !== '', // the run page asks before it knows the show
     refetchInterval: (query) =>
       isRunning(query.state.data?.last_run_status) ? RUN_POLL_MS : false,
   });

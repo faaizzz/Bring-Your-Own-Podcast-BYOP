@@ -11,7 +11,7 @@ for d in apps/api apps/web docker docs .github .github/ISSUE_TEMPLATE; do
   [ -d "$d" ] || err "missing directory $d"
 done
 
-for f in LICENSE README.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md .editorconfig .gitignore .gitattributes \
+for f in LICENSE README.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .editorconfig .gitignore .gitattributes \
   docs/IMPLEMENTATION_WORKFLOW.md .github/ISSUE_TEMPLATE/bug_report.md \
   .github/ISSUE_TEMPLATE/feature_request.md; do
   [ -f "$f" ] || err "missing file $f"

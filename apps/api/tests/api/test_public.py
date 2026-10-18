@@ -231,3 +231,67 @@ async def test_drafts_and_unknown_episodes_have_no_public_audio(
     assert (await client.get(url)).status_code == 404
     assert (await client.get(f"/media/episodes/{uuid.uuid4()}.mp3")).status_code == 404
     assert (await client.get("/media/episodes/not-a-uuid.mp3")).status_code == 422
+
+
+# --- rate limits and cross-origin access ---------------------------------------------------
+
+
+async def test_the_feed_is_rate_limited_per_client(
+    client: AsyncClient, app: FastAPI, db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        media_root=str(tmp_path), public_base_url=BASE, public_feed_rate_per_minute=3
+    )
+    await make_show(db_session, admin_user)
+
+    statuses = [(await client.get("/feeds/daily-ai.xml")).status_code for _ in range(5)]
+    refused = await client.get("/feeds/daily-ai.xml")
+
+    assert statuses == [200, 200, 200, 429, 429]
+    assert refused.headers["retry-after"].isdigit() and int(refused.headers["retry-after"]) >= 1
+    # Another client address has its own allowance (the last forwarded address is the real one).
+    other = await client.get("/feeds/daily-ai.xml", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert other.status_code == 200
+
+
+async def test_audio_has_its_own_limit_separate_from_the_feed(
+    client: AsyncClient, app: FastAPI, db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        media_root=str(tmp_path),
+        public_base_url=BASE,
+        public_feed_rate_per_minute=1,
+        public_media_rate_per_minute=2,
+    )
+    url, _ = await media_url(db_session, admin_user, tmp_path)
+
+    assert (await client.get("/feeds/daily-ai.xml")).status_code == 200
+    assert (await client.get("/feeds/daily-ai.xml")).status_code == 429
+    assert [(await client.get(url)).status_code for _ in range(3)] == [200, 200, 429]
+    assert (await client.head(url)).status_code == 429  # HEAD counts too
+
+
+async def test_a_limit_of_zero_switches_the_check_off(
+    client: AsyncClient, app: FastAPI, db_session: AsyncSession, admin_user: User, tmp_path: Path
+) -> None:
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        media_root=str(tmp_path), public_base_url=BASE, public_feed_rate_per_minute=0
+    )
+    await make_show(db_session, admin_user)
+
+    assert {(await client.get("/feeds/daily-ai.xml")).status_code for _ in range(10)} == {200}
+
+
+async def test_other_origins_get_no_cross_origin_permission(
+    authed: AsyncClient, client: AsyncClient
+) -> None:
+    """There is no CORS middleware: browsers keep the API and the feed same-origin."""
+    headers = {"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"}
+
+    preflight = await authed.options("/api/shows", headers=headers)
+    simple = await authed.get("/api/shows", headers={"Origin": "https://evil.example"})
+    feed = await client.get("/feeds/none.xml", headers={"Origin": "https://evil.example"})
+
+    for response in (preflight, simple, feed):
+        assert not any(h.lower().startswith("access-control-") for h in response.headers)
+    assert preflight.status_code in (400, 405)
