@@ -84,6 +84,172 @@ const validation = (patch: Partial<SourceValidation> = {}): SourceValidation => 
   ...patch,
 });
 
+const candidates = [
+  {
+    kind: 'rss',
+    name: 'Alpha Feed',
+    value: 'https://alpha.example/feed.xml',
+    reason: 'Covers open models.',
+    recent_titles: ['Story A', 'Story B'],
+  },
+  {
+    kind: 'url',
+    name: 'Releases',
+    value: 'https://blog.example/releases',
+    reason: 'Release notes.',
+    recent_titles: [],
+  },
+  {
+    kind: 'web_search',
+    name: 'News',
+    value: 'open ai tooling news',
+    reason: 'Fresh.',
+    recent_titles: [],
+  },
+];
+
+function discoveryHandlers(extra: Record<string, Handler> = {}): Record<string, Handler> {
+  return {
+    'POST /api/shows/s1/sources/discover': () => ({ status: 202, body: { job_id: 'job1' } }),
+    'GET /api/sources/discover/job1': () => ({
+      body: { job_id: 'job1', status: 'done', candidates, error: null },
+    }),
+    ...extra,
+  };
+}
+
+async function openDiscovery(extra: Record<string, Handler> = {}) {
+  const opened = await openSources([], discoveryHandlers(extra));
+  await opened.user.click(await screen.findByRole('button', { name: 'Discover sources' }));
+  const dialog = await screen.findByRole('dialog');
+  await opened.user.click(within(dialog).getByRole('button', { name: 'Discover sources' }));
+  return { ...opened, dialog };
+}
+
+describe('discovering sources', () => {
+  it('lists validated candidates with their reason and recent titles', async () => {
+    const { dialog, fetchMock } = await openDiscovery();
+
+    const rows = await within(dialog).findAllByTestId('candidate');
+
+    expect(rows).toHaveLength(3);
+    expect(within(rows[0] as HTMLElement).getByText('Covers open models.')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('Story A')).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).getByText('“open ai tooling news”')).toBeInTheDocument();
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/sources/discover')).toHaveLength(1);
+  });
+
+  it('saves an accepted candidate as a discovered source', async () => {
+    const { user, dialog, fetchMock } = await openDiscovery();
+    await within(dialog).findAllByTestId('candidate');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Accept Alpha Feed' }));
+
+    expect(await within(dialog).findByText('Added')).toBeInTheDocument();
+    expect(jsonBody(callsTo(fetchMock, 'POST /api/shows/s1/sources')[0])).toEqual({
+      kind: 'rss',
+      value: 'https://alpha.example/feed.xml',
+      name: 'Alpha Feed',
+      origin: 'discovered',
+    });
+  });
+
+  it('hides rejected candidates without saving anything', async () => {
+    const { user, dialog, fetchMock } = await openDiscovery();
+    await within(dialog).findAllByTestId('candidate');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Reject Releases' }));
+
+    expect(within(dialog).getAllByTestId('candidate')).toHaveLength(2);
+    expect(within(dialog).queryByText('Releases')).not.toBeInTheDocument();
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/sources')).toHaveLength(0);
+  });
+
+  it('accepts all remaining candidates', async () => {
+    const { user, dialog, fetchMock } = await openDiscovery();
+    await within(dialog).findAllByTestId('candidate');
+    await user.click(within(dialog).getByRole('button', { name: 'Reject News' }));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Accept all (2)' }));
+
+    await waitFor(() => {
+      expect(within(dialog).getAllByText('Added')).toHaveLength(2);
+    });
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/sources')).toHaveLength(2);
+  });
+
+  it('shows why a candidate could not be added and lets the user retry', async () => {
+    const { user, dialog } = await openDiscovery({
+      'POST /api/shows/s1/sources': () => ({
+        status: 409,
+        body: { detail: 'This source is already added to the show' },
+      }),
+    });
+    await within(dialog).findAllByTestId('candidate');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Accept Alpha Feed' }));
+
+    expect(
+      await within(dialog).findByText('This source is already added to the show'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Accept Alpha Feed' })).toBeEnabled();
+  });
+
+  it('shows progress while the worker is busy, then the result', async () => {
+    let polls = 0;
+    const { dialog } = await openDiscovery({
+      'GET /api/sources/discover/job1': () => {
+        polls += 1;
+        return polls < 2
+          ? { body: { job_id: 'job1', status: 'running', candidates: [], error: null } }
+          : { body: { job_id: 'job1', status: 'done', candidates, error: null } };
+      },
+    });
+
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('Searching the web');
+    expect(await within(dialog).findAllByTestId('candidate')).toHaveLength(3);
+  });
+
+  it('reports a failed job and a job that cannot be started', async () => {
+    const failed = await openDiscovery({
+      'GET /api/sources/discover/job1': () => ({
+        body: {
+          job_id: 'job1',
+          status: 'failed',
+          candidates: [],
+          error: 'The model provider rejected the API key.',
+        },
+      }),
+    });
+    expect(await within(failed.dialog).findByRole('alert')).toHaveTextContent(
+      'rejected the API key',
+    );
+  });
+
+  it('says so when nothing new was found', async () => {
+    const { dialog } = await openDiscovery({
+      'GET /api/sources/discover/job1': () => ({
+        body: { job_id: 'job1', status: 'done', candidates: [], error: null },
+      }),
+    });
+
+    expect(
+      await within(dialog).findByText('Nothing new was found for this topic.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the error when the job cannot be started', async () => {
+    const { dialog } = await openDiscovery({
+      'POST /api/shows/s1/sources/discover': () => ({
+        status: 503,
+        body: { detail: 'The job queue is unavailable' },
+      }),
+    });
+
+    expect(await within(dialog).findByText('The job queue is unavailable')).toBeInTheDocument();
+  });
+});
+
 describe('Sources tab', () => {
   it('invites the user to add a source when there are none', async () => {
     await openSources([]);

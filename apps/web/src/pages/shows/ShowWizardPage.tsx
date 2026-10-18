@@ -5,7 +5,9 @@ import { FormProvider, useForm, type FieldErrors } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../../lib/toast';
+import type { DiscoveredSource } from '../../lib/discovery';
 import { useCreateShow, useSaveSpeakers, useUploadCover, type SpeakerInput } from '../../lib/shows';
+import { useAddSources } from '../../lib/sources';
 import { useDefaultSpeakers } from '../../lib/voices';
 import { CoverPicker } from './form/CoverPicker';
 import { ModelStep } from './form/ModelStep';
@@ -21,6 +23,7 @@ import {
   type ShowFormValues,
   type StepId,
 } from './form/schema';
+import { SourcesStep } from './form/SourcesStep';
 import { SpeakersStep } from './form/SpeakersStep';
 import { TopicStep } from './form/TopicStep';
 import { firstErrorStep, stepsWithErrors } from './form/useStepper';
@@ -34,6 +37,8 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
   const [step, setStep] = useState<StepId>('topic');
   const [general, setGeneral] = useState<string[]>([]);
   const [cover, setCover] = useState<File | null>(null);
+  const [sources, setSources] = useState<DiscoveredSource[]>([]);
+  const addSources = useAddSources();
   const uploadCover = useUploadCover();
   const create = useCreateShow();
   const saveSpeakers = useSaveSpeakers();
@@ -44,7 +49,8 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
   const current = STEPS[index];
   const isLast = index === STEPS.length - 1;
   const failing = stepsWithErrors(form.formState.errors);
-  const busy = create.isPending || saveSpeakers.isPending || uploadCover.isPending;
+  const busy =
+    create.isPending || saveSpeakers.isPending || uploadCover.isPending || addSources.isPending;
 
   const next = async () => {
     if (!current) return;
@@ -86,6 +92,23 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
         // The show is complete without a cover; let the user retry from its settings.
         const message = error instanceof Error ? error.message : 'The upload failed.';
         notify(`The cover was not saved: ${message}`, 'danger');
+      }
+    }
+    if (sources.length > 0) {
+      const failed = await addSources.mutateAsync({
+        showId: created.id,
+        sources: sources.map((s) => ({
+          kind: s.kind,
+          value: s.value,
+          name: s.name,
+          origin: 'discovered' as const,
+        })),
+      });
+      if (failed.length > 0) {
+        notify(
+          `${String(failed.length)} of ${String(sources.length)} sources could not be added; you can add them from the Sources tab.`,
+          'danger',
+        );
       }
     }
     for (const warning of created.warnings) notify(warning, 'info');
@@ -154,10 +177,25 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
             <div hidden={step !== 'models'}>
               <ModelStep />
             </div>
+            <div hidden={step !== 'sources'}>
+              <SourcesStep
+                chosen={sources}
+                onAdd={(source) => {
+                  setSources((current) =>
+                    current.some((s) => s.kind === source.kind && s.value === source.value)
+                      ? current
+                      : [...current, source],
+                  );
+                }}
+                onRemove={(source) => {
+                  setSources((current) => current.filter((s) => s !== source));
+                }}
+              />
+            </div>
             <div hidden={step !== 'schedule'}>
               <ScheduleStep editing={false} />
             </div>
-            {step === 'review' && <ReviewStep cover={cover} />}
+            {step === 'review' && <ReviewStep cover={cover} sourceCount={sources.length} />}
 
             <div className="d-flex justify-content-between mt-4">
               <Button

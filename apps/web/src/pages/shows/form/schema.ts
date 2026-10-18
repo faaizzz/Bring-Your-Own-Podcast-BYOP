@@ -235,7 +235,7 @@ export const showFormSchema = z
 export type ShowFormValues = z.infer<typeof showFormSchema>;
 export type FormPath = FieldPath<ShowFormValues>;
 
-export type StepId = 'topic' | 'speakers' | 'models' | 'schedule' | 'review';
+export type StepId = 'topic' | 'speakers' | 'models' | 'sources' | 'schedule' | 'review';
 
 export type StepDef = { id: StepId; label: string; fields: FormPath[] };
 
@@ -255,6 +255,8 @@ export const STEPS: StepDef[] = [
   },
   { id: 'speakers', label: 'Speakers & voices', fields: ['speakers'] },
   { id: 'models', label: 'Models', fields: ['llm_provider', 'llm_model'] },
+  // Sources are not form fields: the wizard keeps its own list and saves it after creating the show.
+  { id: 'sources', label: 'Sources', fields: [] },
   {
     id: 'schedule',
     label: 'Schedule',

@@ -29,6 +29,7 @@ apps/api/byop/        FastAPI package
   worker.py           Celery app + tasks entrypoint
   api/                routers, ONE FILE PER RESOURCE (shows.py, speakers.py, ...)
   services/           domain logic — never in routers
+  tasks/              Celery tasks (thin: they call services); register new modules in `worker.py` `include`
   storage/            `Storage` interface + `LocalStorage` / `S3Storage`; everything of a show lives under `shows/<id>/`
   models/             SQLAlchemy models
   schemas/            pydantic request/response models
@@ -82,7 +83,7 @@ New directories or modules must follow these names; update this section if the l
 `make up|up-kokoro|down|logs|migrate|test|lint|typecheck|check|fmt` (`make help` lists them). `make up` creates `.env` from `.env.example` and generates `BYOP_SECRET_KEY` if empty; `docker-compose.override.yml` adds dev hot reload. `make test` (and `check`) first starts postgres/redis via compose (`make deps`); tests use the `byop_test` database from `TEST_DATABASE_URL`, created and migrated on demand. `make migrate` applies Alembic migrations. Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
 
 ## Configuration
-All configuration comes from environment variables documented in `.env.example` (single source of truth). Any server-side fetch of a user-supplied URL goes through `services/safe_http.fetch_bytes` (public addresses only; see `docs/sources.md`); tests replace `safe_http.resolve_host` instead of touching DNS. Media goes through `byop/storage` only (`StorageDep`), never `open()` on `MEDIA_ROOT` or boto3 directly; `STORAGE_BACKEND=local|s3` with `S3_*` (see `docs/storage.md`). Instance defaults for new shows come from `DEFAULT_LLM_PROVIDER`/`DEFAULT_LLM_MODEL`/`DEFAULT_SHOW_STYLE`. Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
+All configuration comes from environment variables documented in `.env.example` (single source of truth). Long jobs run as Celery tasks that keep their state in Redis (see `services/discovery_jobs.py`); a task creates its own DB engine (NullPool) and Redis client because it runs in its own event loop. Any server-side fetch of a user-supplied URL goes through `services/safe_http.fetch_bytes` (public addresses only; see `docs/sources.md`); tests replace `safe_http.resolve_host` instead of touching DNS. Media goes through `byop/storage` only (`StorageDep`), never `open()` on `MEDIA_ROOT` or boto3 directly; `STORAGE_BACKEND=local|s3` with `S3_*` (see `docs/storage.md`). Instance defaults for new shows come from `DEFAULT_LLM_PROVIDER`/`DEFAULT_LLM_MODEL`/`DEFAULT_SHOW_STYLE`. Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
 
 ## Commits
 - Format: `<type>(<area>): <summary>` — types `feat|fix|chore|docs|test|refactor|ci`; areas like `api`, `web`, `infra`, `docs`, `providers`.

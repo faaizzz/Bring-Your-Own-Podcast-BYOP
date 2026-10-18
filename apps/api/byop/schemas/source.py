@@ -29,6 +29,8 @@ class SourceCreate(BaseModel):
     value: Value
     name: Name | None = None
     enabled: bool = True
+    # `discovered` marks sources the user accepted from automatic discovery.
+    origin: SourceOrigin = SourceOrigin.USER
 
     @model_validator(mode="after")
     def _value_matches_kind(self) -> "SourceCreate":

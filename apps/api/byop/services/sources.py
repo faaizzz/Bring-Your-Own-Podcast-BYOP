@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.models import Source
-from byop.models.enums import SourceKind, SourceOrigin
+from byop.models.enums import SourceKind
 from byop.schemas.source import SourceCreate, SourceUpdate, SourceValidation, check_value
 from byop.services.feeds import FeedInvalid, FeedPreview, preview_feed
 from byop.services.safe_http import FetchError, ensure_public_url
@@ -121,7 +121,7 @@ async def create_source(
         value=data.value,
         # A feed names itself when the user does not.
         name=data.name or (preview.title if preview else None),
-        origin=SourceOrigin.USER,
+        origin=data.origin,
         enabled=data.enabled,
     )
     try:

@@ -32,7 +32,8 @@ import { SpeakersStep } from './form/SpeakersStep';
 import { TopicStep } from './form/TopicStep';
 import { firstErrorStep, stepsWithErrors } from './form/useStepper';
 
-const EDIT_STEPS = STEPS.filter((s) => s.id !== 'review');
+// Sources have their own tab on the show; the review step only exists in the wizard.
+const EDIT_STEPS = STEPS.filter((s) => s.id !== 'review' && s.id !== 'sources');
 
 /** The cover saves immediately, like a file upload should, not with the rest of the form. */
 function CoverSection({ show }: { show: Show }): React.JSX.Element {

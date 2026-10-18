@@ -36,7 +36,13 @@ export const validationSchema = z.object({
 });
 export type SourceValidation = z.infer<typeof validationSchema>;
 
-export type SourceInput = { kind: SourceKind; value: string; name?: string; enabled?: boolean };
+export type SourceInput = {
+  kind: SourceKind;
+  value: string;
+  name?: string;
+  enabled?: boolean;
+  origin?: 'user' | 'discovered';
+};
 export type SourcePatch = { value?: string; name?: string | null; enabled?: boolean };
 
 function sourcesKey(showId: string) {
@@ -84,5 +90,25 @@ export function useValidateSource(showId: string) {
         { kind: 'rss', value },
         { schema: validationSchema },
       ),
+  });
+}
+
+/** Adds several sources to a show (the wizard does this once the show exists). */
+export function useAddSources() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ showId, sources }: { showId: string; sources: SourceInput[] }) => {
+      const failed: { source: SourceInput; message: string }[] = [];
+      for (const source of sources) {
+        try {
+          await api.post<Source>(`/shows/${showId}/sources`, source, { schema: sourceSchema });
+        } catch (error) {
+          failed.push({ source, message: error instanceof Error ? error.message : 'Failed' });
+        }
+      }
+      return failed;
+    },
+    onSettled: (_data, _error, { showId }) =>
+      queryClient.invalidateQueries({ queryKey: sourcesKey(showId) }),
   });
 }

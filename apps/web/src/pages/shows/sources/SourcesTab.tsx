@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Badge, Button, Form, Modal, Spinner, Table } from 'react-bootstrap';
-import { FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiEdit2, FiPlus, FiSearch, FiTrash2 } from 'react-icons/fi';
 
 import { formatDateTime } from '../../../lib/format';
 import type { Show } from '../../../lib/shows';
@@ -13,6 +13,7 @@ import {
   type Source,
 } from '../../../lib/sources';
 import { useToast } from '../../../lib/toast';
+import { DiscoverSources } from './DiscoverSources';
 import { SourceModal } from './SourceModal';
 
 function sourceLabel(source: Source): string {
@@ -38,6 +39,7 @@ export function SourcesTab({ show }: { show: Show }): React.JSX.Element {
   const [editing, setEditing] = useState<Source | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Source | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [discovering, setDiscovering] = useState(false);
 
   const toggle = (source: Source, enabled: boolean) => {
     setToggling(source.id);
@@ -82,14 +84,25 @@ export function SourcesTab({ show }: { show: Show }): React.JSX.Element {
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <p className="text-muted mb-0">Where this show’s stories come from.</p>
-        <Button
-          onClick={() => {
-            setEditing('new');
-          }}
-        >
-          <FiPlus aria-hidden="true" className="me-1" />
-          Add source
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="outline-primary"
+            onClick={() => {
+              setDiscovering(true);
+            }}
+          >
+            <FiSearch aria-hidden="true" className="me-1" />
+            Discover sources
+          </Button>
+          <Button
+            onClick={() => {
+              setEditing('new');
+            }}
+          >
+            <FiPlus aria-hidden="true" className="me-1" />
+            Add source
+          </Button>
+        </div>
       </div>
 
       {sources.isPending ? (
@@ -199,6 +212,35 @@ export function SourcesTab({ show }: { show: Show }): React.JSX.Element {
           onSave={save}
         />
       )}
+
+      <Modal
+        show={discovering}
+        size="lg"
+        onHide={() => {
+          setDiscovering(false);
+        }}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title as="h5">Discover sources</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted">
+            Finds feeds, pages and searches for “{show.topic}”. Feeds and pages are checked before
+            they are shown.
+          </p>
+          <DiscoverSources
+            target={{ kind: 'show', showId: show.id }}
+            onAccept={async (candidate) => {
+              await create.mutateAsync({
+                kind: candidate.kind,
+                value: candidate.value,
+                name: candidate.name,
+                origin: 'discovered',
+              });
+            }}
+          />
+        </Modal.Body>
+      </Modal>
 
       <Modal
         show={deleting !== null}

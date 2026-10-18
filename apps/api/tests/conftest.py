@@ -88,7 +88,7 @@ async def db_session(connection: AsyncConnection) -> AsyncIterator[AsyncSession]
 async def _clean_rate_limits() -> None:
     """Rate-limit counters and cached model lists live in Redis; clear them between tests."""
     redis = get_redis_client()
-    for pattern in ("ratelimit:*", "models:*", "voices:*"):
+    for pattern in ("ratelimit:*", "models:*", "voices:*", "discovery:*"):
         keys = [key async for key in redis.scan_iter(pattern)]
         if keys:
             await redis.delete(*keys)
@@ -130,3 +130,25 @@ async def authed(client: AsyncClient, admin_user: User) -> AsyncClient:
     )
     client.cookies.set(COOKIE_NAME, token)
     return client
+
+
+PUBLIC_IP = "93.184.216.34"
+PRIVATE_HOSTS = {"internal.example": ["10.0.0.5"], "metadata.example": ["169.254.169.254"]}
+
+
+@pytest.fixture
+def fake_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve every hostname to a public address (except the PRIVATE_HOSTS), without real DNS."""
+    from byop.services import safe_http
+    from byop.services.safe_http import FetchError
+
+    async def resolve(host: str, port: int) -> list[str]:
+        if host in PRIVATE_HOSTS:
+            return PRIVATE_HOSTS[host]
+        if host.replace(".", "").isdigit():
+            return [host]
+        if host.endswith(".invalid"):
+            raise FetchError(f"Could not find the host '{host}'")
+        return [PUBLIC_IP]
+
+    monkeypatch.setattr(safe_http, "resolve_host", resolve)

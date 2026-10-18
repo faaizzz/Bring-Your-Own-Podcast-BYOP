@@ -1,4 +1,6 @@
+import calendar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import anyio.to_thread
 import feedparser
@@ -21,12 +23,24 @@ class FeedPreview:
     title: str | None
     entry_count: int
     latest_titles: list[str]
+    # Publication time of the newest entry that has one; None when no entry is dated.
+    newest: datetime | None = None
 
 
 def _looks_like_html(content: bytes, content_type: str | None) -> bool:
     if content_type and "html" in content_type.lower():
         return True
     return content.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html"))
+
+
+def _entry_time(entry: feedparser.FeedParserDict) -> datetime | None:
+    stamp = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not stamp:
+        return None
+    try:
+        return datetime.fromtimestamp(calendar.timegm(stamp), UTC)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
 
 
 def parse_feed(content: bytes, content_type: str | None = None) -> FeedPreview:
@@ -46,10 +60,12 @@ def parse_feed(content: bytes, content_type: str | None = None) -> FeedPreview:
         for entry in parsed.entries
         if str(entry.get("title", "")).strip()
     ]
+    times = [t for t in (_entry_time(entry) for entry in parsed.entries) if t is not None]
     return FeedPreview(
         title=feed_title[:MAX_TITLE_LENGTH] or None,
         entry_count=len(parsed.entries),
         latest_titles=titles[:PREVIEW_TITLES],
+        newest=max(times) if times else None,
     )
 
 

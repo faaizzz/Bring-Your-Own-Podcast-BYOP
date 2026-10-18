@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).
     sources_allow_private_networks: bool = False
 
+    # Discovery asks a model with web search for sources. Unset: the show's model, then the
+    # instance default. On OpenRouter ":online" is appended so the model can search the web.
+    discovery_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
+    discovery_llm_model: str | None = None
+
     # Defaults for new shows (a show can override each of them).
     default_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
     default_llm_model: str | None = None
@@ -67,6 +72,8 @@ class Settings(BaseSettings):
     @field_validator(
         "default_llm_provider",
         "default_llm_model",
+        "discovery_llm_provider",
+        "discovery_llm_model",
         "s3_endpoint_url",
         "s3_public_endpoint_url",
         "s3_bucket",

@@ -85,6 +85,10 @@ describe('create-show wizard', () => {
     expect(screen.getByLabelText('Language model provider')).toHaveValue('');
     await user.click(next());
 
+    // Sources are optional.
+    expect(screen.getByRole('button', { name: 'Discover sources' })).toBeEnabled();
+    await user.click(next());
+
     // Schedule: weekly on Fridays.
     await user.selectOptions(screen.getByLabelText('Schedule'), 'weekly');
     await user.selectOptions(screen.getByLabelText('Weekday'), '4');
@@ -125,7 +129,7 @@ describe('create-show wizard', () => {
       new File(['png-bytes'], 'cover.png', { type: 'image/png' }),
     );
     expect(await screen.findByRole('img', { name: 'Cover preview' })).toBeInTheDocument();
-    for (let i = 0; i < 4; i += 1) await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     expect(screen.getByText('cover.png')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
@@ -136,7 +140,7 @@ describe('create-show wizard', () => {
   it('creates the show without a cover when none is chosen', async () => {
     const { user, fetchMock } = await openWizard();
     await fillTopic(user);
-    for (let i = 0; i < 4; i += 1) await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     await screen.findByText('Created "Daily AI"');
@@ -155,13 +159,134 @@ describe('create-show wizard', () => {
       screen.getByLabelText('Cover image (optional)'),
       new File(['x'], 'tiny.png', { type: 'image/png' }),
     );
-    for (let i = 0; i < 4; i += 1) await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     expect(
       await screen.findByText(/The cover was not saved: The image is too small/),
     ).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Daily AI' })).toBeInTheDocument();
+  });
+
+  describe('sources step', () => {
+    const found = [
+      {
+        kind: 'rss',
+        name: 'Alpha Feed',
+        value: 'https://alpha.example/feed.xml',
+        reason: 'Covers open models.',
+        recent_titles: ['Story A', 'Story B'],
+      },
+      {
+        kind: 'web_search',
+        name: 'News',
+        value: 'open ai tooling news',
+        reason: 'Fresh news.',
+        recent_titles: [],
+      },
+    ];
+    const discoveryHandlers = (): Record<string, Handler> => ({
+      'POST /api/sources/discover': () => ({ status: 202, body: { job_id: 'job1' } }),
+      'GET /api/sources/discover/job1': () => ({
+        body: { job_id: 'job1', status: 'done', candidates: found, error: null },
+      }),
+      'POST /api/shows/s1/sources': () => ({ status: 201, body: {} }),
+    });
+
+    async function onSources(extra: Record<string, Handler> = {}) {
+      const opened = await openWizard({ ...discoveryHandlers(), ...extra });
+      await fillTopic(opened.user);
+      await opened.user.click(next());
+      await opened.user.click(next());
+      await opened.user.click(next());
+      await screen.findByRole('button', { name: 'Discover sources' });
+      return opened;
+    }
+
+    it('discovers with the topic, model and language from the form', async () => {
+      const { user, fetchMock } = await onSources();
+
+      await user.click(screen.getByRole('button', { name: 'Discover sources' }));
+
+      expect(await screen.findAllByTestId('candidate')).toHaveLength(2);
+      expect(bodyOf(callsTo(fetchMock, 'POST /api/sources/discover')[0])).toEqual({
+        topic: 'News about artificial intelligence',
+        language: 'en',
+      });
+      const first = screen.getAllByTestId('candidate')[0] as HTMLElement;
+      expect(within(first).getByText('Covers open models.')).toBeInTheDocument();
+      expect(within(first).getByText('Story A')).toBeInTheDocument();
+    });
+
+    it('keeps accepted sources, drops rejected ones, and saves them with the new show', async () => {
+      const { user, fetchMock } = await onSources();
+      await user.click(screen.getByRole('button', { name: 'Discover sources' }));
+      await screen.findAllByTestId('candidate');
+
+      await user.click(screen.getByRole('button', { name: 'Accept Alpha Feed' }));
+      await user.click(screen.getByRole('button', { name: 'Reject News' }));
+
+      expect(await screen.findByText('Chosen sources (1)')).toBeInTheDocument();
+      expect(screen.getAllByTestId('candidate')).toHaveLength(1);
+      await user.click(next());
+      await user.click(next());
+      expect(screen.getByText('1 chosen')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+      await screen.findByText('Created "Daily AI"');
+      const calls = callsTo(fetchMock, 'POST /api/shows/s1/sources');
+      expect(calls).toHaveLength(1);
+      expect(bodyOf(calls[0])).toEqual({
+        kind: 'rss',
+        value: 'https://alpha.example/feed.xml',
+        name: 'Alpha Feed',
+        origin: 'discovered',
+      });
+    });
+
+    it('accepts everything at once', async () => {
+      const { user } = await onSources();
+      await user.click(screen.getByRole('button', { name: 'Discover sources' }));
+      await screen.findAllByTestId('candidate');
+
+      await user.click(screen.getByRole('button', { name: 'Accept all (2)' }));
+
+      expect(await screen.findByText('Chosen sources (2)')).toBeInTheDocument();
+      expect(screen.getAllByText('Added')).toHaveLength(2);
+    });
+
+    it('lets a sources that fails to save be added later without blocking the show', async () => {
+      const { user } = await onSources({
+        'POST /api/shows/s1/sources': () => ({ status: 422, body: { detail: 'bad' } }),
+      });
+      await user.click(screen.getByRole('button', { name: 'Discover sources' }));
+      await screen.findAllByTestId('candidate');
+      await user.click(screen.getByRole('button', { name: 'Accept Alpha Feed' }));
+      await user.click(next());
+      await user.click(next());
+      await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+      expect(await screen.findByText(/1 of 1 sources could not be added/)).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Daily AI' })).toBeInTheDocument();
+    });
+
+    it('explains why discovery failed', async () => {
+      const { user } = await onSources({
+        'GET /api/sources/discover/job1': () => ({
+          body: {
+            job_id: 'job1',
+            status: 'failed',
+            candidates: [],
+            error: 'No language model is set up for discovery.',
+          },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Discover sources' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No language model is set up');
+      expect(screen.getByRole('button', { name: 'Discover again' })).toBeEnabled();
+    });
   });
 
   it('shows the API model price and sends the chosen provider and model', async () => {
@@ -178,8 +303,7 @@ describe('create-show wizard', () => {
     await user.selectOptions(screen.getByLabelText('Model'), 'meta/llama');
     expect(screen.getByTestId('model-price')).toHaveTextContent('— in / — out');
     await user.selectOptions(screen.getByLabelText('Model'), 'anthropic/claude-sonnet');
-    await user.click(next());
-    await user.click(next());
+    for (let i = 0; i < 3; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     await screen.findByText('Created "Daily AI"');
@@ -327,10 +451,7 @@ describe('create-show wizard', () => {
       }),
     });
     await fillTopic(user);
-    await user.click(next());
-    await user.click(next());
-    await user.click(next());
-    await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     expect(await screen.findByText('String should have at most 200 characters')).toBeVisible();
@@ -346,7 +467,7 @@ describe('create-show wizard', () => {
       }),
     });
     await fillTopic(user);
-    for (let i = 0; i < 4; i += 1) await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('already taken');
@@ -357,7 +478,7 @@ describe('create-show wizard', () => {
       'PUT /api/shows/s1/speakers': () => ({ status: 502, body: { detail: 'voice service down' } }),
     });
     await fillTopic(user);
-    for (let i = 0; i < 4; i += 1) await user.click(next());
+    for (let i = 0; i < 5; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
     expect(

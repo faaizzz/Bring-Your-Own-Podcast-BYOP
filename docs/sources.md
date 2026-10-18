@@ -51,3 +51,37 @@ DNS server.
 The table shows type, name, address, origin, an enabled switch (saved immediately), last fetch
 and last error, with edit and remove actions. *Add source* opens a dialog; for an RSS feed
 *Validate feed* shows its title, entry count and the three latest titles before you add it.
+
+## Discovering sources
+
+Given only a topic, BYOP can propose sources. In the app: **Discover sources** on the Sources
+tab, or the *Sources* step of the create wizard (nothing is saved until the show is created).
+
+How it works (`byop/services/discovery.py`, run by the Celery worker):
+
+1. A language model with web search is asked for RSS feeds, pages to watch and search queries
+   for the topic, in the show's language, as structured JSON. On OpenRouter `:online` is appended
+   to the model id so it can search the web (`perplexity/…` models, which search natively, and ids
+   already ending in `:online` are left alone). On other providers the configured model is
+   used as is, so pick one that can search.
+2. Every candidate is **checked**: an RSS feed must be fetchable, parse, have entries and (when
+   its entries carry dates) a newest one under 90 days old; a page must be fetchable. The same
+   address rules as for manual sources apply. Failures are dropped; sources the show already has
+   are left out.
+3. One to three `web_search` queries are always proposed (a baseline is made from the topic if the
+   model gave none).
+
+The model is chosen as: `DISCOVERY_LLM_PROVIDER` + `DISCOVERY_LLM_MODEL` if set, else the show's
+own model, else `DEFAULT_LLM_PROVIDER` + `DEFAULT_LLM_MODEL`. If none is set the job fails with
+a message saying so. The call is logged and attributed to the show with `stage=discovery`
+(usage capture records it with the others).
+
+| Method | Path | |
+| --- | --- | --- |
+| `POST` | `/api/shows/{id}/sources/discover` | Start for a show's topic; `202 {job_id}` |
+| `POST` | `/api/sources/discover` | Start for a draft `{topic, language?, llm_provider?, llm_model?}` (before the show exists) |
+| `GET` | `/api/sources/discover/{job_id}` | `{status: queued\|running\|done\|failed, candidates, error}`; kept for an hour |
+
+A candidate is `{kind, name, value, reason, recent_titles}`. Accepting one means creating the
+source with `origin: "discovered"` through the normal sources API. Discovery is run on demand;
+re-discovering on a schedule is not part of it.
