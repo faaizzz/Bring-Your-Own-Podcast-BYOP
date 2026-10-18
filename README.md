@@ -38,6 +38,7 @@ development; for a production-like run use
 
 ## Documentation
 
+- [Model providers (OpenRouter, OpenAI, Ollama)](docs/providers.md)
 - [Secrets and key rotation](docs/security.md)
 
 ## Roadmap

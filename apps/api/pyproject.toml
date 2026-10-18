@@ -17,6 +17,8 @@ dependencies = [
   "bcrypt>=4.2",
   "pyjwt>=2.9",
   "cryptography>=43",
+  "openai>=1.50",
+  "tenacity>=9",
 ]
 
 [dependency-groups]

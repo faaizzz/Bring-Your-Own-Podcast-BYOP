@@ -1,6 +1,7 @@
 import asyncio
 import os
-from collections.abc import AsyncIterator
+import socket
+from collections.abc import AsyncIterator, Iterator
 
 # Settings are validated at import time, so the test environment must exist first.
 os.environ["BYOP_SECRET_KEY"] = "test-secret-key-0123456789abcdef"  # keep in sync with TEST_SECRET
@@ -29,6 +30,24 @@ from byop.security import passwords
 from byop.security.tokens import COOKIE_NAME, create_session_token
 from tests.db_utils import TEST_DATABASE_URL, migrate, recreate_database
 from tests.models.factories import make_user
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _block_external_network() -> Iterator[None]:
+    """Tests may talk to local Postgres/Redis only; anything else must be mocked (respx)."""
+    real_connect = socket.socket.connect
+
+    def guarded(self: socket.socket, address: object) -> None:
+        host = address[0] if isinstance(address, tuple) else address
+        if host not in ("127.0.0.1", "::1", "localhost") and not str(host).startswith("/"):
+            raise RuntimeError(
+                f"Network access to {host!r} is blocked in tests; mock it with respx"
+            )
+        real_connect(self, address)  # type: ignore[arg-type]
+
+    socket.socket.connect = guarded  # type: ignore[method-assign,assignment]
+    yield
+    socket.socket.connect = real_connect  # type: ignore[method-assign]
 
 
 @pytest.fixture(autouse=True)
@@ -67,11 +86,12 @@ async def db_session(connection: AsyncConnection) -> AsyncIterator[AsyncSession]
 
 @pytest.fixture(autouse=True)
 async def _clean_rate_limits() -> None:
-    """Rate-limit counters live in Redis, so clear them to keep tests independent."""
+    """Rate-limit counters and cached model lists live in Redis; clear them between tests."""
     redis = get_redis_client()
-    keys = [key async for key in redis.scan_iter("ratelimit:*")]
-    if keys:
-        await redis.delete(*keys)
+    for pattern in ("ratelimit:*", "models:*"):
+        keys = [key async for key in redis.scan_iter(pattern)]
+        if keys:
+            await redis.delete(*keys)
 
 
 @pytest.fixture

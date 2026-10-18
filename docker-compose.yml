@@ -11,6 +11,10 @@ x-api: &api
     DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://byop:byop@postgres:5432/byop}
     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     MEDIA_ROOT: /data/media
+  # Lets the containers reach a model server on the host (e.g. Ollama) on Linux as well as
+  # Docker Desktop: http://host.docker.internal:11434/v1
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   volumes:
     - media:/data/media
   depends_on: &api-deps
