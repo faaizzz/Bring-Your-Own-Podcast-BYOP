@@ -28,7 +28,7 @@ apps/api/byop/        FastAPI package
   logging.py          structlog JSON logging with request id
   worker.py           Celery app + tasks entrypoint
   api/                routers, ONE FILE PER RESOURCE (shows.py, speakers.py, ...)
-  services/           domain logic — never in routers
+  services/           domain logic — never in routers (`storage.py`: media storage seam; everything of a show lives under `shows/<id>/`)
   models/             SQLAlchemy models
   schemas/            pydantic request/response models
   providers/llm/      LLM provider abstraction
@@ -81,7 +81,7 @@ New directories or modules must follow these names; update this section if the l
 `make up|up-kokoro|down|logs|migrate|test|lint|typecheck|check|fmt` (`make help` lists them). `make up` creates `.env` from `.env.example` and generates `BYOP_SECRET_KEY` if empty; `docker-compose.override.yml` adds dev hot reload. `make test` (and `check`) first starts postgres/redis via compose (`make deps`); tests use the `byop_test` database from `TEST_DATABASE_URL`, created and migrated on demand. `make migrate` applies Alembic migrations. Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
 
 ## Configuration
-All configuration comes from environment variables documented in `.env.example` (single source of truth). Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
+All configuration comes from environment variables documented in `.env.example` (single source of truth). Instance defaults for new shows come from `DEFAULT_LLM_PROVIDER`/`DEFAULT_LLM_MODEL`/`DEFAULT_SHOW_STYLE`. Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
 
 ## Commits
 - Format: `<type>(<area>): <summary>` — types `feat|fix|chore|docs|test|refactor|ci`; areas like `api`, `web`, `infra`, `docs`, `providers`.

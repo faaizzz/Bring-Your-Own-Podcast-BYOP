@@ -8,9 +8,17 @@ from byop.db import get_session
 from byop.models import User
 from byop.security.tokens import COOKIE_NAME
 from byop.services.auth import user_from_token
+from byop.services.storage import LocalStorage, Storage
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+def get_storage(settings: SettingsDep) -> Storage:
+    return LocalStorage(settings.media_root)
+
+
+StorageDep = Annotated[Storage, Depends(get_storage)]
 
 
 async def current_user(request: Request, session: SessionDep, settings: SettingsDep) -> User:

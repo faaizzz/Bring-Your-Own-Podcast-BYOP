@@ -43,6 +43,7 @@ development; for a production-like run use
 ## Documentation
 
 - [Model providers (OpenRouter, OpenAI, Ollama, Kokoro)](docs/providers.md)
+- [Shows API](docs/shows.md)
 - [Secrets and key rotation](docs/security.md)
 
 ## Roadmap

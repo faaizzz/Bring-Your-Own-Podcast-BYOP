@@ -1,8 +1,10 @@
 from functools import lru_cache
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from byop.models.enums import ShowStyle
 
 
 class ConfigError(RuntimeError):
@@ -42,7 +44,23 @@ class Settings(BaseSettings):
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Defaults for new shows (a show can override each of them).
+    default_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
+    default_llm_model: str | None = None
+    default_show_style: ShowStyle = ShowStyle.NEWS_BRIEFING
+
     log_level: str = "INFO"
+
+    @field_validator("default_llm_provider", "default_llm_model", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value: object) -> object:
+        """`DEFAULT_LLM_MODEL=` in .env is an empty string, which should fall back to unset."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("default_show_style", mode="before")
+    @classmethod
+    def _blank_style_is_default(cls, value: object) -> object:
+        return ShowStyle.NEWS_BRIEFING if isinstance(value, str) and not value.strip() else value
 
     @classmethod
     def load(cls) -> Self:
