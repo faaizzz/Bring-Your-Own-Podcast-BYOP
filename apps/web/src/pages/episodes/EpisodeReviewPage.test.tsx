@@ -38,6 +38,7 @@ function makeEpisode(patch: Partial<Episode> = {}): Episode {
     audio_revision: 1,
     audio_current: true,
     audio_url: '/api/episodes/e1/audio?v=1',
+    sources: [],
     ...patch,
   };
 }
@@ -318,5 +319,100 @@ describe('episodes tab', () => {
     );
     expect(screen.getByText('Published')).toBeInTheDocument();
     expect(screen.getByText('Voicing…')).toBeInTheDocument();
+  });
+});
+
+describe('episode details', () => {
+  const runDetail = {
+    id: 'r1',
+    show_id: 's1',
+    trigger: 'manual',
+    status: 'awaiting_review',
+    stage: 'finalize',
+    progress: 100,
+    error: null,
+    cancel_requested: false,
+    started_at: '2026-01-01T10:00:00Z',
+    finished_at: '2026-01-01T10:03:00Z',
+    created_at: '2026-01-01T10:00:00Z',
+    episode_id: 'e1',
+    events: [
+      {
+        id: 'ev1',
+        ts: '2026-01-01T10:00:00Z',
+        level: 'info',
+        stage: 'ingest',
+        message: 'Started ingest',
+        data: null,
+      },
+      {
+        id: 'ev2',
+        ts: '2026-01-01T10:00:20Z',
+        level: 'info',
+        stage: 'ingest',
+        message: 'Finished ingest',
+        data: null,
+      },
+    ],
+  };
+
+  it('shows the stories it was made from, the run timeline, a download and the cost note', async () => {
+    const { handlers } = episodeApi({
+      status: 'published',
+      published_at: '2026-01-02T00:00:00Z',
+      sources: [
+        {
+          id: 'i1',
+          title: 'Sonar maps the ocean',
+          url: 'https://example.com/sonar',
+          source_name: 'Ocean Weekly',
+          published_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    });
+    await renderApp('/episodes/e1', {
+      handlers: { ...handlers, 'GET /api/runs/r1': () => ({ body: runDetail }) },
+    });
+
+    const link = await screen.findByRole('link', { name: /Sonar maps the ocean/ });
+    expect(link).toHaveAttribute('href', 'https://example.com/sonar');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.getByText(/Ocean Weekly/)).toBeInTheDocument();
+    const stages = await screen.findByRole('list', { name: 'Stages' });
+    expect(within(stages).getByText('Collect stories').closest('li')).toHaveAttribute(
+      'data-state',
+      'done',
+    );
+    expect(screen.getByRole('link', { name: 'Open the full run log' })).toHaveAttribute(
+      'href',
+      '/runs/r1',
+    );
+    expect(screen.getByRole('link', { name: /Download MP3/ })).toHaveAttribute(
+      'href',
+      '/api/episodes/e1/audio?v=1',
+    );
+    expect(screen.getByText(/once usage is tracked/)).toBeInTheDocument();
+  });
+
+  it('shows a published script as a transcript with one colour per speaker', async () => {
+    const { handlers } = episodeApi({ status: 'published' });
+    await renderApp('/episodes/e1', { handlers });
+
+    const script = await screen.findByRole('list', { name: 'Script' });
+    const lines = within(script).getAllByRole('listitem');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toHaveClass('speaker-0'); // Alex
+    expect(lines[1]).toHaveClass('speaker-1'); // Sam
+    expect(lines[2]).toHaveClass('speaker-0');
+    expect(within(lines[1] as HTMLElement).getByText('Sonar maps the ocean.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Text of line 1')).not.toBeInTheDocument();
+  });
+
+  it('says so when there are no linked stories or the run is gone', async () => {
+    const { handlers } = episodeApi({ run: null });
+    await renderApp('/episodes/e1', { handlers });
+
+    expect(await screen.findByText('No stories are linked to this episode.')).toBeInTheDocument();
+    expect(screen.getByText(/no longer exists/)).toBeInTheDocument();
   });
 });

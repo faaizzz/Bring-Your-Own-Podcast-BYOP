@@ -281,3 +281,47 @@ $dark-muted: #8b97a8;
     object-fit: cover;
   }
 }
+
+// Speakers get one colour each, in the order of the show's cast.
+$speaker-colors: (
+  0: #4680ff,
+  1: #2ca87f,
+  2: #e58a00,
+  3: #dc2626,
+  4: #6f42c1,
+  5: #6c757d,
+);
+
+@each $index, $color in $speaker-colors {
+  .speaker-#{$index} {
+    --speaker-color: #{$color};
+  }
+}
+
+.script-view {
+  .script-line {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid var(--speaker-color);
+    background: var(--bs-tertiary-bg);
+    border-radius: 0 0.375rem 0.375rem 0;
+  }
+
+  .script-speaker {
+    flex: 0 0 5.5rem;
+    font-weight: 600;
+    color: var(--speaker-color);
+    overflow-wrap: anywhere;
+  }
+
+  .script-text {
+    flex: 1;
+    white-space: pre-wrap;
+  }
+}
+
+.script-editor-line {
+  border-left: 4px solid var(--speaker-color) !important;
+}

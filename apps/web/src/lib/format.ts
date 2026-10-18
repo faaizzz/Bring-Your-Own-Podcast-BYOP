@@ -55,3 +55,15 @@ export function formatDuration(seconds: number | null): string {
   const s = String(seconds % 60).padStart(2, '0');
   return h > 0 ? `${String(h)}:${String(m).padStart(2, '0')}:${s}` : `${String(m)}:${s}`;
 }
+
+const MONEY = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
+/** "0.0175" → "$0.0175"; "—" when nothing was recorded. */
+export function formatCost(usd: string | null): string {
+  return usd === null ? '—' : MONEY.format(Number(usd));
+}

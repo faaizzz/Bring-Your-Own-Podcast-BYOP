@@ -12,6 +12,7 @@ from byop.pipeline.orchestrator import fail_run
 from byop.schemas.episode import (
     EpisodeResponse,
     EpisodeRunInfo,
+    EpisodeSource,
     EpisodeSummary,
     EpisodeUpdate,
 )
@@ -62,6 +63,7 @@ async def _detail(session: SessionDep, user_id: uuid.UUID, episode: Episode) -> 
         episode.run_id or uuid.UUID(int=0)
     )
     names = await service.speaker_names(session, user_id, episode.show_id)
+    sources = await service.sources_of(session, user_id, episode.id)
     return EpisodeResponse(
         **_summary(episode, run).model_dump(),
         description=episode.description,
@@ -75,6 +77,16 @@ async def _detail(session: SessionDep, user_id: uuid.UUID, episode: Episode) -> 
             if episode.audio_key
             else None
         ),
+        sources=[
+            EpisodeSource(
+                id=item.id,
+                title=item.title,
+                url=item.canonical_url,
+                source_name=name,
+                published_at=item.published_at,
+            )
+            for item, name in sources
+        ],
         updated_at=episode.updated_at,
     )
 

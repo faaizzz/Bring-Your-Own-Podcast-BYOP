@@ -7,7 +7,7 @@ import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
 import { PROVIDER_LABELS } from '../../lib/voices';
 import { EpisodesTab } from '../episodes/EpisodesTab';
-import { RunsTab } from '../runs/RunsTab';
+import { RunHistory } from '../history/RunHistory';
 import { GenerateButton } from './GenerateButton';
 import { PauseButton } from './PauseButton';
 import { ShowSettings } from './ShowSettings';
@@ -163,7 +163,7 @@ export default function ShowDetailPage(): React.JSX.Element {
         {active === 'overview' && <Overview show={data} />}
         {active === 'sources' && <SourcesTab show={data} />}
         {active === 'episodes' && <EpisodesTab showId={data.id} />}
-        {active === 'runs' && <RunsTab showId={data.id} />}
+        {active === 'runs' && <RunHistory showId={data.id} />}
         {active === 'settings' && <ShowSettings show={data} />}
       </Card.Body>
     </Card>

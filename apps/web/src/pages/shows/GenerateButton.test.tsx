@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { makeShow } from '../../test/fixtures';
@@ -86,34 +86,6 @@ describe('Generate now', () => {
     expect(
       await screen.findByText('Could not start a run: This show already has a run in progress'),
     ).toBeInTheDocument();
-  });
-});
-
-describe('Runs tab', () => {
-  it('lists the show’s runs with links to their views', async () => {
-    await renderApp('/shows/s1/runs', {
-      handlers: handlers(makeShow(), {
-        'GET /api/runs': () => ({
-          body: [
-            { ...queuedRun, id: 'a', status: 'succeeded', progress: 100 },
-            { ...queuedRun, id: 'b', status: 'failed', trigger: 'schedule', progress: 40 },
-          ],
-        }),
-      }),
-    });
-
-    const rows = (await screen.findAllByRole('row')).map((row) => within(row));
-    expect(rows[1]?.getByText('Succeeded')).toBeInTheDocument();
-    expect(rows[2]?.getByText('Failed')).toBeInTheDocument();
-    expect(rows[2]?.getByText('Scheduled')).toBeInTheDocument();
-    expect(rows[1]?.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/runs/a');
-  });
-
-  it('invites the first run when there are none', async () => {
-    await renderApp('/shows/s1/runs', {
-      handlers: handlers(makeShow(), { 'GET /api/runs': () => ({ body: [] }) }),
-    });
-    expect(await screen.findByText('No runs yet')).toBeInTheDocument();
   });
 });
 

@@ -15,7 +15,10 @@ import {
   type Segment,
 } from '../../lib/episodes';
 import { formatDateTime, formatDuration } from '../../lib/format';
+import { speakerClass } from '../../lib/speakers';
 import { useToast } from '../../lib/toast';
+import { EpisodeDetails } from './EpisodeDetails';
+import { ScriptView } from './ScriptView';
 
 const STAGE_LABELS: Record<string, string> = {
   tts: 'Voicing the script',
@@ -223,60 +226,69 @@ function ReviewForm({ episode }: { episode: Episode }): React.JSX.Element {
         </Form.Group>
 
         <h6>Script</h6>
-        <ol className="list-unstyled mb-4">
-          {draft.segments.map((segment, index) => (
-            <li className="border rounded p-2 mb-2" key={index}>
-              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                <Form.Select
-                  size="sm"
-                  className="w-auto"
-                  aria-label={`Speaker of line ${String(index + 1)}`}
-                  value={segment.speaker}
-                  disabled={!editable}
-                  onChange={(e) => {
-                    setSegment(index, { speaker: e.target.value });
-                  }}
-                >
-                  {[...new Set([...episode.speakers, segment.speaker])].map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Badge bg="light" text="dark" className="border">
-                  {segment.kind}
-                </Badge>
-                {editable && draft.segments.length > 1 && (
-                  <Button
+        {isDraft ? (
+          <ol className="list-unstyled mb-4">
+            {draft.segments.map((segment, index) => (
+              <li
+                className={`border rounded p-2 mb-2 script-editor-line ${speakerClass(segment.speaker, episode.speakers)}`}
+                key={index}
+              >
+                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <Form.Select
                     size="sm"
-                    variant="link"
-                    className="ms-auto text-danger"
-                    aria-label={`Remove line ${String(index + 1)}`}
-                    onClick={() => {
-                      setDraft((d) => ({
-                        ...d,
-                        segments: d.segments.filter((_, i) => i !== index),
-                      }));
+                    className="w-auto"
+                    aria-label={`Speaker of line ${String(index + 1)}`}
+                    value={segment.speaker}
+                    disabled={!editable}
+                    onChange={(e) => {
+                      setSegment(index, { speaker: e.target.value });
                     }}
                   >
-                    <FiTrash2 aria-hidden="true" />
-                  </Button>
-                )}
-              </div>
-              <Form.Control
-                as="textarea"
-                rows={Math.min(8, Math.max(2, Math.ceil(segment.text.length / 90)))}
-                aria-label={`Text of line ${String(index + 1)}`}
-                value={segment.text}
-                disabled={!editable}
-                isInvalid={editable && segment.text.trim() === ''}
-                onChange={(e) => {
-                  setSegment(index, { text: e.target.value });
-                }}
-              />
-            </li>
-          ))}
-        </ol>
+                    {[...new Set([...episode.speakers, segment.speaker])].map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Badge bg="light" text="dark" className="border">
+                    {segment.kind}
+                  </Badge>
+                  {editable && draft.segments.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="link"
+                      className="ms-auto text-danger"
+                      aria-label={`Remove line ${String(index + 1)}`}
+                      onClick={() => {
+                        setDraft((d) => ({
+                          ...d,
+                          segments: d.segments.filter((_, i) => i !== index),
+                        }));
+                      }}
+                    >
+                      <FiTrash2 aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+                <Form.Control
+                  as="textarea"
+                  rows={Math.min(8, Math.max(2, Math.ceil(segment.text.length / 90)))}
+                  aria-label={`Text of line ${String(index + 1)}`}
+                  value={segment.text}
+                  disabled={!editable}
+                  isInvalid={editable && segment.text.trim() === ''}
+                  onChange={(e) => {
+                    setSegment(index, { text: e.target.value });
+                  }}
+                />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="mb-4">
+            <ScriptView segments={draft.segments} speakers={episode.speakers} />
+          </div>
+        )}
 
         {isDraft ? (
           <div className="d-flex flex-wrap gap-2 align-items-center">
@@ -400,6 +412,8 @@ export default function EpisodeReviewPage(): React.JSX.Element {
       <Card.Body>
         {/* Remount when the saved episode changes, so the fields restart from it. */}
         <ReviewForm key={`${data.id}:${data.updated_at}`} episode={data} />
+        <hr />
+        <EpisodeDetails episode={data} />
       </Card.Body>
     </Card>
   );

@@ -129,7 +129,6 @@ export const RUNS_KEY = ['runs'] as const;
 const POLL_MS = 2000;
 
 const runKey = (runId: string) => [...RUNS_KEY, runId] as const;
-export const showRunsKey = (showId: string) => [...SHOWS_KEY, showId, 'runs'] as const;
 
 /** The run and its log; polls while it is active unless the live stream is delivering. */
 export function useRun(runId: string, live: boolean) {
@@ -140,25 +139,12 @@ export function useRun(runId: string, live: boolean) {
   });
 }
 
-export function useShowRuns(showId: string) {
-  return useQuery({
-    queryKey: showRunsKey(showId),
-    queryFn: () =>
-      api.get<Run[]>('/runs', {
-        query: { show_id: showId, limit: 50 },
-        schema: z.array(runSchema),
-      }),
-    refetchInterval: (query) =>
-      query.state.data?.some((r) => isActive(r.status)) ? POLL_MS : false,
-  });
-}
-
 function useRefreshAfterRun() {
   const queryClient = useQueryClient();
-  return (showId: string) => {
+  return () => {
     void queryClient.invalidateQueries({ queryKey: SHOWS_KEY });
     void queryClient.invalidateQueries({ queryKey: EPISODES_KEY });
-    void queryClient.invalidateQueries({ queryKey: showRunsKey(showId) });
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
   };
 }
 
@@ -166,7 +152,7 @@ export function useStartRun(showId: string) {
   const refresh = useRefreshAfterRun();
   return useMutation({
     mutationFn: () => api.post<Run>(`/shows/${showId}/runs`, undefined, { schema: runSchema }),
-    onSuccess: () => refresh(showId),
+    onSuccess: refresh,
   });
 }
 

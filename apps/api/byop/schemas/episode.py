@@ -45,6 +45,16 @@ class EpisodeRunInfo(BaseModel):
     error: str | None
 
 
+class EpisodeSource(BaseModel):
+    """A story the episode is built from."""
+
+    id: uuid.UUID
+    title: str
+    url: str
+    source_name: str | None
+    published_at: datetime | None
+
+
 class EpisodeSummary(BaseModel):
     id: uuid.UUID
     show_id: uuid.UUID
@@ -68,4 +78,5 @@ class EpisodeResponse(EpisodeSummary):
     audio_revision: int | None
     audio_current: bool
     audio_url: str | None
+    sources: list[EpisodeSource]
     updated_at: datetime

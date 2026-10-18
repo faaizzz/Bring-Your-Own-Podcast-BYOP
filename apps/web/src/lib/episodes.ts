@@ -41,6 +41,15 @@ export const episodeSummarySchema = z.object({
 });
 export type EpisodeSummary = z.infer<typeof episodeSummarySchema>;
 
+const episodeSourceSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  url: z.string(),
+  source_name: z.string().nullable(),
+  published_at: z.string().nullable(),
+});
+export type EpisodeSource = z.infer<typeof episodeSourceSchema>;
+
 export const episodeSchema = episodeSummarySchema.extend({
   description: z.string(),
   segments: z.array(segmentSchema),
@@ -49,6 +58,7 @@ export const episodeSchema = episodeSummarySchema.extend({
   audio_revision: z.number().nullable(),
   audio_current: z.boolean(),
   audio_url: z.string().nullable(),
+  sources: z.array(episodeSourceSchema),
   updated_at: z.string(),
 });
 export type Episode = z.infer<typeof episodeSchema>;

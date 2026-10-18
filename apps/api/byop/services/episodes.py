@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from byop.models import Episode, Item, Run, Speaker
+from byop.models import Episode, Item, Run, Source, Speaker
 from byop.models.enums import EpisodeStatus, RunStatus, RunTrigger
 from byop.pipeline.orchestrator import ACTIVE, add_event
 from byop.schemas.episode import EpisodeUpdate, SegmentIn
@@ -73,6 +73,19 @@ async def runs_of(
         .execution_options(populate_existing=True)
     )
     return {run.id: run for run in rows}
+
+
+async def sources_of(
+    session: AsyncSession, user_id: uuid.UUID, episode_id: uuid.UUID
+) -> list[tuple[Item, str | None]]:
+    """The stories the episode was made from, each with the name of its source."""
+    rows = await session.execute(
+        select(Item, Source.name)
+        .outerjoin(Source, Source.id == Item.source_id)
+        .where(Item.used_in_episode_id == episode_id, Item.user_id == user_id)
+        .order_by(Item.published_at.desc().nulls_last(), Item.id)
+    )
+    return [(item, name) for item, name in rows.all()]
 
 
 async def speaker_names(session: AsyncSession, user_id: uuid.UUID, show_id: uuid.UUID) -> list[str]:

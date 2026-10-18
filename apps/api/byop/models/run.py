@@ -38,6 +38,8 @@ class Run(Base):
     __table_args__ = (
         CheckConstraint("progress BETWEEN 0 AND 100", name="progress_range"),
         Index("ix_runs_show_id_created_at", "show_id", "created_at"),
+        # The history list pages through a user's runs, newest first.
+        Index("ix_runs_user_id_created_at_id", "user_id", "created_at", "id"),
         # At most one run per show may be waiting or working at any time.
         Index(
             "uq_runs_one_active_per_show",

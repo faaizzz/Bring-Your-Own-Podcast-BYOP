@@ -20,6 +20,22 @@ curl -b cookies.txt -X POST http://localhost:8080/api/shows/<id>/runs
 curl -b cookies.txt http://localhost:8080/api/runs/<run id>      # status, stage, progress, events
 ```
 
+## History
+
+`GET /api/history` lists runs of all shows (or one), newest first, each with its show title, run
+duration, the episode it produced and its cost (the sum of its recorded LLM/TTS calls, `null`
+when none were recorded). Filters: `show_id`, `status`, `trigger`, `created_from` and `created_to`
+(whole days, UTC, both included). It is paged with a keyset cursor: pass `next_cursor` back as
+`cursor` until it is `null` (`limit` 1-200, default 50). Rows added while paging never shift a page,
+and a page costs the same however far back it is (`ix_runs_user_id_created_at_id`). An invalid
+cursor is a `422`.
+
+In the app, **History** shows every run with these filters and a "Load more" button; a show's
+**Runs** tab is the same table for that show. Open an episode (`/episodes/<id>`) for the player,
+a download link, the script with one colour per speaker, the stories it was made from (the
+`sources` of `GET /api/episodes/{id}`, linking to the originals), the run's timeline and a note
+where its cost will go.
+
 ## Watching a run live
 
 In the web app, **Generate now** (on a show card and on the show page; disabled while a run is

@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from byop.models.enums import EventLevel, RunStatus, RunTrigger
+from byop.models.enums import EpisodeStatus, EventLevel, RunStatus, RunTrigger
 
 
 class RunEventResponse(BaseModel):
@@ -35,3 +36,32 @@ class RunResponse(BaseModel):
 
 class RunDetail(RunResponse):
     events: list[RunEventResponse] = Field(default_factory=list)
+
+
+class HistoryRow(BaseModel):
+    """One run in the history list, with the episode it made and what it cost."""
+
+    id: uuid.UUID
+    show_id: uuid.UUID
+    show_title: str
+    trigger: RunTrigger
+    status: RunStatus
+    stage: str | None
+    progress: int
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    # Seconds from start to end; None while the run is still going or never started.
+    duration_s: int | None
+    # Sum of the run's LLM and TTS calls; None when none were recorded.
+    cost_usd: Decimal | None
+    episode_id: uuid.UUID | None
+    episode_title: str | None
+    episode_status: EpisodeStatus | None
+
+
+class HistoryPage(BaseModel):
+    items: list[HistoryRow]
+    # Pass as `cursor` to get the next page; None on the last one.
+    next_cursor: str | None
