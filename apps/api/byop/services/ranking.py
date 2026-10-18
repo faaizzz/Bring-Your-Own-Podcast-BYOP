@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
 from byop.models import Item, Show
-from byop.models.enums import CredentialProvider, ShowStyle
+from byop.models.enums import ShowStyle
 from byop.providers.llm import (
     CallMetadata,
     LLMError,
@@ -24,6 +24,7 @@ from byop.services.credentials import (
     CredentialResolver,
     ProviderNotConfigured,
 )
+from byop.services.llm_choice import show_model
 
 log = structlog.get_logger(__name__)
 
@@ -82,17 +83,6 @@ def _when(item: Item) -> float:
 
 def _newest_first(items: list[Item]) -> list[Item]:
     return sorted(items, key=_when, reverse=True)
-
-
-def ranking_model(settings: Settings, show: Show) -> tuple[CredentialProvider, str] | None:
-    """The show's own model, else the instance default; None if neither is set."""
-    for provider, model in (
-        (show.llm_provider, show.llm_model),
-        (settings.default_llm_provider, settings.default_llm_model),
-    ):
-        if provider and model:
-            return CredentialProvider(provider), model
-    return None
 
 
 def _describe(position: int, item: Item) -> str:
@@ -192,7 +182,7 @@ async def rank_items(
         )
         return _by_recency(listed, limit, reason, total)
 
-    chosen = ranking_model(settings, show)
+    chosen = show_model(settings, show)
     if chosen is None:
         return fallback("No language model is set up for this show")
     provider, model = chosen

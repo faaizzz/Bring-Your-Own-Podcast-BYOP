@@ -62,6 +62,8 @@ class Run(Base):
     stage: Mapped[str | None] = mapped_column(String(50))
     progress: Mapped[int] = mapped_column(SmallInteger, server_default="0", default=0)
     error: Mapped[str | None] = mapped_column(Text)
+    # The stories ranking chose: {"stories": [{item_id, score, reason, supporting_item_ids}]}.
+    selection: Mapped[JsonObject | None] = mapped_column(JSONB)
     # Set by the cancel endpoint; stages look at it between steps and stop.
     cancel_requested: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(64))

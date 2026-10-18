@@ -1,16 +1,19 @@
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
+import httpx
 import pytest
 import respx
+from pydantic import SecretStr
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Item, Run, RunEvent, Show, Source, User
-from byop.models.enums import EventLevel, RunStatus, RunTrigger, SourceKind
+from byop.models import Episode, Item, Run, RunEvent, Show, Source, Speaker, User
+from byop.models.enums import EpisodeStatus, EventLevel, RunStatus, RunTrigger, SourceKind
 from byop.pipeline.context import RunContext
 from byop.pipeline.errors import StageFailed, TransientStageError
 from byop.pipeline.orchestrator import (
@@ -25,6 +28,7 @@ from byop.services import runs as run_service
 from byop.services.ranking import reserve_items
 from tests.helpers import make_settings
 from tests.models.factories import make_show
+from tests.providers.llm.helpers import OPENROUTER_URL, completion
 
 pytestmark = pytest.mark.usefixtures("fake_dns")
 
@@ -123,13 +127,19 @@ async def test_the_real_pipeline_runs_end_to_end_with_stub_tail_stages(
     db_session: AsyncSession, admin_user: User
 ) -> None:
     show = await make_show(db_session, admin_user)
-    db_session.add(
-        Source(
-            user_id=admin_user.id,
-            show_id=show.id,
-            kind=SourceKind.RSS,
-            value="https://f.example.com/rss",
-        )
+    show.target_minutes = 1
+    voice = {"tts_provider": "kokoro", "user_id": admin_user.id, "show_id": show.id}
+    db_session.add_all(
+        [
+            Source(
+                user_id=admin_user.id,
+                show_id=show.id,
+                kind=SourceKind.RSS,
+                value="https://f.example.com/rss",
+            ),
+            Speaker(position=0, name="Alex", voice_id="af_bella", **voice),
+            Speaker(position=1, name="Sam", voice_id="am_michael", **voice),
+        ]
     )
     await db_session.flush()
     feed = (
@@ -142,25 +152,52 @@ async def test_the_real_pipeline_runs_end_to_end_with_stub_tail_stages(
         "lanes along the main roads over the coming year.</description></item>"
         "</channel></rss>"
     )
+    words = " ".join(["word"] * 45)  # 3 segments of ~47 words: inside 120-180 for 1 minute
+    script = {
+        "title": "Oceans and bikes",
+        "description": "Sonar maps and cycling lanes.",
+        "segments": [
+            {"speaker": "Alex", "text": f"Welcome. {words}", "kind": "intro", "item_ids": []},
+            {"speaker": "Sam", "text": f"Sonar story. {words}", "kind": "story", "item_ids": [1]},
+            {"speaker": "Alex", "text": f"Bikes story. {words}", "kind": "story", "item_ids": [2]},
+        ],
+    }
+    ranking = {"selections": [{"item": 1, "score": 9, "reason": "Big."}, {"item": 2, "score": 7}]}
     run = await start(db_session, admin_user, show)
+    cfg = make_settings(
+        openrouter_api_key=SecretStr("sk-or-test-key-123456"),
+        default_llm_provider="openrouter",
+        default_llm_model="vendor/model",
+    )
 
     with respx.mock:
         respx.get("https://f.example.com/rss").respond(
             200, content=feed.encode(), headers={"content-type": "application/rss+xml"}
         )
-        results = await execute(db_session, make_settings(), run, STAGES)
+        respx.post(OPENROUTER_URL).mock(
+            side_effect=[
+                httpx.Response(200, json=completion(json.dumps(ranking))),
+                httpx.Response(200, json=completion(json.dumps(script))),
+            ]
+        )
+        results = await execute(db_session, cfg, run, STAGES)
 
     assert results == [StageResult.DONE] * len(STAGES)
-    await db_session.refresh(run)
+    run = await reload(db_session, run)
     assert run.status is RunStatus.SUCCEEDED and run.progress == 100
+    assert run.selection is not None and len(run.selection["stories"]) == 2  # type: ignore[arg-type]
     log = await events(db_session, run)
     assert any(e.message.startswith("Collected 2 new items") for e in log)
     chose = next(e for e in log if e.message.startswith("Chose "))
     assert chose.data is not None and len(cast(list[object], chose.data["stories"])) == 2
-    assert any(e.level is EventLevel.WARNING and "most recent items" in e.message for e in log)
-    # No episode is produced yet, so nothing stays reserved for the finished run.
-    held = await db_session.scalars(select(Item.reserved_run_id).where(Item.show_id == show.id))
-    assert set(held) == {None}
+    assert any(e.message.startswith("Wrote “Oceans and bikes”") for e in log)
+    episode = await db_session.scalar(select(Episode).where(Episode.run_id == run.id))
+    assert episode is not None and episode.title == "Oceans and bikes"
+    assert episode.status is EpisodeStatus.DRAFT and episode.script is not None
+    # The stories now belong to the draft episode, and nothing is left reserved.
+    items = list(await db_session.scalars(select(Item).where(Item.show_id == show.id)))
+    assert {i.used_in_episode_id for i in items} == {episode.id}
+    assert {i.reserved_run_id for i in items} == {None}
 
 
 # --- failure ---------------------------------------------------------------------------------

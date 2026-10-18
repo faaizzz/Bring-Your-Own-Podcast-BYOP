@@ -20,6 +20,18 @@ async def run(ctx: RunContext) -> None:
             f"Ranking used the most recent items instead: {selection.fallback_reason}",
             level=EventLevel.WARNING,
         )
+    ctx.run.selection = {
+        "stories": [
+            {
+                "item_id": str(pick.item_id),
+                "score": pick.score,
+                "reason": pick.reason,
+                "supporting_item_ids": [str(i) for i in pick.supporting_item_ids],
+            }
+            for pick in selection.items
+        ]
+    }
+    await ctx.session.commit()
     titles = dict(
         (
             await ctx.session.execute(
