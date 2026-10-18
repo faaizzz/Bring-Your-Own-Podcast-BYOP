@@ -90,3 +90,48 @@ jobs:
         run: docker compose -f docker-compose.yml build
         env:
           BUILDKIT_PROGRESS: plain
+
+  e2e:
+    name: e2e (Playwright, mock model and voices)
+    # A full run of the product from a clean clone, with stand-ins for the model, voice and news
+    # servers (docker-compose.e2e.yml), so no keys are needed. See docs/e2e.md.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_FILES: -f docker-compose.yml -f docker-compose.e2e.yml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - name: Start the stack
+        run: docker compose $COMPOSE_FILES up -d --build --wait
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Typecheck the test
+        working-directory: tests/e2e
+        run: npm run typecheck
+      - name: Run the test
+        working-directory: tests/e2e
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:8080
+      - name: Collect container logs
+        if: failure()
+        run: docker compose $COMPOSE_FILES logs --no-color > e2e-container-logs.txt
+      - name: Upload screenshots, traces and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
+            e2e-container-logs.txt
+          retention-days: 14

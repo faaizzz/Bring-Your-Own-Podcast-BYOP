@@ -1,0 +1,16 @@
+{
+  "name": "byop-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end test of BYOP against the e2e compose stack (see docs/e2e.md)",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

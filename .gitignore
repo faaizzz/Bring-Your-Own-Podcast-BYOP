@@ -32,3 +32,7 @@ npm-debug.log*
 .idea/
 .vscode/
 .DS_Store
+
+# Playwright (tests/e2e)
+test-results/
+playwright-report/

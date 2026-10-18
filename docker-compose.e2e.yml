@@ -1,0 +1,44 @@
+# End-to-end test stack (see docs/e2e.md): the normal stack plus stand-ins for the model and
+# voice servers and a news feed, so the whole product runs without paid keys.
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait
+x-e2e-env: &e2e-env
+  # The mock feed lives on the compose network, which BYOP otherwise refuses to fetch from.
+  SOURCES_ALLOW_PRIVATE_NETWORKS: "true"
+  KOKORO_BASE_URL: http://mock-services:8000/v1
+  # Test-only secrets, so the run needs no .env.
+  BYOP_SECRET_KEY: e2e-secret-key-not-for-real-use-0123456789
+  BYOP_ADMIN_EMAIL: e2e@example.com
+  BYOP_ADMIN_PASSWORD: e2e-password-123
+  # Whatever a developer keeps in .env must not leak into the test.
+  OPENROUTER_API_KEY: ""
+  OPENAI_API_KEY: ""
+  ELEVENLABS_API_KEY: ""
+  DEFAULT_LLM_PROVIDER: ""
+  DEFAULT_LLM_MODEL: ""
+  LANGFUSE_PUBLIC_KEY: ""
+  LANGFUSE_SECRET_KEY: ""
+
+services:
+  mock-services:
+    image: byop-api:local
+    pull_policy: never
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./tests/e2e/mock_llm:/mock:ro
+    command: ["uvicorn", "--app-dir", "/mock", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    environment:
+      <<: *e2e-env
+  worker:
+    environment:
+      <<: *e2e-env
+  beat:
+    environment:
+      <<: *e2e-env

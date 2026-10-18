@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up up-kokoro up-minio up-langfuse down logs migrate deps test lint typecheck check fmt
+.PHONY: help up up-kokoro up-minio up-langfuse e2e e2e-down down logs migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
@@ -23,6 +23,19 @@ up-minio: ## Like `up`, plus a local S3-compatible object store (see docs/storag
 up-langfuse: ## Like `up`, plus self-hosted Langfuse tracing (see docs/langfuse.md)
 	./scripts/ensure-env.sh
 	$(COMPOSE) --profile langfuse up -d --build --wait
+
+# The end-to-end stack is its own compose project on its own port, so it never touches your data.
+E2E_PORT ?= 18080
+E2E_COMPOSE = COMPOSE_PROJECT_NAME=byop-e2e BYOP_WEB_PORT=$(E2E_PORT) $(COMPOSE) -f docker-compose.yml -f docker-compose.e2e.yml
+
+e2e: ## Run the browser end-to-end test against a throwaway stack with mock model/voice servers
+	$(E2E_COMPOSE) down -v
+	$(E2E_COMPOSE) up -d --build --wait
+	cd tests/e2e && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	cd tests/e2e && E2E_BASE_URL=http://localhost:$(E2E_PORT) npx playwright test; status=$$?; $(E2E_COMPOSE) down -v; exit $$status
+
+e2e-down: ## Remove the end-to-end stack and its data
+	$(E2E_COMPOSE) down -v
 
 down: ## Stop the stack (keeps volumes)
 	$(COMPOSE) --profile kokoro --profile minio down
