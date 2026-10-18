@@ -55,6 +55,8 @@ New directories or modules must follow these names; update this section if the l
 - Routers are thin: parse input → call a service → return a schema. Every service query filters by `user_id`.
 - Provider keys are read only through `CredentialResolver`; never log secrets (redact), never return them from the API.
 - Structured logging via structlog; no `print`.
+- Models (`byop/models/`, one module per aggregate; `columns.py` has the id/timestamp/`user_id` helpers): UUID `id`, tz-aware `created_at`/`updated_at`, `user_id` FK on every owned table. Enums are `StrEnum`s in `models/enums.py` stored as VARCHAR + CHECK via `enum_type()` (never free text, never native PG enums). Children of a show cascade at the DB level (`ondelete="CASCADE"` + `passive_deletes=True`); `usage_events` deliberately outlive shows/runs (SET NULL) so cost history survives.
+- Migrations: autogenerate, then review by hand (no duplicate enum constraints, working `downgrade`). `tests/test_migrations.py` checks upgrade, no model drift and downgrade to base. Tests recreate the `byop_test` DB from migrations each session. The api container runs `alembic upgrade head` before starting; the admin user is seeded at startup from `BYOP_ADMIN_*` (never overwritten once it exists).
 
 ## TypeScript conventions
 - `strict: true`; **no `any`** (use `unknown` + narrowing). Prefer `type` imports.

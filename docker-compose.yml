@@ -47,7 +47,11 @@ services:
 
   api:
     <<: *api
-    command: ["uvicorn", "byop.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Apply migrations first so a fresh `make up` has a schema (and the admin gets seeded).
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn byop.main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test:
         - CMD

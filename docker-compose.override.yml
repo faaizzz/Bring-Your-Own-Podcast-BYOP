@@ -15,7 +15,10 @@ services:
       - "127.0.0.1:${BYOP_REDIS_PORT:-6379}:6379"
   api:
     <<: *dev-source
-    command: ["uvicorn", "byop.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn byop.main:app --host 0.0.0.0 --port 8000 --reload
   worker:
     <<: *dev-source
   beat:
