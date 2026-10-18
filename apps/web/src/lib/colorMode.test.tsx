@@ -7,7 +7,7 @@ import { COLOR_MODE_KEY, getInitialColorMode } from './colorMode';
 describe('color mode', () => {
   it('toggles dark mode from the header and persists the choice', async () => {
     const user = userEvent.setup();
-    renderApp();
+    await renderApp();
     expect(document.documentElement).toHaveAttribute('data-bs-theme', 'light');
 
     await user.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
@@ -17,10 +17,10 @@ describe('color mode', () => {
     expect(screen.getByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument();
   });
 
-  it('restores the stored choice on the next load', () => {
+  it('restores the stored choice on the next load', async () => {
     window.localStorage.setItem(COLOR_MODE_KEY, 'dark');
 
-    renderApp();
+    await renderApp();
 
     expect(document.documentElement).toHaveAttribute('data-bs-theme', 'dark');
   });
@@ -37,7 +37,7 @@ describe('color mode', () => {
       throw new Error('blocked');
     });
     render(<div />);
-    renderApp();
+    await renderApp();
 
     await user.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
 

@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test/render';
 
 describe('AdminLayout', () => {
-  it('renders the BYOP brand and every menu entry', () => {
-    renderApp();
+  it('renders the BYOP brand and every menu entry', async () => {
+    await renderApp();
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(screen.getAllByText('BYOP').length).toBeGreaterThan(0);
@@ -16,7 +16,7 @@ describe('AdminLayout', () => {
 
   it('navigates between pages and updates the breadcrumb and title', async () => {
     const user = userEvent.setup();
-    renderApp();
+    await renderApp();
 
     await user.click(screen.getByRole('link', { name: 'Shows' }));
 
@@ -24,8 +24,8 @@ describe('AdminLayout', () => {
     expect(document.title).toBe('Shows | BYOP');
   });
 
-  it('shows Settings > Integrations in the breadcrumb', () => {
-    renderApp('/settings/integrations');
+  it('shows Settings > Integrations in the breadcrumb', async () => {
+    await renderApp('/settings/integrations');
 
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(within(crumbs).getByText('Settings')).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe('AdminLayout', () => {
 
   it('collapses the sidebar to an icon rail from the header toggle', async () => {
     const user = userEvent.setup();
-    renderApp();
+    await renderApp();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(nav).not.toHaveClass('navbar-collapsed');
 
@@ -44,17 +44,8 @@ describe('AdminLayout', () => {
   });
 
   it('loads the lazy Costs page', async () => {
-    renderApp('/costs');
+    await renderApp('/costs');
 
     expect(await screen.findByText('Cost per generation')).toBeInTheDocument();
-  });
-});
-
-describe('Login page', () => {
-  it('renders outside the admin layout', () => {
-    renderApp('/login');
-
-    expect(screen.getByRole('heading', { name: 'Sign in to BYOP' })).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
   });
 });

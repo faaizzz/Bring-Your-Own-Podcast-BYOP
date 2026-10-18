@@ -13,7 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, c
 
 from byop.db import get_session
 from byop.main import create_app
+from byop.redis_client import get_redis_client
+from byop.security import passwords
 from tests.db_utils import TEST_DATABASE_URL, migrate, recreate_database
+
+
+@pytest.fixture(autouse=True)
+def _fast_password_hashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(passwords, "BCRYPT_ROUNDS", 4)
 
 
 @pytest.fixture(scope="session")
@@ -43,6 +50,15 @@ async def db_session(connection: AsyncConnection) -> AsyncIterator[AsyncSession]
     )
     yield session
     await session.close()
+
+
+@pytest.fixture(autouse=True)
+async def _clean_rate_limits() -> None:
+    """Rate-limit counters live in Redis, so clear them to keep tests independent."""
+    redis = get_redis_client()
+    keys = [key async for key in redis.scan_iter("ratelimit:*")]
+    if keys:
+        await redis.delete(*keys)
 
 
 @pytest.fixture

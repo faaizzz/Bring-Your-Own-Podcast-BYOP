@@ -84,7 +84,11 @@ All configuration comes from environment variables documented in `.env.example` 
 - Then `git push origin main`.
 
 ## Auth and multi-user
-v0.1 is single-user: one admin seeded from `.env`. The `users` table and `user_id` on every owned table already exist, so multi-user means adding signup/invite flows and per-user settings — no schema change to owned tables.
+v0.1 is single-user: one admin seeded from `.env` (bcrypt hash in `users`). Login sets a signed JWT (`byop_session`, httpOnly, SameSite=Lax, Secure over https) valid `BYOP_SESSION_HOURS`; its `pv` claim fingerprints the password hash, so changing the password ends old sessions. Login is limited to 5/min per IP (Redis; keyed on the last `X-Forwarded-For` entry added by nginx; fails open if Redis is down).
+- **Guard is the default**: in `byop/api/__init__.py` only `health` and `auth.public_router` are public; register every other router on the `protected` router (it depends on `current_user`). `tests/api/test_guard.py` enumerates the OpenAPI routes and fails if one answers an anonymous call with anything but 401 — add a route to its `PUBLIC_ROUTES` only for the RSS feed / episode audio and the like.
+- Routers take `CurrentUser` (from `byop.api.deps`) and pass `user.id` to services, which filter every query by it.
+- Web: `useMe`/`useLogin`/`useLogout` in `src/lib/auth.ts`, `RequireAuth` wraps the admin routes, and a 401 from any query clears the session so the guard redirects to `/login`.
+- **Multi-user later**: the `users` table and `user_id` on every owned table already exist. Add an invite/signup flow (and per-user settings) that inserts `User` rows; `current_user`, services and tests already scope by `user_id`, so no schema change to owned tables is needed. `is_admin` gates instance-level settings.
 
 ## Open-source hygiene
 This is a clean open-source project. Do not reference private or internal predecessor projects, organisations, domains or people in code, comments, docs or commits. Third-party code keeps its licence notice (e.g. Gradient Able, MIT).

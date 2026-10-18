@@ -26,7 +26,8 @@ cp .env.example .env   # optional: `make up` creates it and generates BYOP_SECRE
 make up                # builds and starts postgres, redis, api, worker, beat, web
 ```
 
-Open <http://localhost:8080>; the API health check is at
+Open <http://localhost:8080> and sign in with `BYOP_ADMIN_EMAIL` / `BYOP_ADMIN_PASSWORD`
+from your `.env` (change the example password before exposing the app). The API health check is at
 <http://localhost:8080/api/health>. Every variable is documented in
 [`.env.example`](.env.example). Run `make migrate` to apply database migrations. Other targets: `make down`, `make logs`,
 `make migrate`, `make check` (lint + typecheck + tests), `make fmt`.

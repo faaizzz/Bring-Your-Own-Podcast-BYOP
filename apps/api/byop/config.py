@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     byop_admin_email: str = "admin@example.com"
     byop_admin_password: SecretStr | None = None
     public_base_url: str = "http://localhost:8080"
+    # How long a login session (JWT cookie) stays valid.
+    byop_session_hours: int = Field(default=168, ge=1)
     media_root: str = "/data/media"
 
     # Infrastructure

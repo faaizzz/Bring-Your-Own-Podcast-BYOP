@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Dropdown } from 'react-bootstrap';
 import { FiLogOut, FiMoon, FiMoreVertical, FiSun, FiUser } from 'react-icons/fi';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
+import { useMe, useLogout } from '../lib/auth';
 import { useColorMode } from '../lib/colorMode';
 import { Brand } from './Brand';
 
@@ -20,6 +21,17 @@ export function Header({
 }: HeaderProps): React.JSX.Element {
   const [moreOpen, setMoreOpen] = useState(false);
   const { mode, toggle } = useColorMode();
+  const { data: user } = useMe();
+  const logout = useLogout();
+  const navigate = useNavigate();
+
+  const signOut = () => {
+    logout.mutate(undefined, {
+      onSettled: () => {
+        navigate('/login', { replace: true });
+      },
+    });
+  };
 
   return (
     <header
@@ -71,9 +83,9 @@ export function Header({
               </Dropdown.Toggle>
               <Dropdown.Menu align="end" className="profile-notification">
                 <div className="pro-head">
-                  <span>Admin</span>
+                  <span>{user?.email ?? 'Account'}</span>
                 </div>
-                <Dropdown.Item as={Link} to="/login">
+                <Dropdown.Item as="button" onClick={signOut}>
                   <FiLogOut aria-hidden="true" /> Sign out
                 </Dropdown.Item>
               </Dropdown.Menu>
