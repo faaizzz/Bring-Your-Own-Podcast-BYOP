@@ -1,5 +1,16 @@
 # Model providers
 
+## Configure from the UI
+
+**Settings › Integrations** has one card per provider (OpenRouter, OpenAI, ElevenLabs,
+Kokoro, OpenAI-compatible, Langfuse). The badge shows where the credentials come from:
+**Connected** (a key saved in the app), **From .env**, **Not configured**, or **Error**
+(a failed connection test, or a stored key that can no longer be decrypted). *Configure* /
+*Edit* opens a dialog that saves the override and tests it right away; *Test connection*
+re-checks any configured provider, including ones set only in `.env`; *Remove override*
+deletes the saved key so the `.env` value (if any) applies again. Saved keys are shown
+masked and never sent back to the browser: leaving a key field blank keeps the stored one.
+
 ## LLMs
 
 Every LLM call goes through `byop.providers.llm.LLMProvider`:

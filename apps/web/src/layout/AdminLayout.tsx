@@ -5,6 +5,7 @@ import { useMediaQuery } from '../lib/useMediaQuery';
 import { Breadcrumb } from './Breadcrumb';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { ToastProvider } from './ToastProvider';
 
 const MOBILE_QUERY = '(max-width: 991.98px)';
 
@@ -36,7 +37,7 @@ export function AdminLayout(): React.JSX.Element {
   );
 
   return (
-    <>
+    <ToastProvider>
       {isMobile ? (
         <div className={`nav-outside mob-fixed ${mobileOpen ? 'mob-backdrop' : ''}`}>{chrome}</div>
       ) : (
@@ -52,6 +53,6 @@ export function AdminLayout(): React.JSX.Element {
           </div>
         </div>
       </main>
-    </>
+    </ToastProvider>
   );
 }
