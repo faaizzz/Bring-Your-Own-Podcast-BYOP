@@ -8,7 +8,7 @@ celery_app = Celery(
     "byop",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["byop.tasks.discovery"],
+    include=["byop.tasks.discovery", "byop.tasks.ingest"],
 )
 celery_app.conf.update(
     task_serializer="json",

@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).
     sources_allow_private_networks: bool = False
 
+    # Ingest (collecting stories for an episode).
+    ingest_freshness_days: int = Field(default=3, ge=1)  # older items are not collected
+    ingest_dedup_days: int = Field(default=14, ge=1)  # titles are compared against this window
+    ingest_title_similarity: float = Field(default=0.55, gt=0, le=1)  # pg_trgm threshold
+    ingest_source_timeout_s: float = Field(default=30.0, gt=0)
+
     # Discovery asks a model with web search for sources. Unset: the show's model, then the
     # instance default. On OpenRouter ":online" is appended so the model can search the web.
     discovery_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None

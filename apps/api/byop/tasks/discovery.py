@@ -3,15 +3,15 @@ import uuid
 
 import structlog
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from byop.config import Settings, get_settings
+from byop.config import Settings
 from byop.providers.llm import LLMError
 from byop.schemas.discovery import DiscoveryStatus
 from byop.services.credentials import CredentialResolver
 from byop.services.discovery import DiscoveryRequest, DiscoveryUnavailable, discover_sources
 from byop.services.discovery_jobs import create_job, load_job, save_job
+from byop.tasks.runtime import task_deps
 from byop.worker import celery_app
 
 log = structlog.get_logger(__name__)
@@ -55,19 +55,8 @@ async def run_discovery_job(
 
 
 async def _run(job_id: str, request: DiscoveryRequest) -> None:
-    settings = get_settings()
-    # A fresh engine and Redis client: each task runs in its own event loop, and pooled
-    # connections from another loop cannot be reused.
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
-    redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    try:
-        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-            await run_discovery_job(
-                job_id, request, session=session, redis=redis, settings=settings
-            )
-    finally:
-        await redis.aclose()
-        await engine.dispose()
+    async with task_deps() as (session, redis, settings):
+        await run_discovery_job(job_id, request, session=session, redis=redis, settings=settings)
 
 
 @celery_app.task(name="byop.discover_sources")

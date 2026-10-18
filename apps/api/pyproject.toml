@@ -23,6 +23,8 @@ dependencies = [
   "pillow>=11",
   "python-multipart>=0.0.20",
   "feedparser>=6.0",
+  "langdetect>=1.0.9",
+  "readability-lxml>=0.9",
 ]
 
 [dependency-groups]
@@ -69,5 +71,5 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 
 [[tool.mypy.overrides]]
-module = ["kombu.*", "feedparser.*"]
+module = ["kombu.*", "feedparser.*", "readability.*", "lxml.*", "langdetect.*"]
 ignore_missing_imports = true
