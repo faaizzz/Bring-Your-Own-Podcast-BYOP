@@ -34,6 +34,7 @@ def response_for(view: ShowView) -> ShowResponse:
         target_minutes=show.target_minutes,
         style=show.style,
         prompt_override=show.prompt_override,
+        ranking_hints=show.ranking_hints,
         llm_provider=show.llm_provider,
         llm_model=show.llm_model,
         items_per_episode=show.items_per_episode,

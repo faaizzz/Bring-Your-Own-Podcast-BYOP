@@ -14,6 +14,13 @@ export function TopicStep({ children }: { children?: React.ReactNode }): React.J
         hint="What should the show cover? This guides which stories are picked and how they are told."
       />
       <Field name="description" label="Description (optional)" as="textarea" rows={2} />
+      <Field
+        name="ranking_hints"
+        label="Story priorities (optional)"
+        as="textarea"
+        rows={2}
+        hint="Guides which stories are picked, e.g. “prefer open-source releases over funding news”."
+      />
       <div className="row">
         <div className="col-md-6">
           <Field name="language" label="Language" hint="A BCP-47 tag, e.g. en, de or pt-BR" />

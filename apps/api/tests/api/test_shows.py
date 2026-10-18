@@ -459,3 +459,21 @@ async def test_delete_works_when_the_show_has_no_media(
 async def test_requires_a_session(client: AsyncClient) -> None:
     assert (await client.get("/api/shows")).status_code == 401
     assert (await client.post("/api/shows", json=NEW)).status_code == 401
+
+
+async def test_ranking_hints_are_stored_changed_and_cleared(authed: AsyncClient) -> None:
+    show = await create(authed, ranking_hints="  Prefer releases over funding news  ")
+    url = f"/api/shows/{show['id']}"
+
+    assert show["ranking_hints"] == "Prefer releases over funding news"
+    assert (await authed.patch(url, json={"ranking_hints": "Local stories first"})).json()[
+        "ranking_hints"
+    ] == "Local stories first"
+    assert (await authed.patch(url, json={"ranking_hints": None})).json()["ranking_hints"] is None
+    assert (await authed.get(url)).json()["ranking_hints"] is None
+    too_long = await authed.patch(url, json={"ranking_hints": "x" * 2001})
+    assert too_long.status_code == 422
+
+
+async def test_shows_start_without_ranking_hints(authed: AsyncClient) -> None:
+    assert (await create(authed))["ranking_hints"] is None

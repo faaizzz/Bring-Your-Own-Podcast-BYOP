@@ -117,6 +117,22 @@ describe('create-show wizard', () => {
     expect(bodyOf(callsTo(fetchMock, 'PUT /api/shows/s1/speakers')[0])).toEqual(kokoroHosts);
   });
 
+  it('sends the story priorities with the new show', async () => {
+    const { user, fetchMock } = await openWizard();
+    await fillTopic(user);
+    await user.type(
+      screen.getByLabelText('Story priorities (optional)'),
+      'Prefer releases over funding news',
+    );
+    for (let i = 0; i < 5; i += 1) await user.click(next());
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    await screen.findByText('Created "Daily AI"');
+    expect(bodyOf(callsTo(fetchMock, 'POST /api/shows')[0])).toMatchObject({
+      ranking_hints: 'Prefer releases over funding news',
+    });
+  });
+
   it('uploads the chosen cover after creating the show', async () => {
     const { user, fetchMock } = await openWizard({
       'POST /api/shows/s1/cover': () => ({

@@ -11,13 +11,14 @@ from sqlalchemy import select
 
 from byop.config import get_settings
 from byop.db import dispose_engine, get_sessionmaker
-from byop.models import Show
+from byop.models import Item, Show
 from byop.services.credentials import (
     CredentialDecryptionError,
     CredentialResolver,
     rotate_credentials,
 )
 from byop.services.ingest.pipeline import ingest_show
+from byop.services.ranking import available_items, rank_items
 
 OLD_KEY_ENV = "OLD_BYOP_SECRET_KEY"
 
@@ -66,6 +67,41 @@ async def _ingest(reference: str) -> int:
     return 0
 
 
+async def _rank(reference: str) -> int:
+    """Show which stories would be chosen for the next episode, without reserving anything."""
+    settings = get_settings()
+    try:
+        async with get_sessionmaker()() as session:
+            try:
+                condition = Show.id == uuid.UUID(reference)
+            except ValueError:
+                condition = Show.slug == reference
+            show = await session.scalar(select(Show).where(condition))
+            if show is None:
+                print(f"No show with id or slug '{reference}'.", file=sys.stderr)
+                return 1
+            candidates = await available_items(session, show)
+            selection = await rank_items(
+                CredentialResolver(session, settings), settings, show, candidates
+            )
+            titles = {item.id: item for item in candidates}
+    finally:
+        await dispose_engine()
+    print(
+        f"{show.title}: {len(selection.items)} of {selection.candidates} available items chosen "
+        f"for an episode of up to {show.items_per_episode}."
+    )
+    if selection.used_fallback:
+        print(f"  (most recent items used instead of the model: {selection.fallback_reason})")
+    for position, pick in enumerate(selection.items, start=1):
+        item: Item = titles[pick.item_id]
+        print(f"{position:>2}. [{pick.score:>4.1f}] {item.title}")
+        print(f"      {pick.reason}")
+        for other in pick.supporting_item_ids:
+            print(f"      also covered by: {titles[other].title}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m byop.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -75,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     ingest = commands.add_parser("ingest", help="collect fresh items for a show now")
     ingest.add_argument("show", help="the show's id or slug")
+    rank = commands.add_parser("rank", help="show the stories that would be chosen for a show")
+    rank.add_argument("show", help="the show's id or slug")
     args = parser.parse_args(argv)
 
     if args.command == "rotate-key":
@@ -85,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_rotate_key(old_key))
     if args.command == "ingest":
         return asyncio.run(_ingest(args.show))
+    if args.command == "rank":
+        return asyncio.run(_rank(args.show))
     return 2
 
 

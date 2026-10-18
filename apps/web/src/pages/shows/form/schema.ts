@@ -169,6 +169,7 @@ export const showFormSchema = z
       .min(1, 'Describe what the show is about')
       .max(5000, 'At most 5000 characters'),
     description: z.string().trim().max(5000, 'At most 5000 characters'),
+    ranking_hints: z.string().trim().max(2000, 'At most 2000 characters'),
     language: z.string().trim().regex(LANGUAGE_PATTERN, 'Use a language tag such as en or pt-BR'),
     style: z.enum(STYLES),
     target_minutes: z
@@ -343,6 +344,7 @@ export function emptyValues(speakers: SpeakerInput[]): ShowFormValues {
     title: '',
     topic: '',
     description: '',
+    ranking_hints: '',
     language: 'en',
     style: 'news_briefing',
     target_minutes: 10,
@@ -366,6 +368,7 @@ export function showToValues(show: Show, speakers: Speaker[]): ShowFormValues {
     title: show.title,
     topic: show.topic,
     description: show.description,
+    ranking_hints: show.ranking_hints ?? '',
     language: show.language,
     style: show.style,
     target_minutes: show.target_minutes,
@@ -407,6 +410,7 @@ export function toCreateBody(values: ShowFormValues): ShowBody {
     items_per_episode: values.items_per_episode,
     ...scheduleFields(values),
   };
+  if (values.ranking_hints.trim() !== '') body.ranking_hints = values.ranking_hints.trim();
   if (values.llm_provider !== '') {
     body.llm_provider = values.llm_provider;
     body.llm_model = values.llm_model.trim();
@@ -419,6 +423,7 @@ export function toUpdateBody(values: ShowFormValues): ShowBody {
   const base = toCreateBody(values);
   return {
     ...base,
+    ranking_hints: values.ranking_hints.trim() === '' ? null : values.ranking_hints.trim(),
     llm_provider: values.llm_provider === '' ? null : values.llm_provider,
     llm_model: values.llm_provider === '' ? null : values.llm_model.trim(),
     paused: values.paused,

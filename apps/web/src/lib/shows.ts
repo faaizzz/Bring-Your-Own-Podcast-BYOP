@@ -29,6 +29,7 @@ export const showSchema = z.object({
   target_minutes: z.number(),
   style: z.enum(STYLES),
   prompt_override: z.string().nullable(),
+  ranking_hints: z.string().nullable(),
   llm_provider: z.string().nullable(),
   llm_model: z.string().nullable(),
   items_per_episode: z.number(),

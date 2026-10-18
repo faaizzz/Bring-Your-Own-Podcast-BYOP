@@ -36,6 +36,7 @@ describe('show form schema', () => {
     [{ target_minutes: 0 }, 'target_minutes', 'At least 1 minute'],
     [{ target_minutes: 61 }, 'target_minutes', 'At most 60 minutes'],
     [{ target_minutes: Number.NaN }, 'target_minutes', 'Enter the length in minutes'],
+    [{ ranking_hints: 'x'.repeat(2001) }, 'ranking_hints', 'At most 2000 characters'],
     [{ items_per_episode: 21 }, 'items_per_episode', 'At most 20 stories'],
     [{ items_per_episode: 1.5 }, 'items_per_episode', 'Use a whole number'],
     [{ timezone: 'Mars/Base' }, 'timezone', 'Choose a valid time zone'],
@@ -152,6 +153,20 @@ describe('conversion to and from the API', () => {
       schedule_monthday: null,
     });
     expect(monthly).toMatchObject({ schedule_weekday: null, schedule_monthday: 15 });
+  });
+
+  it('sends story priorities only when there are some, and clears them on update', () => {
+    expect(toCreateBody(valid())).not.toHaveProperty('ranking_hints');
+    expect(toCreateBody(valid({ ranking_hints: '  Prefer releases  ' }))).toMatchObject({
+      ranking_hints: 'Prefer releases',
+    });
+    expect(toUpdateBody(valid({ ranking_hints: '' }))).toMatchObject({ ranking_hints: null });
+    expect(toUpdateBody(valid({ ranking_hints: 'Local first' }))).toMatchObject({
+      ranking_hints: 'Local first',
+    });
+    expect(
+      showToValues(makeShow({ ranking_hints: 'Local first' }), savedSpeakers()).ranking_hints,
+    ).toBe('Local first');
   });
 
   it('clears the model and unused schedule fields on update', () => {

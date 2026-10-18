@@ -61,6 +61,8 @@ class Show(Base):
         default=ShowStyle.NEWS_BRIEFING,
     )
     prompt_override: Mapped[str | None] = mapped_column(Text)
+    # Free-text guidance for choosing stories, e.g. "prefer releases over funding news".
+    ranking_hints: Mapped[str | None] = mapped_column(Text)
     llm_provider: Mapped[str | None] = mapped_column(String(50))
     llm_model: Mapped[str | None] = mapped_column(String(200))
     items_per_episode: Mapped[int] = mapped_column(Integer, server_default="5", default=5)

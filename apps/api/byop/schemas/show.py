@@ -51,6 +51,7 @@ TargetMinutes = Annotated[int, Field(ge=1, le=60)]
 ItemsPerEpisode = Annotated[int, Field(ge=1, le=20)]
 Weekday = Annotated[int, Field(ge=0, le=6)]  # 0 = Monday
 Monthday = Annotated[int, Field(ge=1, le=31)]
+RankingHints = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 ModelName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Email = Annotated[str, StringConstraints(max_length=320), AfterValidator(_check_email)]
 
@@ -58,6 +59,7 @@ Email = Annotated[str, StringConstraints(max_length=320), AfterValidator(_check_
 NULLABLE_FIELDS = frozenset(
     {
         "prompt_override",
+        "ranking_hints",
         "llm_provider",
         "llm_model",
         "schedule_time",
@@ -96,6 +98,7 @@ class ShowCreate(BaseModel):
     # None selects the instance default (see DEFAULT_SHOW_STYLE / DEFAULT_LLM_*).
     style: ShowStyle | None = None
     prompt_override: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    ranking_hints: RankingHints | None = None
     llm_provider: LLMProviderName | None = None
     llm_model: ModelName | None = None
     items_per_episode: ItemsPerEpisode = 5
@@ -134,6 +137,7 @@ class ShowUpdate(BaseModel):
     target_minutes: TargetMinutes | None = None
     style: ShowStyle | None = None
     prompt_override: Annotated[str, StringConstraints(max_length=20000)] | None = None
+    ranking_hints: RankingHints | None = None
     llm_provider: LLMProviderName | None = None
     llm_model: ModelName | None = None
     items_per_episode: ItemsPerEpisode | None = None
@@ -171,6 +175,7 @@ class ShowResponse(BaseModel):
     target_minutes: int
     style: ShowStyle
     prompt_override: str | None
+    ranking_hints: str | None
     llm_provider: str | None
     llm_model: str | None
     items_per_episode: int

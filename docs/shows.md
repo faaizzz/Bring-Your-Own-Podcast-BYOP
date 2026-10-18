@@ -29,6 +29,8 @@ another user's show is a `404`.
   the show is still saved and the response carries a note in `warnings`.
 - **Defaults** for omitted fields come from the instance: `DEFAULT_LLM_PROVIDER` +
   `DEFAULT_LLM_MODEL` (used only as a pair) and `DEFAULT_SHOW_STYLE` (see `.env.example`).
+- **`ranking_hints`** (optional, up to 2000 characters) tells the editor model which stories to
+  favour; see [choosing stories](ranking.md).
 - **Schedule fields** are stored as sent; `next_run_at` is computed by the scheduler
   and is read-only here.
 

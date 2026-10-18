@@ -46,6 +46,7 @@ development; for a production-like run use
 - [Shows API](docs/shows.md)
 - [Sources (RSS, pages, web search)](docs/sources.md)
 - [Ingest (collecting and de-duplicating stories)](docs/ingest.md)
+- [Choosing stories (ranking and reservation)](docs/ranking.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
 - [Secrets and key rotation](docs/security.md)
 

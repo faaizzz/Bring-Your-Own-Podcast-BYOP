@@ -14,6 +14,7 @@ export function makeShow(patch: Partial<Show> = {}): Show {
     target_minutes: 10,
     style: 'news_briefing',
     prompt_override: null,
+    ranking_hints: null,
     llm_provider: null,
     llm_model: null,
     items_per_episode: 5,

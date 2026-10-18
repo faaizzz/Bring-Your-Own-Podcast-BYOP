@@ -67,6 +67,11 @@ class Item(Base):
     used_in_episode_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("episodes.id", ondelete="SET NULL"), index=True
     )
+    # Held for a run that has picked this item but not finished (an item belongs to at most one
+    # run at a time); released if the run fails or its draft is rejected.
+    reserved_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()
 
