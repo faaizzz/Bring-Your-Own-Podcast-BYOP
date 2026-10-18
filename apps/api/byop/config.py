@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).
     sources_allow_private_networks: bool = False
 
+    # Runs (the generation pipeline).
+    run_timeout_minutes: int = Field(default=60, ge=1)  # no progress for this long: failed
+    run_stage_max_retries: int = Field(default=3, ge=0)  # for transient errors, per stage
+    run_reaper_interval_s: int = Field(default=60, ge=5)  # how often stuck runs are looked for
+
     # Ingest (collecting stories for an episode).
     ingest_freshness_days: int = Field(default=3, ge=1)  # older items are not collected
     ingest_dedup_days: int = Field(default=14, ge=1)  # titles are compared against this window

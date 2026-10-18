@@ -8,7 +8,7 @@ celery_app = Celery(
     "byop",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["byop.tasks.discovery", "byop.tasks.ingest"],
+    include=["byop.tasks.discovery", "byop.tasks.ingest", "byop.tasks.pipeline"],
 )
 celery_app.conf.update(
     task_serializer="json",
@@ -16,8 +16,13 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    # Periodic jobs are registered here by the scheduler story.
-    beat_schedule={},
+    # Periodic jobs. The scheduler story adds the per-show schedules here.
+    beat_schedule={
+        "reap-stuck-runs": {
+            "task": "byop.reap_runs",
+            "schedule": float(settings.run_reaper_interval_s),
+        },
+    },
 )
 
 

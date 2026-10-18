@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from byop.config import Settings
 from byop.models import Episode, Item, Run, Show, User
-from byop.models.enums import RunTrigger
+from byop.models.enums import RunStatus, RunTrigger
 from byop.services import ranking
 from byop.services.credentials import CredentialResolver
 from byop.services.ranking import (
@@ -64,8 +64,10 @@ async def add_items(
     return items
 
 
-async def add_run(session: AsyncSession, show: Show) -> Run:
-    run = Run(user_id=show.user_id, show_id=show.id, trigger=RunTrigger.MANUAL)
+async def add_run(session: AsyncSession, show: Show, status: RunStatus = RunStatus.QUEUED) -> Run:
+    """A show may have only one queued or running run, so a competitor for the same stories
+    is a run waiting for review (it still holds what it picked)."""
+    run = Run(user_id=show.user_id, show_id=show.id, trigger=RunTrigger.MANUAL, status=status)
     session.add(run)
     await session.flush()
     return run
@@ -335,7 +337,10 @@ async def test_reserving_holds_items_for_one_run_only(
 ) -> None:
     show = await make_show(db_session, admin_user)
     items = await add_items(db_session, show, 5)
-    first, second = await add_run(db_session, show), await add_run(db_session, show)
+    first, second = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     ids = [i.id for i in items]
 
     won = await reserve_items(db_session, show, first.id, ids[:3])
@@ -383,7 +388,10 @@ async def test_used_items_and_other_shows_items_cannot_be_reserved(
 async def test_release_gives_everything_back(db_session: AsyncSession, admin_user: User) -> None:
     show = await make_show(db_session, admin_user)
     items = await add_items(db_session, show, 4)
-    first, second = await add_run(db_session, show), await add_run(db_session, show)
+    first, second = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     await reserve_items(db_session, show, first.id, [items[0].id, items[1].id])
     await reserve_items(db_session, show, second.id, [items[2].id])
 
@@ -422,7 +430,10 @@ async def test_available_items_skip_held_and_used_but_include_the_runs_own(
 ) -> None:
     show = await make_show(db_session, admin_user)
     items = await add_items(db_session, show, 4)
-    mine, theirs = await add_run(db_session, show), await add_run(db_session, show)
+    mine, theirs = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     await reserve_items(db_session, show, mine.id, [items[0].id])
     await reserve_items(db_session, show, theirs.id, [items[1].id])
 
@@ -440,7 +451,10 @@ async def test_selecting_for_a_run_reserves_the_choice_and_hides_it_from_other_r
     show = await make_show(db_session, admin_user)
     show.items_per_episode = 2
     items = await add_items(db_session, show, 6)
-    first, second = await add_run(db_session, show), await add_run(db_session, show)
+    first, second = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     cfg = configured()
     resolver = CredentialResolver(db_session, cfg)
     respx.post(OPENROUTER_URL).mock(
@@ -466,7 +480,10 @@ async def test_a_concurrent_run_taking_a_pick_makes_the_ranking_run_again(
     show = await make_show(db_session, admin_user)
     show.items_per_episode = 2
     items = await add_items(db_session, show, 5)
-    mine, rival = await add_run(db_session, show), await add_run(db_session, show)
+    mine, rival = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     cfg = configured()
     route = respx.post(OPENROUTER_URL).mock(
         side_effect=[answer(pick(1), pick(2)), answer(pick(1), pick(2))]
@@ -503,7 +520,10 @@ async def test_after_repeated_conflicts_the_newest_available_items_are_taken(
     show = await make_show(db_session, admin_user)
     show.items_per_episode = 2
     items = await add_items(db_session, show, 4)
-    mine, rival = await add_run(db_session, show), await add_run(db_session, show)
+    mine, rival = (
+        await add_run(db_session, show),
+        await add_run(db_session, show, RunStatus.AWAITING_REVIEW),
+    )
     await reserve_items(db_session, show, rival.id, [items[0].id])
     cfg = configured()
 
@@ -548,7 +568,7 @@ async def test_two_runs_reserving_at_the_same_time_never_share_an_item(engine: o
         user = await make_user(setup, f"race-{tag}@example.com")
         show = await make_show(setup, user, slug=f"race-{tag}")
         items = await add_items(setup, show, 40)
-        runs = [await add_run(setup, show), await add_run(setup, show)]
+        runs = [await add_run(setup, show), await add_run(setup, show, RunStatus.AWAITING_REVIEW)]
         await setup.commit()
         ids = [i.id for i in items]
         run_ids = [r.id for r in runs]

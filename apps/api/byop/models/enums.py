@@ -42,6 +42,12 @@ class RunStatus(enum.StrEnum):
     CANCELLED = "cancelled"
 
 
+class EventLevel(enum.StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
 class EpisodeStatus(enum.StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"

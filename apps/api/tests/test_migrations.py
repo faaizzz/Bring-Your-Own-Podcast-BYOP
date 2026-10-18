@@ -19,6 +19,7 @@ EXPECTED_TABLES = {
     "sources",
     "items",
     "runs",
+    "run_events",
     "episodes",
     "usage_events",
 }
