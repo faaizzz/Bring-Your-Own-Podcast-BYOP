@@ -51,4 +51,17 @@ if [ -f docker-compose.yml ] && command -v docker >/dev/null 2>&1 && docker comp
   done
 fi
 
+# CI must run the three jobs on push and pull_request, with no self-hosted runners.
+ci=.github/workflows/ci.yml
+if [ -f "$ci" ]; then
+  for j in api web compose; do
+    grep -qE "^  ${j}:" "$ci" || err "$ci is missing job $j"
+  done
+  grep -qE "^  push:|^on:.*push" "$ci" || err "$ci must trigger on push"
+  grep -qE "^  pull_request:" "$ci" || err "$ci must trigger on pull_request"
+  ! grep -q "self-hosted" "$ci" || err "$ci must use GitHub-hosted runners only"
+else
+  err "missing $ci"
+fi
+
 exit "$fail"

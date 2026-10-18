@@ -1,5 +1,7 @@
 # BYOP — Bring Your Own Podcast
 
+[![CI](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/actions/workflows/ci.yml/badge.svg)](https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP/actions/workflows/ci.yml)
+
 Self-hosted, open-source app that turns the sources you care about into a
 recurring, multi-speaker AI podcast with its own RSS feed. Bring your own LLM
 and text-to-speech keys (or run everything locally) and keep full control.
