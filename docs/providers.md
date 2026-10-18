@@ -108,7 +108,7 @@ temporary files are left behind on failure.
 | `openai` | `OpenAITTS` | `POST /audio/speech` | 4096 | `model`, `speed`, `instructions`, `format` |
 | `elevenlabs` | `ElevenLabsTTS` | `POST /v1/text-to-speech/{voice_id}` | 5000 | `model_id`, `stability`, `similarity_boost`, `style`, `speed`, `use_speaker_boost`, `language_code`, `seed`, `format` |
 | `openrouter` | `OpenRouterTTS` | `POST /audio/speech` on OpenRouter | 4096 | `model` (required), `speed`, `instructions`, `format` |
-| `kokoro` | `KokoroTTS` | `POST /v1/audio/speech` on a local Kokoro server | 4000 | `speed`, `lang_code`, `volume_multiplier`, `format` |
+| `kokoro` | `KokoroTTS` | `POST /v1/audio/speech` on a local Kokoro server | 800 | `speed`, `lang_code`, `volume_multiplier`, `format` |
 
 `format` is `pcm` (default) or `mp3`. Each provider's limits, formats, accepted
 parameters (with type and range, `ParamSpec`) and timeout are declared once, in its `ProviderQuirks`; unsupported

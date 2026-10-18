@@ -37,13 +37,17 @@ class KokoroTTS(OpenAITTS):
 
     name: ClassVar[str] = "kokoro"
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
-        # The server splits long text itself; this keeps individual segments comfortably small.
-        max_chars_per_request=4000,
+        # On a CPU a request takes roughly as long as the text is long (about 0.15 s per
+        # character), so chunks stay small enough to finish well within the timeout.
+        max_chars_per_request=800,
         formats=OpenAITTS.quirks.formats,
         default_format="pcm",
         supported_params=frozenset({"speed", "lang_code", "volume_multiplier"}),
         # CPU synthesis is far slower than a hosted API.
         timeout_s=300.0,
+        # The server works through requests one at a time, so parallel ones only wait in its
+        # queue (and each one's wait counts against the timeout).
+        max_concurrency=1,
         param_specs={
             "speed": ParamSpec("number", minimum=0.25, maximum=4.0),
             "lang_code": ParamSpec("string", max_length=8),

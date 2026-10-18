@@ -24,10 +24,10 @@ async def _run_stage(run_id: uuid.UUID, stage: str, task_id: str | None) -> str:
 async def _give_up(run_id: uuid.UUID, stage: str, message: str) -> None:
     from byop.models import Run
 
-    async with task_deps() as (session, _redis, _settings):
+    async with task_deps() as (session, _redis, settings):
         run = await session.get(Run, run_id)
         if run is not None:
-            await fail_run(session, run, message, stage=stage)
+            await fail_run(session, run, message, stage=stage, media_root=settings.media_root)
 
 
 @celery_app.task(bind=True, name="byop.run_stage")

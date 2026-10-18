@@ -21,6 +21,7 @@ from byop.models.enums import EventLevel, RunStatus
 from byop.pipeline.context import RunContext
 from byop.pipeline.errors import RunStopped, StageFailed, TransientStageError
 from byop.pipeline.stages import finalize, ingest, mix, rank, script, tts
+from byop.pipeline.workdir import remove_work_dir
 from byop.services.credentials import CredentialResolver
 from byop.services.ranking import release_items
 
@@ -76,8 +77,16 @@ async def add_event(
     )
 
 
-async def fail_run(session: AsyncSession, run: Run, message: str, *, stage: str | None) -> bool:
-    """End an active run as failed, with its reason, and give its stories back."""
+async def fail_run(
+    session: AsyncSession,
+    run: Run,
+    message: str,
+    *,
+    stage: str | None,
+    media_root: str | None = None,
+) -> bool:
+    """End an active run as failed, with its reason, give its stories back and (if the media
+    root is given) delete its scratch files."""
     await session.refresh(run, ["status"])
     if run.status not in ACTIVE:
         return False  # it already ended some other way; keep that outcome
@@ -87,11 +96,15 @@ async def fail_run(session: AsyncSession, run: Run, message: str, *, stage: str 
     await add_event(session, run, message, level=EventLevel.ERROR, stage=stage)
     await session.commit()
     await release_items(session, run.user_id, run.id)
+    if media_root:
+        await remove_work_dir(media_root, run.id)
     log.warning("run_failed", run_id=str(run.id), stage=stage, error=message)
     return True
 
 
-async def finish_cancelled(session: AsyncSession, run: Run, *, stage: str | None) -> bool:
+async def finish_cancelled(
+    session: AsyncSession, run: Run, *, stage: str | None, media_root: str | None = None
+) -> bool:
     await session.refresh(run, ["status"])
     if run.status not in ACTIVE:
         return False
@@ -100,7 +113,21 @@ async def finish_cancelled(session: AsyncSession, run: Run, *, stage: str | None
     await add_event(session, run, "Run cancelled", stage=stage)
     await session.commit()
     await release_items(session, run.user_id, run.id)
+    if media_root:
+        await remove_work_dir(media_root, run.id)
     return True
+
+
+async def _start_over(session: AsyncSession, run: Run, *, force: bool = True) -> None:
+    """Reset the session after a stage ended by exception.
+
+    Everything a stage keeps is committed as it goes, so rolling back loses nothing. Unless
+    `force` is set it only happens when the session is unusable after an interrupted write
+    (a rollback expires every loaded object, which is wasteful when nothing is wrong).
+    """
+    if force or not session.is_active:
+        await session.rollback()
+    await session.refresh(run)  # a rollback expires everything; async code cannot lazy-load
 
 
 async def run_stage(
@@ -123,7 +150,7 @@ async def run_stage(
     assert show is not None  # runs are deleted with their show
 
     if run.cancel_requested:
-        await finish_cancelled(session, run, stage=stage.name)
+        await finish_cancelled(session, run, stage=stage.name, media_root=settings.media_root)
         return StageResult.CANCELLED
     if run.status is RunStatus.QUEUED:
         run.status = RunStatus.RUNNING
@@ -148,11 +175,11 @@ async def run_stage(
     try:
         await stage.run(context)
     except RunStopped:
-        await finish_cancelled(session, run, stage=stage.name)
+        await _start_over(session, run, force=False)
+        await finish_cancelled(session, run, stage=stage.name, media_root=settings.media_root)
         return StageResult.CANCELLED
     except TransientStageError as exc:
-        await session.rollback()
-        await session.refresh(run)  # a rollback expires everything; async code cannot lazy-load
+        await _start_over(session, run)
         await add_event(
             session, run, f"Temporary problem, will retry: {exc}",
             level=EventLevel.WARNING, stage=stage.name,
@@ -160,15 +187,15 @@ async def run_stage(
         await session.commit()
         raise
     except StageFailed as exc:
-        await fail_run(session, run, str(exc), stage=stage.name)
+        await _start_over(session, run, force=False)
+        await fail_run(session, run, str(exc), stage=stage.name, media_root=settings.media_root)
         return StageResult.FAILED
     except Exception as exc:
         log.exception("stage_crashed", run_id=str(run_id), stage=stage.name)
-        await session.rollback()
-        await session.refresh(run)
+        await _start_over(session, run)
         await fail_run(
             session, run, f"Unexpected error in {stage.name}: {type(exc).__name__}: {exc}",
-            stage=stage.name,
+            stage=stage.name, media_root=settings.media_root,
         )  # fmt: skip
         return StageResult.FAILED
 
@@ -201,6 +228,7 @@ async def reap_stuck_runs(
             run,
             f"Timed out: no progress for {minutes} minutes (the worker may have stopped)",
             stage=run.stage,
+            media_root=settings.media_root,
         ):
             reaped.append(run.id)
     return reaped

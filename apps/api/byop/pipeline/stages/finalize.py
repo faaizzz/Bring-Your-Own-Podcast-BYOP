@@ -5,6 +5,7 @@ from sqlalchemy import select
 from byop.models import Episode
 from byop.models.enums import RunStatus
 from byop.pipeline.context import RunContext
+from byop.pipeline.workdir import remove_work_dir
 from byop.services.ranking import commit_items, release_items
 
 
@@ -22,6 +23,7 @@ async def run(ctx: RunContext) -> None:
         await commit_items(ctx.session, ctx.user_id, ctx.run.id, episode_id)
     else:  # nothing was written: give the stories back
         await release_items(ctx.session, ctx.user_id, ctx.run.id)
+    await remove_work_dir(ctx.settings.media_root, ctx.run.id)  # the audio chunks are not used yet
     ctx.run.status = RunStatus.SUCCEEDED
     ctx.run.progress = 100
     ctx.run.finished_at = datetime.now(UTC)

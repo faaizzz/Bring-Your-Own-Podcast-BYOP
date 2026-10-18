@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     run_stage_max_retries: int = Field(default=3, ge=0)  # for transient errors, per stage
     run_reaper_interval_s: int = Field(default=60, ge=5)  # how often stuck runs are looked for
 
+    # Text-to-speech stage.
+    tts_concurrency: int = Field(default=4, ge=1, le=16)  # chunks synthesized at once
+    tts_chunk_retries: int = Field(default=2, ge=0)  # extra attempts per chunk before the fallback
+    tts_retry_backoff_s: float = Field(default=1.0, ge=0)  # doubles with each retry
+
     # Ingest (collecting stories for an episode).
     ingest_freshness_days: int = Field(default=3, ge=1)  # older items are not collected
     ingest_dedup_days: int = Field(default=14, ge=1)  # titles are compared against this window

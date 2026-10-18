@@ -97,6 +97,9 @@ class ProviderQuirks:
     timeout_s: float = 120.0
     # Types and bounds for `supported_params`; a parameter without a spec is not checked.
     param_specs: Mapping[str, ParamSpec] = field(default_factory=dict)
+    # How many requests may run at once against this provider; None means no limit of its own.
+    # For servers that work through requests one at a time (a local model on a CPU).
+    max_concurrency: int | None = None
 
     def value_problems(self, params: Mapping[str, object]) -> dict[str, str]:
         """Parameter name -> why its value is unacceptable (supported parameters only)."""

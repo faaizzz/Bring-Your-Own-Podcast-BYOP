@@ -49,6 +49,7 @@ development; for a production-like run use
 - [Choosing stories (ranking and reservation)](docs/ranking.md)
 - [Runs (the generation pipeline)](docs/runs.md)
 - [Scripts (the multi-speaker script writer)](docs/scripts.md)
+- [Voicing the script (text-to-speech stage)](docs/tts.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
 - [Secrets and key rotation](docs/security.md)
 

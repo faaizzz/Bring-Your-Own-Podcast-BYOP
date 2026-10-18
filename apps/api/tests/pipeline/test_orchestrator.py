@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import cast
 
 import httpx
@@ -29,6 +30,7 @@ from byop.services.ranking import reserve_items
 from tests.helpers import make_settings
 from tests.models.factories import make_show
 from tests.providers.llm.helpers import OPENROUTER_URL, completion
+from tests.providers.tts.helpers import pcm_bytes
 
 pytestmark = pytest.mark.usefixtures("fake_dns")
 
@@ -123,8 +125,8 @@ async def test_progress_follows_the_stage_ranges_and_never_goes_backwards(
     assert seen == [40, 50, 80]
 
 
-async def test_the_real_pipeline_runs_end_to_end_with_stub_tail_stages(
-    db_session: AsyncSession, admin_user: User
+async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
+    db_session: AsyncSession, admin_user: User, tmp_path: Path
 ) -> None:
     show = await make_show(db_session, admin_user)
     show.target_minutes = 1
@@ -168,9 +170,12 @@ async def test_the_real_pipeline_runs_end_to_end_with_stub_tail_stages(
         openrouter_api_key=SecretStr("sk-or-test-key-123456"),
         default_llm_provider="openrouter",
         default_llm_model="vendor/model",
+        kokoro_base_url="http://kokoro:8880/v1",
+        media_root=str(tmp_path),
     )
 
     with respx.mock:
+        respx.post("http://kokoro:8880/v1/audio/speech").respond(200, content=pcm_bytes())
         respx.get("https://f.example.com/rss").respond(
             200, content=feed.encode(), headers={"content-type": "application/rss+xml"}
         )
@@ -191,6 +196,8 @@ async def test_the_real_pipeline_runs_end_to_end_with_stub_tail_stages(
     chose = next(e for e in log if e.message.startswith("Chose "))
     assert chose.data is not None and len(cast(list[object], chose.data["stories"])) == 2
     assert any(e.message.startswith("Wrote “Oceans and bikes”") for e in log)
+    assert any(e.message.startswith("Voiced 3 chunks") for e in log)
+    assert not (tmp_path / "work").exists() or not any((tmp_path / "work").iterdir())
     episode = await db_session.scalar(select(Episode).where(Episode.run_id == run.id))
     assert episode is not None and episode.title == "Oceans and bikes"
     assert episode.status is EpisodeStatus.DRAFT and episode.script is not None

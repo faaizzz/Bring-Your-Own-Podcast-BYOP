@@ -29,9 +29,10 @@ not working, and does not block the next one.
 `ingest` (0–20 %) → `rank` (20–30) → `script` (30–55) → `tts` (55–85) → `mix` (85–95) →
 `finalize` (95–100). They are plain functions in `byop/pipeline/stages/` that take a
 `RunContext` (the run, its show, a session, settings and a credential resolver); the wiring is
-`byop/pipeline/orchestrator.py`. Today `ingest`, `rank` and `script` are real (the script becomes a
-draft episode, see [scripts](scripts.md)); `tts` and `mix` are placeholders that log "Not
-implemented yet", and `finalize` ends the run and marks the stories as used by the draft.
+`byop/pipeline/orchestrator.py`. Today `ingest`, `rank`, `script` (the script becomes a draft episode, see
+[scripts](scripts.md)) and `tts` (see [voicing](tts.md)) are real; `mix` is a placeholder that logs
+"Not implemented yet", and `finalize` ends the run, marks the stories as used by the draft and
+deletes the run's scratch files.
 
 The chain is one Celery task per stage (`byop.run_stage`), built by
 `byop.tasks.pipeline.build_chain`. Each stage:
