@@ -10,6 +10,8 @@ another user's show is a `404`.
 | `POST` | `/api/shows` | Create (`title` and `topic` are required) |
 | `GET` | `/api/shows/{id}` | One show |
 | `PATCH` | `/api/shows/{id}` | Change only the fields you send; `null` clears optional ones |
+| `POST` | `/api/shows/{id}/pause` | Stop the schedule (manual runs still work); `next_run_at` becomes `null` |
+| `POST` | `/api/shows/{id}/resume` | Resume it; the next run is the first slot after now |
 | `DELETE` | `/api/shows/{id}` | Delete the show, its episodes/runs/items/sources/speakers and its media files |
 
 ## Rules
@@ -31,8 +33,25 @@ another user's show is a `404`.
   `DEFAULT_LLM_MODEL` (used only as a pair) and `DEFAULT_SHOW_STYLE` (see `.env.example`).
 - **`ranking_hints`** (optional, up to 2000 characters) tells the editor model which stories to
   favour; see [choosing stories](ranking.md).
-- **Schedule fields** are stored as sent; `next_run_at` is computed by the scheduler
-  and is read-only here.
+- **Schedule fields** are stored as sent; `next_run_at` is computed from them (read-only) and
+  recomputed whenever the schedule, the time zone or `paused` changes. See below.
+
+## Scheduling
+
+`schedule_kind` is `manual` (never automatic), `daily`, `weekly` (`schedule_weekday`, 0 = Monday) or
+`monthly` (`schedule_monthday`, 1–31; in a shorter month the last day, so 31 means Feb 28/29, Apr 30).
+`schedule_time` is the wall-clock time in the show's `timezone` (an IANA name such as
+`Europe/Berlin`), so it stays at the same local time across daylight-saving changes. A time the
+clock skips in spring runs right after the jump; one that happens twice in autumn uses the first.
+The maths is `compute_next_run` in `byop/services/schedule.py` (the first moment strictly after
+now).
+
+The `beat` service runs `byop.schedule_tick` every minute. It locks the due shows
+(`next_run_at <= now`, not paused) with `FOR UPDATE SKIP LOCKED`, creates a run with trigger
+`schedule` and moves `next_run_at` ahead in the same transaction, so overlapping ticks never start a
+show twice. Downtime makes at most one catch-up run (the missed slots are not replayed), and a slot
+is skipped when the show still has a run queued or running. A show waiting for review does not block
+the next run. **`beat` must be running** (`docker compose` starts it) for schedules to fire.
 
 ## In the app
 

@@ -9,6 +9,7 @@ import { PROVIDER_LABELS } from '../../lib/voices';
 import { EpisodesTab } from '../episodes/EpisodesTab';
 import { RunsTab } from '../runs/RunsTab';
 import { GenerateButton } from './GenerateButton';
+import { PauseButton } from './PauseButton';
 import { ShowSettings } from './ShowSettings';
 import { SourcesTab } from './sources/SourcesTab';
 
@@ -134,7 +135,10 @@ export default function ShowDetailPage(): React.JSX.Element {
               Paused
             </Badge>
           )}
-          <GenerateButton show={data} className="ms-auto" />
+          <div className="ms-auto d-flex gap-2">
+            <PauseButton show={data} />
+            <GenerateButton show={data} />
+          </div>
         </div>
       </Card.Header>
       <Card.Body>

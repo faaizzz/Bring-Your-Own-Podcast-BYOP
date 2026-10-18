@@ -123,6 +123,18 @@ export function useUpdateShow(id: string) {
   });
 }
 
+/** Stop or resume the show's schedule (manual runs still work). */
+export function usePauseShow(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (paused: boolean) =>
+      api.post<Show>(`/shows/${id}/${paused ? 'pause' : 'resume'}`, undefined, {
+        schema: showSchema,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: SHOWS_KEY }),
+  });
+}
+
 /** The id is a parameter because the wizard saves speakers for a show it has just created. */
 export function useSaveSpeakers() {
   const queryClient = useQueryClient();

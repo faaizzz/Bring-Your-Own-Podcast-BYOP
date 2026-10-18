@@ -23,12 +23,24 @@ from byop.services.credentials import (
 )
 from byop.services.defaults import default_tts_provider
 from byop.services.models import list_models_cached
+from byop.services.schedule import next_run_for
 from byop.services.speaker_defaults import default_speakers
 from byop.storage import Storage, StorageError, show_prefix
 
 log = structlog.get_logger(__name__)
 
 MAX_SLUG_LENGTH = 100
+# Changing any of these moves the show's next scheduled run.
+SCHEDULE_FIELDS = frozenset(
+    {
+        "schedule_kind",
+        "schedule_time",
+        "schedule_weekday",
+        "schedule_monthday",
+        "timezone",
+        "paused",
+    }
+)
 
 
 class ShowNotFound(Exception):
@@ -191,6 +203,7 @@ async def create_show(
         slug = await _unique_slug(session, slugify(data.title))
 
     show = Show(user_id=user_id, slug=slug, **values)
+    show.next_run_at = next_run_for(show)
     try:
         async with session.begin_nested():
             session.add(show)
@@ -260,6 +273,8 @@ async def update_show(
 
     for name, value in changes.items():
         setattr(show, name, value)
+    if SCHEDULE_FIELDS & changes.keys():
+        show.next_run_at = next_run_for(show)
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -274,6 +289,18 @@ async def update_show(
         view.slug_locked,
         warnings,
     )
+
+
+async def set_paused(
+    session: AsyncSession, user_id: uuid.UUID, show_id: uuid.UUID, paused: bool
+) -> ShowView:
+    """Stop or resume the show's schedule. Resuming looks ahead from now: the slots missed while
+    paused are not made up."""
+    show = (await get_show(session, user_id, show_id)).show
+    show.paused = paused
+    show.next_run_at = next_run_for(show)
+    await session.commit()
+    return await get_show(session, user_id, show_id, refresh=True)
 
 
 async def delete_show(

@@ -95,6 +95,24 @@ async def create_show(
     return response_for(view)
 
 
+@router.post("/{show_id}/pause", response_model=ShowResponse)
+async def pause_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
+    """Stop scheduled runs; manual runs still work."""
+    try:
+        return response_for(await service.set_paused(session, user.id, show_id, True))
+    except service.ShowNotFound as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/{show_id}/resume", response_model=ShowResponse)
+async def resume_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
+    """Resume the schedule from the next slot after now."""
+    try:
+        return response_for(await service.set_paused(session, user.id, show_id, False))
+    except service.ShowNotFound as exc:
+        raise _http_error(exc) from exc
+
+
 @router.get("/{show_id}", response_model=ShowResponse)
 async def get_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
     try:

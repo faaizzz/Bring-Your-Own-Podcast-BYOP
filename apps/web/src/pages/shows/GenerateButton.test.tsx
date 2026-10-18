@@ -116,3 +116,40 @@ describe('Runs tab', () => {
     expect(await screen.findByText('No runs yet')).toBeInTheDocument();
   });
 });
+
+describe('Pause schedule', () => {
+  it('pauses a scheduled show and says so', async () => {
+    const user = userEvent.setup();
+    const state = { show: makeShow({ schedule_kind: 'daily', schedule_time: '09:00:00' }) };
+    const { fetchMock } = await renderApp('/shows/s1', {
+      handlers: {
+        ...handlers(state.show),
+        'GET /api/shows/s1': () => ({ body: state.show }),
+        'POST /api/shows/s1/pause': () => {
+          state.show = { ...state.show, paused: true, next_run_at: null };
+          return { body: state.show };
+        },
+        'POST /api/shows/s1/resume': () => {
+          state.show = { ...state.show, paused: false, next_run_at: '2030-01-01T09:00:00Z' };
+          return { body: state.show };
+        },
+      },
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Pause schedule' }));
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/pause')).toHaveLength(1);
+    expect(await screen.findByText('Schedule paused.')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Resume schedule' })).toBeInTheDocument();
+    expect(await screen.findByText('Paused', { selector: '.badge' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Resume schedule' }));
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/resume')).toHaveLength(1);
+    expect(await screen.findByRole('button', { name: 'Pause schedule' })).toBeInTheDocument();
+  });
+
+  it('has nothing to pause on a manual show', async () => {
+    await renderApp('/shows/s1', { handlers: handlers(makeShow()) });
+    await screen.findByRole('button', { name: 'Generate now: Daily AI' });
+    expect(screen.queryByRole('button', { name: /schedule/ })).not.toBeInTheDocument();
+  });
+});
