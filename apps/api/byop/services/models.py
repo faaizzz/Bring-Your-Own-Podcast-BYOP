@@ -1,12 +1,11 @@
-import hashlib
 import json
 from decimal import Decimal
 
 import structlog
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
 
 from byop.providers.llm import LLMProvider, ModelInfo
+from byop.services import cache
 from byop.services.credentials import ProviderConfig
 
 CACHE_TTL_SECONDS = 3600
@@ -15,11 +14,7 @@ log = structlog.get_logger(__name__)
 
 
 def cache_key(config: ProviderConfig) -> str:
-    """Per provider and credential: a changed key or base URL must not see another's list."""
-    base = config.base_url or ""
-    key = config.api_key.get_secret_value() if config.api_key else ""
-    fingerprint = hashlib.sha256(f"{base}\n{key}".encode()).hexdigest()[:16]
-    return f"models:{config.provider.value}:{fingerprint}"
+    return cache.cache_key("models", config)
 
 
 def _encode(models: list[ModelInfo]) -> str:
@@ -59,16 +54,13 @@ async def list_models_cached(
 ) -> list[ModelInfo]:
     """The provider's model list, cached for an hour. Redis trouble degrades to a live call."""
     key = cache_key(config)
-    try:
-        cached = await redis.get(key)
-        if cached:
-            return _decode(str(cached))
-    except (RedisError, ValueError, KeyError):
-        log.warning("models_cache_read_failed")
+    cached = await cache.read(redis, key)
+    if cached is not None:
+        try:
+            return _decode(cached)
+        except (ValueError, KeyError):
+            log.warning("models_cache_corrupt")
 
     models = await llm.list_models()
-    try:
-        await redis.set(key, _encode(models), ex=CACHE_TTL_SECONDS)
-    except RedisError:
-        log.warning("models_cache_write_failed")
+    await cache.write(redis, key, _encode(models), CACHE_TTL_SECONDS)
     return models

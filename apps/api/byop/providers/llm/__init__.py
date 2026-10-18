@@ -1,6 +1,6 @@
 from byop.models.enums import CredentialProvider
+from byop.providers.common import CallMetadata, RetryPolicy
 from byop.providers.llm.base import (
-    CallMetadata,
     LLMError,
     LLMProvider,
     LLMResponseError,
@@ -9,7 +9,6 @@ from byop.providers.llm.base import (
     ModelInfo,
     TokenUsage,
 )
-from byop.providers.llm.openai_chat import RetryPolicy
 from byop.providers.llm.openai_compatible import OPENAI_BASE_URL, OpenAICompatibleLLM
 from byop.providers.llm.openrouter import OpenRouterLLM
 from byop.services.credentials import ProviderConfig

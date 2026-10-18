@@ -67,3 +67,45 @@ provider and credential. It answers `409` when the provider is not configured an
 `host.docker.internal` works on Docker Desktop, and the compose file maps it to the
 host gateway on Linux. LM Studio works the same way (`http://host.docker.internal:1234/v1`).
 Small local models follow JSON schemas less reliably, so expect more repair rounds.
+
+## Text-to-speech
+
+Every speech call goes through `byop.providers.tts.TTSProvider`:
+
+```python
+tts = get_tts(CredentialProvider.ELEVENLABS, config)
+result = await tts.synthesize(
+    "Welcome to the show.",
+    voice_id="21m00Tcm4TlvDq8ikWAM",
+    params={"stability": 0.4},          # the speaker's voice parameters
+    output_dir=work_dir,                # caller-owned temp directory
+    metadata=CallMetadata(run_id=run_id, stage="tts"),
+)
+result.audio_path     # <work_dir>/<id>.wav
+result.sample_rate    # 24000
+result.characters     # counted for every call
+```
+
+Whatever the provider returns (raw PCM, MP3, ...) is normalised to **WAV, 24 kHz,
+mono, 16-bit**, so mixing never needs to know where audio came from. 24 kHz PCM is
+wrapped in a WAV header directly; everything else is converted with ffmpeg. Audio is
+streamed to disk in `output_dir`; nothing holds a whole file in memory, and no
+temporary files are left behind on failure.
+
+| Provider | Class | Endpoint | Max chars | Parameters (`params`) |
+| --- | --- | --- | --- | --- |
+| `openai` | `OpenAITTS` | `POST /audio/speech` | 4096 | `model`, `speed`, `instructions`, `format` |
+| `elevenlabs` | `ElevenLabsTTS` | `POST /v1/text-to-speech/{voice_id}` | 5000 | `model_id`, `stability`, `similarity_boost`, `style`, `speed`, `use_speaker_boost`, `language_code`, `seed`, `format` |
+| `openrouter` | `OpenRouterTTS` | `POST /audio/speech` on OpenRouter | 4096 | `model` (required), `speed`, `instructions`, `format` |
+
+`format` is `pcm` (default) or `mp3`. Each provider's limits, formats, accepted
+parameters and timeout are declared once, in its `ProviderQuirks`; unsupported
+parameters or over-long text raise `TTSParamError` before any request is sent
+(splitting long scripts is the synthesis stage's job). Failures raise `TTSError`;
+429, 5xx and network errors are retried like LLM calls.
+
+`GET /api/voices?provider=openai|elevenlabs|openrouter` returns `id`, `name`,
+`language`, `gender` and `preview_url`, cached for an hour per credential. OpenAI
+and OpenRouter have no voice-listing endpoint, so their built-in voice names are
+listed statically. Adding a provider means one new subclass with its quirks plus a
+line in `get_tts`; nothing else branches on the provider.

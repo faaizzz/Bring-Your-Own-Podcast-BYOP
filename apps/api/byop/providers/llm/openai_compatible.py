@@ -1,4 +1,5 @@
-from byop.providers.llm.openai_chat import OpenAIChatProvider, RetryPolicy
+from byop.providers.common import RetryPolicy
+from byop.providers.llm.openai_chat import OpenAIChatProvider
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 # Local servers (Ollama, LM Studio) ignore the key, but the SDK insists on one.

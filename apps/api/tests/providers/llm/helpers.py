@@ -3,7 +3,7 @@ import json
 import httpx
 import respx
 
-from byop.providers.llm import RetryPolicy
+from byop.providers.common import RetryPolicy
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # No sleeping in tests.

@@ -1,7 +1,8 @@
 from decimal import Decimal, InvalidOperation
 
+from byop.providers.common import RetryPolicy
 from byop.providers.llm.base import ModelInfo
-from byop.providers.llm.openai_chat import OpenAIChatProvider, RetryPolicy
+from byop.providers.llm.openai_chat import OpenAIChatProvider
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 ONE_MILLION = Decimal(1_000_000)

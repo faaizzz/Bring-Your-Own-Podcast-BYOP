@@ -1,7 +1,6 @@
 """Shared implementation for providers that speak the OpenAI chat-completions protocol."""
 
 import json
-import random
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
@@ -15,8 +14,8 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel, ValidationError
 from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
 
+from byop.providers.common import CallMetadata, RetryPolicy, backoff_seconds
 from byop.providers.llm.base import (
-    CallMetadata,
     LLMError,
     LLMProvider,
     LLMResponseError,
@@ -30,15 +29,6 @@ from byop.providers.llm.json_extract import extract_json
 log = structlog.get_logger(__name__)
 
 MAX_ERRORS_IN_REPAIR_PROMPT = 5
-
-
-@dataclass(frozen=True)
-class RetryPolicy:
-    """Exponential backoff with jitter for 429 / 5xx / network errors."""
-
-    max_attempts: int = 4
-    initial_wait_s: float = 1.0
-    max_wait_s: float = 30.0
 
 
 @dataclass
@@ -142,19 +132,11 @@ class OpenAIChatProvider(LLMProvider):
         return None
 
     def _wait(self, state: RetryCallState) -> float:
-        policy = self._retry
-        backoff: float = min(
-            policy.initial_wait_s * 2 ** (state.attempt_number - 1), policy.max_wait_s
-        )
-        wait: float = backoff * random.uniform(0.5, 1.0)  # noqa: S311  # jitter, not security
         exc = state.outcome.exception() if state.outcome else None
+        retry_after = None
         if isinstance(exc, openai.APIStatusError):
-            retry_after = exc.response.headers.get("retry-after", "")
-            try:
-                wait = max(wait, min(float(retry_after), policy.max_wait_s))
-            except ValueError:
-                pass
-        return wait
+            retry_after = exc.response.headers.get("retry-after")
+        return backoff_seconds(self._retry, state.attempt_number, retry_after)
 
     async def _chat(
         self,

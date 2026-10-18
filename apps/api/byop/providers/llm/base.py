@@ -1,10 +1,11 @@
-import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal, overload
 
 from pydantic import BaseModel
+
+from byop.providers.common import CallMetadata
 
 
 class LLMError(Exception):
@@ -23,16 +24,6 @@ class LLMResponseError(LLMError):
 class Message:
     role: Literal["system", "user", "assistant"]
     content: str
-
-
-@dataclass(frozen=True)
-class CallMetadata:
-    """Who is calling and why; carried on every call so usage capture and tracing can hook in."""
-
-    run_id: uuid.UUID | None = None
-    show_id: uuid.UUID | None = None
-    stage: str | None = None
-    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

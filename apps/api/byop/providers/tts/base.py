@@ -1,0 +1,258 @@
+"""Text-to-speech provider interface.
+
+Everything that differs between providers (limits, wire formats, accepted parameters,
+timeouts) is declared once in each provider's `ProviderQuirks`; no other code branches on
+the provider.
+"""
+
+import time
+import uuid
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from decimal import Decimal
+from pathlib import Path
+from typing import ClassVar
+
+import anyio
+import httpx
+import structlog
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
+
+from byop.providers.common import CallMetadata, RetryPolicy, backoff_seconds
+from byop.providers.tts.audio import CANONICAL_SAMPLE_RATE, AudioFormat, to_canonical_wav
+from byop.providers.tts.errors import TTSError, TTSParamError
+
+log = structlog.get_logger(__name__)
+
+CANONICAL_FORMAT = "wav"
+
+
+class _StatusError(Exception):
+    def __init__(self, status_code: int, retry_after: str | None) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+        self.retry_after = retry_after
+
+
+@dataclass(frozen=True)
+class Voice:
+    id: str
+    name: str
+    language: str | None = None
+    gender: str | None = None
+    preview_url: str | None = None
+
+
+@dataclass(frozen=True)
+class TTSResult:
+    audio_path: Path
+    format: str
+    sample_rate: int
+    characters: int
+    # Providers do not report cost; the usage story fills it from a price table.
+    cost_usd: Decimal | None
+    latency_ms: int
+
+
+@dataclass(frozen=True)
+class ProviderQuirks:
+    max_chars_per_request: int
+    # What the API can return, by our format name ("pcm", "mp3"), and which one we ask for.
+    formats: Mapping[str, AudioFormat]
+    default_format: str
+    # Keys accepted in `params` (the speaker's voice parameters), besides `format`.
+    supported_params: frozenset[str]
+    required_params: frozenset[str] = frozenset()
+    timeout_s: float = 120.0
+
+
+@dataclass(frozen=True)
+class AudioRequest:
+    """One HTTP request that returns audio."""
+
+    url: str
+    json: dict[str, object]
+    headers: dict[str, str] = field(default_factory=dict)
+    query: dict[str, str] = field(default_factory=dict)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, _StatusError):
+        return exc.status_code == 429 or exc.status_code >= 500
+    return isinstance(exc, httpx.TransportError)  # includes timeouts
+
+
+class TTSProvider(ABC):
+    name: ClassVar[str]
+    quirks: ClassVar[ProviderQuirks]
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        timeout_s: float | None = None,
+        retry: RetryPolicy | None = None,
+        default_headers: dict[str, str] | None = None,
+    ) -> None:
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        self._retry = retry or RetryPolicy()
+        self._http = httpx.AsyncClient(
+            timeout=timeout_s or self.quirks.timeout_s, headers=default_headers
+        )
+
+    @property
+    def max_chars_per_request(self) -> int:
+        return self.quirks.max_chars_per_request
+
+    # -- provider-specific parts ------------------------------------------------------------
+
+    @abstractmethod
+    def build_request(
+        self, text: str, voice_id: str, params: Mapping[str, object], audio_format: AudioFormat
+    ) -> AudioRequest:
+        """The HTTP request that synthesizes `text` in `audio_format`."""
+
+    @abstractmethod
+    async def list_voices(self) -> list[Voice]:
+        """The voices this provider offers."""
+
+    # -- shared flow ------------------------------------------------------------------------
+
+    def _validate(self, text: str, params: Mapping[str, object]) -> AudioFormat:
+        quirks = self.quirks
+        if not text.strip():
+            raise TTSParamError("There is no text to synthesize")
+        if len(text) > quirks.max_chars_per_request:
+            raise TTSParamError(
+                f"Text is {len(text)} characters; {self.name} accepts at most "
+                f"{quirks.max_chars_per_request} per request"
+            )
+        unknown = set(params) - quirks.supported_params - {"format"}
+        if unknown:
+            raise TTSParamError(
+                f"{self.name} does not support parameter(s): {', '.join(sorted(unknown))}"
+            )
+        missing = quirks.required_params - set(params)
+        if missing:
+            raise TTSParamError(f"{self.name} requires parameter(s): {', '.join(sorted(missing))}")
+        format_name = str(params.get("format", quirks.default_format))
+        if format_name not in quirks.formats:
+            raise TTSParamError(
+                f"{self.name} cannot produce '{format_name}' "
+                f"(available: {', '.join(sorted(quirks.formats))})"
+            )
+        return quirks.formats[format_name]
+
+    def _wait(self, state: RetryCallState) -> float:
+        exc = state.outcome.exception() if state.outcome else None
+        retry_after = exc.retry_after if isinstance(exc, _StatusError) else None
+        return backoff_seconds(self._retry, state.attempt_number, retry_after)
+
+    def _retrying(self) -> AsyncRetrying:
+        return AsyncRetrying(
+            stop=stop_after_attempt(self._retry.max_attempts),
+            wait=self._wait,
+            retry=retry_if_exception(_is_retryable),
+            reraise=True,
+        )
+
+    def _translate(self, exc: Exception) -> TTSError:
+        if isinstance(exc, _StatusError):
+            return TTSError(
+                f"{self.name} request failed (HTTP {exc.status_code})", status_code=exc.status_code
+            )
+        if isinstance(exc, httpx.TimeoutException):
+            return TTSError(f"{self.name} request timed out")
+        return TTSError(f"Could not reach {self.name}")
+
+    async def _download(self, request: AudioRequest, destination: Path) -> None:
+        """Stream the audio response to `destination` (never buffering a whole file)."""
+
+        async def attempt() -> None:
+            async with self._http.stream(
+                "POST",
+                request.url,
+                json=request.json,
+                headers=request.headers,
+                params=request.query,
+            ) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    raise _StatusError(response.status_code, response.headers.get("retry-after"))
+                async with await anyio.open_file(destination, "wb") as out:
+                    async for chunk in response.aiter_bytes():
+                        await out.write(chunk)
+
+        try:
+            await self._retrying()(attempt)
+        except (_StatusError, httpx.HTTPError) as exc:
+            raise self._translate(exc) from exc
+
+    async def synthesize(
+        self,
+        text: str,
+        *,
+        voice_id: str,
+        output_dir: Path,
+        params: Mapping[str, object] | None = None,
+        metadata: CallMetadata | None = None,
+    ) -> TTSResult:
+        """Synthesize `text` into a canonical WAV (24 kHz, mono, 16-bit) inside `output_dir`."""
+        started = time.perf_counter()
+        params = params or {}
+        audio_format = self._validate(text, params)
+        request = self.build_request(text, voice_id, params, audio_format)
+
+        await anyio.Path(output_dir).mkdir(parents=True, exist_ok=True)
+        stem = uuid.uuid4().hex
+        raw = output_dir / f"{stem}.{audio_format.extension}.part"
+        wav = output_dir / f"{stem}.{CANONICAL_FORMAT}"
+        try:
+            await self._download(request, raw)
+            if (await anyio.Path(raw).stat()).st_size == 0:
+                raise TTSError(f"{self.name} returned no audio")
+            await to_canonical_wav(raw, audio_format, wav)
+        except BaseException:
+            await anyio.Path(wav).unlink(missing_ok=True)
+            raise
+        finally:
+            await anyio.Path(raw).unlink(missing_ok=True)
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        meta = metadata or CallMetadata()
+        log.info(
+            "tts_synthesize",
+            provider=self.name,
+            stage=meta.stage,
+            run_id=str(meta.run_id) if meta.run_id else None,
+            show_id=str(meta.show_id) if meta.show_id else None,
+            characters=len(text),
+            format=audio_format.name,
+            latency_ms=latency_ms,
+        )
+        return TTSResult(
+            audio_path=wav,
+            format=CANONICAL_FORMAT,
+            sample_rate=CANONICAL_SAMPLE_RATE,
+            characters=len(text),
+            cost_usd=None,
+            latency_ms=latency_ms,
+        )
+
+    async def _get_json(self, url: str, headers: Mapping[str, str]) -> object:
+        async def attempt() -> object:
+            response = await self._http.get(url, headers=dict(headers))
+            if response.status_code >= 400:
+                raise _StatusError(response.status_code, response.headers.get("retry-after"))
+            return response.json()
+
+        try:
+            return await self._retrying()(attempt)
+        except (_StatusError, httpx.HTTPError) as exc:
+            raise self._translate(exc) from exc
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
