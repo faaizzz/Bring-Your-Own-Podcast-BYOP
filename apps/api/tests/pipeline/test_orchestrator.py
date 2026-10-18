@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
@@ -13,8 +14,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Episode, Item, Run, RunEvent, Show, Source, Speaker, User
-from byop.models.enums import EpisodeStatus, EventLevel, RunStatus, RunTrigger, SourceKind
+from byop.models import Episode, Item, Run, RunEvent, Show, Source, Speaker, UsageEvent, User
+from byop.models.enums import (
+    EpisodeStatus,
+    EventLevel,
+    RunStatus,
+    RunTrigger,
+    SourceKind,
+    UsageKind,
+)
 from byop.pipeline.context import RunContext
 from byop.pipeline.errors import StageFailed, TransientStageError
 from byop.pipeline.orchestrator import (
@@ -30,6 +38,7 @@ from byop.services import episodes as episodes_service
 from byop.services import runs as run_service
 from byop.services.ranking import reserve_items
 from byop.services.script_revision import audio_revision_of, revision_of
+from byop.services.usage import refresh_run_totals
 from byop.tasks.pipeline import RESYNTH_STAGES
 from tests.helpers import make_settings
 from tests.models.factories import make_show
@@ -609,3 +618,134 @@ async def test_unknown_runs_are_skipped_not_crashed(db_session: AsyncSession) ->
     assert (
         await run_stage(db_session, make_settings(), uuid.uuid4(), "ingest") is StageResult.SKIPPED
     )
+
+
+# --- usage and cost ----------------------------------------------------------------------------
+
+
+def spend(ctx: RunContext, cost: str, kind: str = "llm") -> None:
+    from byop.providers.common import UsageRecord, record_usage
+
+    record_usage(
+        UsageRecord(
+            kind=kind,  # type: ignore[arg-type]
+            provider="openrouter" if kind == "llm" else "kokoro",
+            model="m/x",
+            stage=ctx.stage,
+            run_id=ctx.run.id,
+            show_id=ctx.show.id,
+            latency_ms=5,
+            input_tokens=100 if kind == "llm" else None,
+            characters=400 if kind == "tts" else None,
+            cost_usd=Decimal(cost) if kind == "llm" else None,
+        )
+    )
+
+
+async def usage_rows(session: AsyncSession, run: Run) -> list[UsageEvent]:
+    return list(await session.scalars(select(UsageEvent).where(UsageEvent.run_id == run.id)))
+
+
+async def test_the_usage_of_each_stage_is_stored_and_the_totals_set_when_the_run_ends(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show = await make_show(db_session, admin_user)
+    run = await start(db_session, admin_user, show)
+
+    async def writing(ctx: RunContext) -> None:
+        spend(ctx, "0.010000")
+        spend(ctx, "0.005000")
+        await ctx.log("asked the model twice")
+
+    async def voicing(ctx: RunContext) -> None:
+        spend(ctx, "0", kind="tts")
+
+    async def finishing(ctx: RunContext) -> None:
+        await last(ctx)
+        await refresh_run_totals(ctx.session, ctx.run)
+        await ctx.session.commit()
+
+    stages = [
+        stage("script", writing, 0, 40),
+        stage("tts", voicing, 40, 90),
+        stage("finalize", finishing, 90, 100),
+    ]
+
+    await execute(db_session, make_settings(), run, stages)
+
+    rows = await usage_rows(db_session, run)
+    assert sorted((e.stage, e.kind.value) for e in rows) == [
+        ("script", "llm"),
+        ("script", "llm"),
+        ("tts", "tts"),
+    ]
+    await db_session.refresh(run)
+    assert (
+        run.llm_cost_usd
+        == Decimal("0.015000")
+        == sum((e.cost_usd for e in rows if e.kind is UsageKind.LLM), Decimal(0))
+    )
+    assert run.tts_cost_usd == Decimal(0) and run.cost_usd == Decimal("0.015000")
+
+
+async def test_spend_is_stored_while_a_stage_is_still_working(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show = await make_show(db_session, admin_user)
+    run = await start(db_session, admin_user, show)
+    seen: list[int] = []
+
+    async def slow(ctx: RunContext) -> None:
+        spend(ctx, "0.01")
+        await ctx.progress(0.5)  # the heartbeat writes what was spent so far
+        seen.append(len(await usage_rows(ctx.session, ctx.run)))
+        spend(ctx, "0.02")
+
+    await run_stage(
+        db_session, make_settings(), run.id, "slow", stages=[stage("slow", slow, 0, 100)]
+    )
+
+    assert seen == [1]
+    assert len(await usage_rows(db_session, run)) == 2
+
+
+async def test_a_failed_stage_keeps_its_usage_and_the_failed_run_has_totals(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show = await make_show(db_session, admin_user)
+    run = await start(db_session, admin_user, show)
+
+    async def breaks(ctx: RunContext) -> None:
+        spend(ctx, "0.040000")
+        raise StageFailed("the model said nonsense")
+
+    result = await run_stage(
+        db_session, make_settings(), run.id, "script", stages=[stage("script", breaks, 0, 100)]
+    )
+
+    assert result is StageResult.FAILED
+    await db_session.refresh(run)
+    assert run.status is RunStatus.FAILED
+    assert len(await usage_rows(db_session, run)) == 1
+    assert run.cost_usd == run.llm_cost_usd == Decimal("0.040000")
+
+
+async def test_a_cancelled_run_has_totals_too(db_session: AsyncSession, admin_user: User) -> None:
+    show = await make_show(db_session, admin_user)
+    run = await start(db_session, admin_user, show)
+
+    async def stops(ctx: RunContext) -> None:
+        spend(ctx, "0.030000")
+        await ctx.session.execute(
+            update(Run).where(Run.id == ctx.run.id).values(cancel_requested=True)
+        )
+        await ctx.session.commit()
+        await ctx.checkpoint()
+
+    result = await run_stage(
+        db_session, make_settings(), run.id, "script", stages=[stage("script", stops, 0, 100)]
+    )
+
+    assert result is StageResult.CANCELLED
+    await db_session.refresh(run)
+    assert run.cost_usd == Decimal("0.030000")

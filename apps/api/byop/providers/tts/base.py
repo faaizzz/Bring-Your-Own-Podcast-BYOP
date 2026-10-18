@@ -19,7 +19,13 @@ import httpx
 import structlog
 from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
 
-from byop.providers.common import CallMetadata, RetryPolicy, backoff_seconds
+from byop.providers.common import (
+    CallMetadata,
+    RetryPolicy,
+    UsageRecord,
+    backoff_seconds,
+    record_usage,
+)
 from byop.providers.tts.audio import CANONICAL_SAMPLE_RATE, AudioFormat, to_canonical_wav
 from byop.providers.tts.errors import TTSError, TTSParamError
 
@@ -279,6 +285,19 @@ class TTSProvider(ABC):
             characters=len(text),
             format=audio_format.name,
             latency_ms=latency_ms,
+        )
+        model = params.get("model")
+        record_usage(
+            UsageRecord(
+                kind="tts",
+                provider=self.name,
+                model=model if isinstance(model, str) else None,
+                stage=meta.stage,
+                run_id=meta.run_id,
+                show_id=meta.show_id,
+                latency_ms=latency_ms,
+                characters=len(text),
+            )
         )
         return TTSResult(
             audio_path=wav,

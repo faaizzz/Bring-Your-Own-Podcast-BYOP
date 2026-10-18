@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "run_events",
     "episodes",
     "usage_events",
+    "price_overrides",
 }
 
 

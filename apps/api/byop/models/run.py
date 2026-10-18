@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -8,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -69,6 +71,16 @@ class Run(Base):
     # Set by the cancel endpoint; stages look at it between steps and stop.
     cancel_requested: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(64))
+    # What the run's LLM and TTS calls cost, summed from `usage_events` when it ends.
+    cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), server_default="0", default=Decimal("0")
+    )
+    llm_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), server_default="0", default=Decimal("0")
+    )
+    tts_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), server_default="0", default=Decimal("0")
+    )
     trace_id: Mapped[str | None] = mapped_column(String(64))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

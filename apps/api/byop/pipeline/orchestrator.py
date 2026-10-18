@@ -23,9 +23,11 @@ from byop.pipeline.context import RunContext
 from byop.pipeline.errors import RunStopped, StageFailed, TransientStageError
 from byop.pipeline.stages import finalize, ingest, mix, rank, script, tts
 from byop.pipeline.workdir import remove_work_dir
+from byop.providers.common import reset_usage_sink, set_usage_sink
 from byop.services.credentials import CredentialResolver
 from byop.services.ranking import release_items
 from byop.services.run_stream import announce
+from byop.services.usage import UsageCollector, refresh_run_totals
 
 log = structlog.get_logger(__name__)
 
@@ -96,6 +98,7 @@ async def fail_run(
     run.status = RunStatus.FAILED
     run.error = message
     run.finished_at = datetime.now(UTC)
+    await refresh_run_totals(session, run)
     await add_event(session, run, message, level=EventLevel.ERROR, stage=stage)
     await session.commit()
     await announce(redis, run.id)
@@ -119,6 +122,7 @@ async def finish_cancelled(
         return False
     run.status = RunStatus.CANCELLED
     run.finished_at = datetime.now(UTC)
+    await refresh_run_totals(session, run)
     await add_event(session, run, "Run cancelled", stage=stage)
     await session.commit()
     await announce(redis, run.id)
@@ -138,6 +142,20 @@ async def _start_over(session: AsyncSession, run: Run, *, force: bool = True) ->
     if force or not session.is_active:
         await session.rollback()
     await session.refresh(run)  # a rollback expires everything; async code cannot lazy-load
+
+
+async def _write_usage(session: AsyncSession, collector: UsageCollector, run: Run) -> None:
+    """Store what the stage's provider calls used, whatever way the stage ended."""
+    user_id = run.user_id
+    for attempt in (1, 2):
+        try:
+            await collector.flush(session, user_id)
+            return
+        except Exception:
+            # After an interrupted write the session needs a rollback before it can be used.
+            log.warning("usage_flush_failed", run_id=str(run.id), attempt=attempt, exc_info=True)
+            await session.rollback()
+    await session.refresh(run)
 
 
 async def run_stage(
@@ -187,8 +205,14 @@ async def run_stage(
         progress_end=stage.end,
         redis=redis,
     )
+    collector = UsageCollector()
+    token = set_usage_sink(collector)
     try:
-        await stage.run(context)
+        try:
+            await stage.run(context)
+        finally:
+            reset_usage_sink(token)
+            await _write_usage(session, collector, run)
     except RunStopped:
         await _start_over(session, run, force=False)
         await finish_cancelled(

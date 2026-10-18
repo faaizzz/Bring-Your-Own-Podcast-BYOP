@@ -14,7 +14,13 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel, ValidationError
 from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_after_attempt
 
-from byop.providers.common import CallMetadata, RetryPolicy, backoff_seconds
+from byop.providers.common import (
+    CallMetadata,
+    RetryPolicy,
+    UsageRecord,
+    backoff_seconds,
+    record_usage,
+)
 from byop.providers.llm.base import (
     LLMError,
     LLMProvider,
@@ -230,6 +236,20 @@ class OpenAIChatProvider(LLMProvider):
             cost_usd=str(totals.cost) if totals.cost is not None else None,
             requests=totals.requests,
             latency_ms=latency_ms,
+        )
+        record_usage(
+            UsageRecord(
+                kind="llm",
+                provider=self.name,
+                model=totals.raw_model or model,
+                stage=meta.stage,
+                run_id=meta.run_id,
+                show_id=meta.show_id,
+                latency_ms=latency_ms,
+                input_tokens=totals.usage.input_tokens,
+                output_tokens=totals.usage.output_tokens,
+                cost_usd=totals.cost,
+            )
         )
         return LLMResult(
             text=text,

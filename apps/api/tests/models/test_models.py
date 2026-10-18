@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from byop.models import (
     Episode,
     Item,
+    PriceOverride,
     ProviderCredential,
     Run,
     Show,
@@ -253,6 +254,7 @@ async def test_timestamps_are_timezone_aware(db_session: AsyncSession) -> None:
         ("episodes", "status", "live"),
         ("usage_events", "kind", "image"),
         ("usage_events", "cost_source", "guess"),
+        ("price_overrides", "kind", "image"),
         ("provider_credentials", "provider", "acme"),
     ],
 )
@@ -282,6 +284,7 @@ async def test_enum_columns_reject_unknown_values(
                 user_id=user.id, show_id=show.id, title="t", status=EpisodeStatus.DRAFT
             ),
             "usage_events": UsageEvent(user_id=user.id, kind=UsageKind.LLM, provider="p"),
+            "price_overrides": PriceOverride(user_id=user.id, kind=UsageKind.TTS, name="openai"),
             "provider_credentials": ProviderCredential(
                 user_id=user.id, provider=CredentialProvider.OPENAI, secret_encrypted="x"
             ),

@@ -41,3 +41,9 @@ export function callsTo(fetchMock: ReturnType<typeof mockApi>, key: string) {
     return `${init?.method ?? 'GET'} ${url.pathname}` === key;
   });
 }
+
+/** The parsed JSON body of a recorded call (see `callsTo`). */
+export function requestBody(call: [unknown, RequestInit?] | undefined): unknown {
+  const body = call?.[1]?.body;
+  return typeof body === 'string' ? (JSON.parse(body) as unknown) : undefined;
+}

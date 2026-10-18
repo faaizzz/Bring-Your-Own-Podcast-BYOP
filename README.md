@@ -53,6 +53,7 @@ development; for a production-like run use
 - [Episode audio (mixing, loudness, intro/outro/music)](docs/audio.md)
 - [Reviewing episodes (edit, re-synthesize, approve, reject)](docs/review.md)
 - [Podcast feed and public audio](docs/feed.md)
+- [Usage and costs](docs/costs.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
 - [Secrets and key rotation](docs/security.md)
 

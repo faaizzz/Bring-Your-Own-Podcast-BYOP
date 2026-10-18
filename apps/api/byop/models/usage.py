@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from byop.models.base import Base
@@ -44,5 +44,26 @@ class UsageEvent(Base):
         default=CostSource.UNKNOWN,
     )
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = created_at_column()
+    updated_at: Mapped[datetime] = updated_at_column()
+
+
+class PriceOverride(Base):
+    """A price the user set themselves; it wins over the shipped table (`pricing.yaml`).
+
+    For an LLM `name` is the model id and the two token prices apply; for TTS it is the provider
+    (`openai`) or one of its models (`openai:tts-1-hd`) and `per_million_chars` applies.
+    """
+
+    __tablename__ = "price_overrides"
+    __table_args__ = (UniqueConstraint("user_id", "kind", "name"),)
+
+    id: Mapped[uuid.UUID] = id_column()
+    user_id: Mapped[uuid.UUID] = user_id_column()
+    kind: Mapped[UsageKind] = mapped_column(enum_type(UsageKind, "price_override_kind"))
+    name: Mapped[str] = mapped_column(String(200))
+    input_per_million: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
+    output_per_million: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
+    per_million_chars: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()

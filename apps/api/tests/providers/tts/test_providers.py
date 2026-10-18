@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from byop.providers.common import CallMetadata
+from byop.providers.common import CallMetadata, UsageRecord, reset_usage_sink, set_usage_sink
 from byop.providers.tts import (
     CANONICAL_SAMPLE_RATE,
     ElevenLabsTTS,
@@ -497,3 +497,33 @@ async def test_openrouter_needs_a_model_and_sends_attribution(tmp_path: Path) ->
     request = route.calls.last.request
     assert request.headers["authorization"] == "Bearer sk-or-test"
     assert request.headers["x-title"] == "BYOP"
+
+
+# --- usage reporting ---------------------------------------------------------------------------
+
+
+class Collect:
+    def __init__(self) -> None:
+        self.records: list[UsageRecord] = []
+
+    def record(self, usage: UsageRecord) -> None:
+        self.records.append(usage)
+
+
+@respx.mock
+@every_provider
+async def test_every_synthesis_reports_its_characters_to_the_active_sink(
+    case: Case, tmp_path: Path
+) -> None:
+    respx.post(case.url).respond(200, content=pcm_bytes())
+    sink = Collect()
+    token = set_usage_sink(sink)
+    try:
+        await synth(case, tmp_path, text="Hello there.")
+    finally:
+        reset_usage_sink(token)
+
+    (usage,) = sink.records
+    assert (usage.kind, usage.provider, usage.stage) == ("tts", case.name, "tts")
+    assert usage.characters == len("Hello there.") and usage.latency_ms >= 0
+    assert usage.input_tokens is None and usage.cost_usd is None

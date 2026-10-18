@@ -2,7 +2,10 @@
 
 import random
 import uuid
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Literal, Protocol
 
 
 @dataclass(frozen=True)
@@ -34,3 +37,49 @@ def backoff_seconds(policy: RetryPolicy, attempt: int, retry_after: str | None =
         except ValueError:
             pass  # an HTTP-date form: the computed backoff is fine
     return wait
+
+
+@dataclass(frozen=True)
+class UsageRecord:
+    """What one billable call used. Providers report it; `services/usage.py` prices it."""
+
+    kind: Literal["llm", "tts"]
+    provider: str
+    model: str | None
+    stage: str | None
+    run_id: uuid.UUID | None
+    show_id: uuid.UUID | None
+    latency_ms: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    characters: int | None = None
+    # What the provider itself says the call cost (OpenRouter does); None when it does not.
+    cost_usd: Decimal | None = None
+
+
+class UsageSink(Protocol):
+    def record(self, usage: UsageRecord) -> None: ...
+
+
+_sink: ContextVar[UsageSink | None] = ContextVar("byop_usage_sink", default=None)
+
+
+def set_usage_sink(sink: UsageSink | None) -> Token[UsageSink | None]:
+    """Make `sink` receive the usage of every provider call made in this context (and in tasks
+    started from it) until `reset_usage_sink`."""
+    return _sink.set(sink)
+
+
+def reset_usage_sink(token: Token[UsageSink | None]) -> None:
+    _sink.reset(token)
+
+
+def current_usage_sink() -> UsageSink | None:
+    return _sink.get()
+
+
+def record_usage(usage: UsageRecord) -> None:
+    """Hand a finished call's usage to whoever is collecting it (nobody, outside a run)."""
+    sink = _sink.get()
+    if sink is not None:
+        sink.record(usage)

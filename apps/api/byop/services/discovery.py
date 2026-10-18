@@ -21,6 +21,7 @@ from byop.services.credentials import (
 )
 from byop.services.feeds import FeedInvalid, preview_feed
 from byop.services.safe_http import FetchError, fetch_bytes
+from byop.services.usage import capture_usage
 
 log = structlog.get_logger(__name__)
 
@@ -190,14 +191,15 @@ async def discover_sources(
         ) from exc
 
     try:
-        result = await llm.complete(
-            build_messages(request),
-            model=search_model_id(provider, model),
-            response_schema=RawCandidates,
-            temperature=0.2,
-            # Attributes the cost of this call to the show (usage capture reads the same fields).
-            metadata=CallMetadata(show_id=request.show_id, stage=STAGE),
-        )
+        async with capture_usage(session, request.user_id):
+            result = await llm.complete(
+                build_messages(request),
+                model=search_model_id(provider, model),
+                response_schema=RawCandidates,
+                temperature=0.2,
+                # Attributes the cost of this call to the show.
+                metadata=CallMetadata(show_id=request.show_id, stage=STAGE),
+            )
     finally:
         await llm.aclose()
     assert isinstance(result.parsed, RawCandidates)

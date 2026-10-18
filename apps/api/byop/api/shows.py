@@ -5,7 +5,9 @@ from fastapi import APIRouter, HTTPException, status
 from byop.api.deps import CurrentUser, RedisDep, SessionDep, SettingsDep, StorageDep
 from byop.api.integrations import ResolverDep
 from byop.config import Settings
+from byop.schemas.costs import CostEstimate
 from byop.schemas.show import ShowCreate, ShowResponse, ShowUpdate
+from byop.services import costs as costs_service
 from byop.services import shows as service
 from byop.services.podcast_feed import feed_url
 from byop.services.shows import ShowView
@@ -121,6 +123,31 @@ async def resume_show(
         return response_for(await service.set_paused(session, user.id, show_id, False), settings)
     except service.ShowNotFound as exc:
         raise _http_error(exc) from exc
+
+
+@router.get("/{show_id}/estimate", response_model=CostEstimate)
+async def estimate_cost(
+    show_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    settings: SettingsDep,
+    resolver: ResolverDep,
+    redis: RedisDep,
+) -> CostEstimate:
+    """What one episode of this show is expected to cost, from its length, model and voices."""
+    try:
+        show = (await service.get_show(session, user.id, show_id)).show
+    except service.ShowNotFound as exc:
+        raise _http_error(exc) from exc
+    return await costs_service.estimate_episode(
+        session,
+        settings,
+        user.id,
+        show,
+        extra_llm_price=await costs_service.provider_llm_price(
+            resolver, redis, settings, user.id, show
+        ),
+    )
 
 
 @router.get("/{show_id}", response_model=ShowResponse)

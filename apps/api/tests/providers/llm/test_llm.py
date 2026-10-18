@@ -6,6 +6,7 @@ import pytest
 import respx
 from pydantic import BaseModel
 
+from byop.providers.common import UsageRecord, reset_usage_sink, set_usage_sink
 from byop.providers.llm import (
     CallMetadata,
     LLMError,
@@ -386,3 +387,79 @@ async def test_openai_compatible_model_list_has_ids_only() -> None:
     assert [(m.id, m.name, m.prompt_price_per_million) for m in models] == [
         ("llama3.1", "llama3.1", None)
     ]
+
+
+# --- usage reporting -------------------------------------------------------------------------
+
+
+class Collect:
+    def __init__(self) -> None:
+        self.records: list[UsageRecord] = []
+
+    def record(self, usage: UsageRecord) -> None:
+        self.records.append(usage)
+
+
+@respx.mock
+async def test_every_completion_reports_its_usage_to_the_active_sink() -> None:
+    respx.post(OPENROUTER_URL).respond(
+        200,
+        json=completion(
+            "Hello!", model="vendor/x-1", prompt=120, completion_tokens=30, cost="0.0007"
+        ),
+    )
+    run_id, show_id = uuid.uuid4(), uuid.uuid4()
+    sink = Collect()
+    token = set_usage_sink(sink)
+    try:
+        await openrouter().complete(
+            MESSAGES,
+            model="vendor/x",
+            metadata=CallMetadata(stage="script", run_id=run_id, show_id=show_id),
+        )
+    finally:
+        reset_usage_sink(token)
+
+    (usage,) = sink.records
+    assert (usage.kind, usage.provider, usage.stage) == ("llm", "openrouter", "script")
+    assert usage.model == "vendor/x-1"  # the model that actually answered
+    assert (usage.input_tokens, usage.output_tokens) == (120, 30)
+    assert usage.cost_usd == Decimal("0.0007")
+    assert (usage.run_id, usage.show_id) == (run_id, show_id) and usage.latency_ms >= 0
+
+
+@respx.mock
+async def test_a_repaired_reply_is_one_call_with_the_tokens_of_every_request() -> None:
+    respx.post(OPENROUTER_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=completion("not json", prompt=10, completion_tokens=2)),
+            httpx.Response(
+                200, json=completion('{"greeting": "hi"}', prompt=20, completion_tokens=4)
+            ),
+        ]
+    )
+    sink = Collect()
+    token = set_usage_sink(sink)
+    try:
+        await openrouter().complete(MESSAGES, model="m", response_schema=Greeting)
+    finally:
+        reset_usage_sink(token)
+
+    (usage,) = sink.records
+    assert (usage.input_tokens, usage.output_tokens) == (30, 6)
+
+
+@respx.mock
+async def test_a_failed_call_reports_nothing_and_no_sink_is_fine() -> None:
+    respx.post(OPENROUTER_URL).respond(401, json={"error": {"message": "bad key"}})
+    sink = Collect()
+    token = set_usage_sink(sink)
+    try:
+        with pytest.raises(LLMError):
+            await openrouter().complete(MESSAGES, model="m")
+    finally:
+        reset_usage_sink(token)
+    assert sink.records == []
+
+    respx.post(OPENROUTER_URL).respond(200, json=completion("ok"))
+    await openrouter().complete(MESSAGES, model="m")  # no sink at all

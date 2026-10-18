@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from redis.asyncio import Redis
 
-from byop.api.deps import CurrentUser, StorageDep
+from byop.api.deps import CurrentUser, SessionDep, StorageDep
 from byop.api.integrations import ResolverDep
 from byop.models.enums import CredentialProvider
 from byop.providers.tts import (
@@ -19,6 +19,7 @@ from byop.schemas.voices import DefaultProviderResponse, VoicePreviewRequest, Vo
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
 from byop.services.speaker_defaults import default_speakers
+from byop.services.usage import capture_usage
 from byop.services.validation import error_detail, param_errors
 from byop.services.voice_preview import render_preview
 from byop.services.voices import list_voices_cached
@@ -87,7 +88,11 @@ async def list_voices(
 
 @router.post("/preview", response_class=Response, responses={200: {"content": {"audio/mpeg": {}}}})
 async def preview_voice(
-    body: VoicePreviewRequest, user: CurrentUser, resolver: ResolverDep, storage: StorageDep
+    body: VoicePreviewRequest,
+    user: CurrentUser,
+    session: SessionDep,
+    resolver: ResolverDep,
+    storage: StorageDep,
 ) -> Response:
     """A short MP3 of a voice with the given parameters. Identical requests are cached."""
     name = CredentialProvider(body.provider)
@@ -104,9 +109,10 @@ async def preview_voice(
 
     try:
         try:
-            clip = await render_preview(
-                storage, tts, voice_id=body.voice_id, params=body.params, text=body.text
-            )
+            async with capture_usage(session, user.id):
+                clip = await render_preview(
+                    storage, tts, voice_id=body.voice_id, params=body.params, text=body.text
+                )
         finally:
             await tts.aclose()
     except TTSParamError as exc:

@@ -7,6 +7,7 @@ from byop.models.enums import EpisodeStatus, RunStatus, RunTrigger
 from byop.pipeline.context import RunContext
 from byop.pipeline.workdir import remove_work_dir
 from byop.services.ranking import commit_items, release_items
+from byop.services.usage import refresh_run_totals
 
 
 async def run(ctx: RunContext) -> None:
@@ -43,5 +44,6 @@ async def run(ctx: RunContext) -> None:
         message = "Run finished"
     ctx.run.progress = 100
     ctx.run.finished_at = now
+    await refresh_run_totals(ctx.session, ctx.run)
     await ctx.session.commit()
     await ctx.log(message, episode_id=str(episode.id) if episode else None)

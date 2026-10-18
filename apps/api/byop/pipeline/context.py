@@ -11,6 +11,7 @@ from byop.models.enums import EventLevel, RunStatus
 from byop.pipeline.errors import RunStopped
 from byop.services.credentials import CredentialResolver
 from byop.services.run_stream import announce
+from byop.services.usage import flush_current
 
 
 @dataclass
@@ -50,6 +51,7 @@ class RunContext:
             )
         )
         await self.session.commit()
+        await flush_current(self.session, self.user_id)
         await announce(self.redis, self.run.id)
 
     async def progress(self, fraction: float) -> None:
@@ -62,6 +64,7 @@ class RunContext:
         self.run.progress = self.progress_start + round(span * min(1.0, max(0.0, fraction)))
         self.run.updated_at = func.now()
         await self.session.commit()
+        await flush_current(self.session, self.user_id)  # spend shows up while a stage works
         await announce(self.redis, self.run.id)
 
     async def checkpoint(self) -> None:

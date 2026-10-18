@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from byop.api import (
     auth,
+    costs,
     covers,
     discovery,
     episodes,
@@ -39,6 +40,8 @@ protected.include_router(discovery.router)
 protected.include_router(speakers.router)
 protected.include_router(episodes.router)
 protected.include_router(episodes.show_router)
+protected.include_router(costs.router)
+protected.include_router(costs.pricing_router)
 protected.include_router(history.router)
 protected.include_router(runs.router)
 protected.include_router(runs.show_router)
