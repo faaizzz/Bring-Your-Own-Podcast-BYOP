@@ -115,6 +115,7 @@ class ShowCreate(BaseModel):
     feed_email: Email | None = None
     feed_category: Annotated[str, StringConstraints(max_length=100)] | None = None
     feed_explicit: bool = False
+    feed_enabled: bool = True
 
     @model_validator(mode="after")
     def _complete_schedule(self) -> "ShowCreate":
@@ -154,6 +155,7 @@ class ShowUpdate(BaseModel):
     feed_email: Email | None = None
     feed_category: Annotated[str, StringConstraints(max_length=100)] | None = None
     feed_explicit: bool | None = None
+    feed_enabled: bool | None = None
 
     @model_validator(mode="after")
     def _only_optional_fields_may_be_null(self) -> "ShowUpdate":
@@ -193,6 +195,9 @@ class ShowResponse(BaseModel):
     feed_email: str | None
     feed_category: str | None
     feed_explicit: bool
+    feed_enabled: bool
+    # Absolute address of the public RSS feed (from PUBLIC_BASE_URL).
+    feed_url: str
 
     # Public, versioned URL of the cover image; None until one is uploaded.
     cover_url: str | None

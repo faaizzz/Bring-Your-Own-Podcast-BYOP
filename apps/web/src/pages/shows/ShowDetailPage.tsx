@@ -8,6 +8,7 @@ import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
 import { PROVIDER_LABELS } from '../../lib/voices';
 import { EpisodesTab } from '../episodes/EpisodesTab';
 import { RunHistory } from '../history/RunHistory';
+import { FeedCard } from './FeedCard';
 import { GenerateButton } from './GenerateButton';
 import { PauseButton } from './PauseButton';
 import { ShowSettings } from './ShowSettings';
@@ -77,6 +78,7 @@ function Overview({ show }: { show: Show }): React.JSX.Element {
           ))}
         </ul>
       )}
+      <FeedCard show={show} />
     </>
   );
 }

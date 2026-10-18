@@ -6,7 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     // Mirrors docker/nginx.conf: /api goes to the FastAPI service.
-    proxy: { '/api': { target: process.env.BYOP_API_URL ?? 'http://localhost:8000' } },
+    proxy: Object.fromEntries(
+      ['/api', '/feeds', '/media'].map((path) => [
+        path,
+        { target: process.env.BYOP_API_URL ?? 'http://localhost:8000' },
+      ]),
+    ),
   },
   css: {
     preprocessorOptions: {

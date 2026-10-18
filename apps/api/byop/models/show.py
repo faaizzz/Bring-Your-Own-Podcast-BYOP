@@ -84,6 +84,8 @@ class Show(Base):
     feed_email: Mapped[str | None] = mapped_column(String(320))
     feed_category: Mapped[str | None] = mapped_column(String(100))
     feed_explicit: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
+    # Whether the public RSS feed (`/feeds/<slug>.xml`) is served.
+    feed_enabled: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
     cover_key: Mapped[str | None] = mapped_column(String(500))
     # Optional audio branding, stored under the show's prefix: a clip before and after the
     # speech, and a music bed that plays (ducked) under it.

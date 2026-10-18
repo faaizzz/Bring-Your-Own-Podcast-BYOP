@@ -5,6 +5,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from kombu.exceptions import OperationalError
 
+from byop.api.audio_response import audio_response
 from byop.api.deps import CurrentUser, SessionDep, StorageDep
 from byop.models import Episode, Run
 from byop.models.enums import EpisodeStatus
@@ -17,11 +18,10 @@ from byop.schemas.episode import (
     EpisodeUpdate,
 )
 from byop.services import episodes as service
-from byop.services.byte_ranges import RangeNotSatisfiable, parse_range
 from byop.services.script_revision import audio_revision_of, revision_of
 from byop.services.shows import ShowNotFound
 from byop.services.validation import FieldValidationError, error_detail
-from byop.storage import StorageError, StorageKeyNotFound
+from byop.storage import StorageError
 from byop.tasks.pipeline import RESYNTH_STAGES, enqueue_run
 
 router = APIRouter(prefix="/episodes", tags=["episodes"])
@@ -211,29 +211,6 @@ async def episode_audio(
         raise NotFound from exc
     if episode.audio_key is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The episode has no audio yet")
-    try:
-        info = await storage.head(episode.audio_key)
-        if info is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "The episode has no audio yet")
-        try:
-            wanted = parse_range(range_header, info.size)
-        except RangeNotSatisfiable:
-            return Response(
-                status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
-                headers={"Content-Range": f"bytes */{info.size}"},
-            )
-        headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, no-cache"}
-        if wanted is None:
-            stream = storage.get_stream(episode.audio_key)
-            headers["Content-Length"] = str(info.size)
-            code = status.HTTP_200_OK
-        else:
-            stream = storage.get_stream(episode.audio_key, start=wanted.start, end=wanted.end)
-            headers["Content-Length"] = str(wanted.length)
-            headers["Content-Range"] = f"bytes {wanted.start}-{wanted.end}/{info.size}"
-            code = status.HTTP_206_PARTIAL_CONTENT
-    except StorageKeyNotFound as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "The episode has no audio yet") from exc
-    except StorageError as exc:
-        raise StorageDown from exc
-    return StreamingResponse(stream, status_code=code, media_type="audio/mpeg", headers=headers)
+    return await audio_response(
+        storage, episode.audio_key, range_header, cache_control="private, no-cache"
+    )

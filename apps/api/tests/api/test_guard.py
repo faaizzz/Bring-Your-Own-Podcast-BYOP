@@ -13,6 +13,9 @@ PUBLIC_ROUTES = {
     ("POST", "/api/auth/logout"),
     # Covers are fetched by feeds and podcast directories without a session.
     ("GET", "/api/shows/{show_id}/cover"),
+    # The podcast feed and its audio are fetched by podcast apps, which have no session.
+    ("GET", "/feeds/{slug}.xml"),
+    ("GET", "/media/episodes/{episode_id}.mp3"),
 }
 
 
@@ -23,7 +26,8 @@ def api_routes(app: FastAPI) -> list[tuple[str, str]]:
         (method.upper(), path)
         for path, operations in paths.items()
         for method in operations
-        if path.startswith("/api") and method in {"get", "post", "put", "patch", "delete"}
+        if path.startswith(("/api", "/feeds", "/media"))
+        and method in {"get", "post", "put", "patch", "delete"}
     )
 
 

@@ -44,6 +44,8 @@ export const showSchema = z.object({
   episode_count: z.number(),
   last_run_status: z.string().nullable(),
   last_episode_at: z.string().nullable(),
+  feed_enabled: z.boolean(),
+  feed_url: z.string(),
   cover_url: z.string().nullable(),
   intro_url: z.string().nullable(),
   outro_url: z.string().nullable(),

@@ -4,14 +4,16 @@ from fastapi import APIRouter, HTTPException, status
 
 from byop.api.deps import CurrentUser, RedisDep, SessionDep, SettingsDep, StorageDep
 from byop.api.integrations import ResolverDep
+from byop.config import Settings
 from byop.schemas.show import ShowCreate, ShowResponse, ShowUpdate
 from byop.services import shows as service
+from byop.services.podcast_feed import feed_url
 from byop.services.shows import ShowView
 
 router = APIRouter(prefix="/shows", tags=["shows"])
 
 
-def response_for(view: ShowView) -> ShowResponse:
+def response_for(view: ShowView, settings: Settings) -> ShowResponse:
     show = view.show
     version = int(show.updated_at.timestamp())
 
@@ -50,6 +52,8 @@ def response_for(view: ShowView) -> ShowResponse:
         feed_email=show.feed_email,
         feed_category=show.feed_category,
         feed_explicit=show.feed_explicit,
+        feed_enabled=show.feed_enabled,
+        feed_url=feed_url(settings.public_base_url, show.slug),
         cover_url=cover_url,
         intro_url=audio_url("intro", show.intro_key),
         outro_url=audio_url("outro", show.outro_key),
@@ -75,8 +79,10 @@ SERVICE_ERRORS = (service.ShowNotFound, service.ShowConflict, service.ShowInvali
 
 
 @router.get("", response_model=list[ShowResponse])
-async def list_shows(user: CurrentUser, session: SessionDep) -> list[ShowResponse]:
-    return [response_for(view) for view in await service.list_shows(session, user.id)]
+async def list_shows(
+    user: CurrentUser, session: SessionDep, settings: SettingsDep
+) -> list[ShowResponse]:
+    return [response_for(view, settings) for view in await service.list_shows(session, user.id)]
 
 
 @router.post("", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
@@ -92,31 +98,37 @@ async def create_show(
         view = await service.create_show(session, resolver, redis, settings, user.id, body)
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
-    return response_for(view)
+    return response_for(view, settings)
 
 
 @router.post("/{show_id}/pause", response_model=ShowResponse)
-async def pause_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
+async def pause_show(
+    show_id: uuid.UUID, user: CurrentUser, session: SessionDep, settings: SettingsDep
+) -> ShowResponse:
     """Stop scheduled runs; manual runs still work."""
     try:
-        return response_for(await service.set_paused(session, user.id, show_id, True))
+        return response_for(await service.set_paused(session, user.id, show_id, True), settings)
     except service.ShowNotFound as exc:
         raise _http_error(exc) from exc
 
 
 @router.post("/{show_id}/resume", response_model=ShowResponse)
-async def resume_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
+async def resume_show(
+    show_id: uuid.UUID, user: CurrentUser, session: SessionDep, settings: SettingsDep
+) -> ShowResponse:
     """Resume the schedule from the next slot after now."""
     try:
-        return response_for(await service.set_paused(session, user.id, show_id, False))
+        return response_for(await service.set_paused(session, user.id, show_id, False), settings)
     except service.ShowNotFound as exc:
         raise _http_error(exc) from exc
 
 
 @router.get("/{show_id}", response_model=ShowResponse)
-async def get_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
+async def get_show(
+    show_id: uuid.UUID, user: CurrentUser, session: SessionDep, settings: SettingsDep
+) -> ShowResponse:
     try:
-        return response_for(await service.get_show(session, user.id, show_id))
+        return response_for(await service.get_show(session, user.id, show_id), settings)
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
 
@@ -127,6 +139,7 @@ async def update_show(
     body: ShowUpdate,
     user: CurrentUser,
     session: SessionDep,
+    settings: SettingsDep,
     resolver: ResolverDep,
     redis: RedisDep,
 ) -> ShowResponse:
@@ -134,7 +147,7 @@ async def update_show(
         view = await service.update_show(session, resolver, redis, user.id, show_id, body)
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
-    return response_for(view)
+    return response_for(view, settings)
 
 
 @router.delete("/{show_id}", status_code=status.HTTP_204_NO_CONTENT)

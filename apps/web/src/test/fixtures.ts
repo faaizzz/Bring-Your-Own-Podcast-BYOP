@@ -29,6 +29,8 @@ export function makeShow(patch: Partial<Show> = {}): Show {
     episode_count: 0,
     last_run_status: null,
     last_episode_at: null,
+    feed_enabled: true,
+    feed_url: 'http://localhost:8080/feeds/daily-ai.xml',
     cover_url: null,
     intro_url: null,
     outro_url: null,

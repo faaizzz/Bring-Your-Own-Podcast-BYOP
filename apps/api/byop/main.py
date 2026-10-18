@@ -5,6 +5,7 @@ import structlog
 from fastapi import FastAPI
 
 from byop.api import api_router
+from byop.api.public import router as public_router
 from byop.config import get_settings
 from byop.db import dispose_engine, get_sessionmaker
 from byop.logging import configure_logging, install_request_logging
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     )
     install_request_logging(app)
     app.include_router(api_router)
+    app.include_router(public_router)
     return app
 
 

@@ -5,7 +5,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from byop.api.deps import CurrentUser, SessionDep, StorageDep
+from byop.api.deps import CurrentUser, SessionDep, SettingsDep, StorageDep
 from byop.api.shows import response_for
 from byop.schemas.show import ShowResponse
 from byop.services import show_audio as service
@@ -27,6 +27,7 @@ async def upload_audio(
     user: CurrentUser,
     session: SessionDep,
     storage: StorageDep,
+    settings: SettingsDep,
 ) -> ShowResponse:
     """Set the show's intro, outro or music bed. The upload goes to disk, never into memory."""
     async with anyio.TemporaryDirectory() as tmp:
@@ -51,15 +52,22 @@ async def upload_audio(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
         except StorageError as exc:
             raise StorageDown from exc
-    return response_for(view)
+    return response_for(view, settings)
 
 
 @router.delete("/{kind}", response_model=ShowResponse)
 async def delete_audio(
-    show_id: uuid.UUID, kind: AudioKind, user: CurrentUser, session: SessionDep, storage: StorageDep
+    show_id: uuid.UUID,
+    kind: AudioKind,
+    user: CurrentUser,
+    session: SessionDep,
+    storage: StorageDep,
+    settings: SettingsDep,
 ) -> ShowResponse:
     try:
-        return response_for(await service.remove_asset(session, storage, user.id, show_id, kind))
+        return response_for(
+            await service.remove_asset(session, storage, user.id, show_id, kind), settings
+        )
     except ShowNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Show not found") from exc
     except StorageError as exc:

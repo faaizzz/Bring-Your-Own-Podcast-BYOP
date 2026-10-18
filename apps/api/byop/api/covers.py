@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from byop.api.deps import CurrentUser, SessionDep, StorageDep
+from byop.api.deps import CurrentUser, SessionDep, SettingsDep, StorageDep
 from byop.api.shows import response_for
 from byop.schemas.show import ShowResponse
 from byop.services import covers as service
@@ -24,6 +24,7 @@ async def upload_cover(
     user: CurrentUser,
     session: SessionDep,
     storage: StorageDep,
+    settings: SettingsDep,
 ) -> ShowResponse:
     """Replace the show's cover with a PNG or JPEG; it is cropped square and resized."""
     data = await file.read(service.MAX_UPLOAD_BYTES + 1)
@@ -37,15 +38,21 @@ async def upload_cover(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except StorageError as exc:
         raise StorageDown from exc
-    return response_for(view)
+    return response_for(view, settings)
 
 
 @router.delete("", response_model=ShowResponse)
 async def delete_cover(
-    show_id: uuid.UUID, user: CurrentUser, session: SessionDep, storage: StorageDep
+    show_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    storage: StorageDep,
+    settings: SettingsDep,
 ) -> ShowResponse:
     try:
-        return response_for(await service.remove_cover(session, storage, user.id, show_id))
+        return response_for(
+            await service.remove_cover(session, storage, user.id, show_id), settings
+        )
     except ShowNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Show not found") from exc
     except StorageError as exc:
