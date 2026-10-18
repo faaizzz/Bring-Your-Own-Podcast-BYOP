@@ -16,7 +16,7 @@ it, then read the GitHub issue, then implement exactly that issue.
 - API: Python 3.12, FastAPI, pydantic v2 + pydantic-settings, async SQLAlchemy 2 + asyncpg, Alembic, Celery (+beat) on Redis, structlog, httpx.
 - Data: PostgreSQL 16 (with `pg_trgm`), Redis 7. Audio mixing with ffmpeg.
 - Web: Vite + React 18 + TypeScript (strict), react-bootstrap/Bootstrap 5, react-router 6, TanStack Query, react-hook-form + zod, Gradient Able admin look.
-- Runtime: docker compose (`api`, `worker`, `beat`, `web`, `postgres`, `redis`; optional profiles `minio`, `kokoro`, `langfuse`).
+- Runtime: docker compose (`api`, `worker`, `beat`, `web`, `postgres`, `redis`; optional profiles `minio` (S3-compatible object store, image is RustFS), `kokoro`, `langfuse`).
 
 ## Layout
 ```
@@ -28,7 +28,8 @@ apps/api/byop/        FastAPI package
   logging.py          structlog JSON logging with request id
   worker.py           Celery app + tasks entrypoint
   api/                routers, ONE FILE PER RESOURCE (shows.py, speakers.py, ...)
-  services/           domain logic — never in routers (`storage.py`: media storage seam; everything of a show lives under `shows/<id>/`)
+  services/           domain logic — never in routers
+  storage/            `Storage` interface + `LocalStorage` / `S3Storage`; everything of a show lives under `shows/<id>/`
   models/             SQLAlchemy models
   schemas/            pydantic request/response models
   providers/llm/      LLM provider abstraction
@@ -64,7 +65,7 @@ New directories or modules must follow these names; update this section if the l
 - `strict: true`; **no `any`** (use `unknown` + narrowing). Prefer `type` imports.
 - Server state through TanStack Query only (no ad-hoc fetch in components); API calls go through `src/lib/api.ts`.
 - Forms: react-hook-form + zod. Components are function components with explicit prop types.
-- Lint with eslint, format with prettier; `npm run check` runs lint + typecheck + vitest + build. Tests live next to the code as `*.test.ts(x)`; shared test helpers in `src/test/`. Show forms are one react-hook-form + zod model (`pages/shows/form/schema.ts`) shared by the wizard and the Settings tab; it mirrors API rules and maps API 422s onto fields (`applyServerErrors`). Voice settings per provider are listed in `VOICE_PARAMS` there and must stay in step with the providers' `ParamSpec`s. Icons come from `react-icons/fi`; transient messages go through `useToast()` (`lib/toast.ts`, provided by the admin layout); per-resource query hooks live in `lib/<resource>.ts` (e.g. `lib/integrations.ts`); page components are default exports, routes in `src/routes.tsx`, sidebar/breadcrumb menu in `src/layout/menu.ts`.
+- Lint with eslint, format with prettier; `npm run check` runs lint + typecheck + vitest + build. Multipart uploads go through `api.post(path, FormData)`. Tests live next to the code as `*.test.ts(x)`; shared test helpers in `src/test/`. Show forms are one react-hook-form + zod model (`pages/shows/form/schema.ts`) shared by the wizard and the Settings tab; it mirrors API rules and maps API 422s onto fields (`applyServerErrors`). Voice settings per provider are listed in `VOICE_PARAMS` there and must stay in step with the providers' `ParamSpec`s. Icons come from `react-icons/fi`; transient messages go through `useToast()` (`lib/toast.ts`, provided by the admin layout); per-resource query hooks live in `lib/<resource>.ts` (e.g. `lib/integrations.ts`); page components are default exports, routes in `src/routes.tsx`, sidebar/breadcrumb menu in `src/layout/menu.ts`.
 
 ## Testing expectations
 - Every story adds tests for its new behaviour. API: pytest + pytest-asyncio against a real Postgres (transaction rollback per test); external HTTP is mocked with `respx`. Web: vitest + @testing-library/react.
@@ -81,7 +82,7 @@ New directories or modules must follow these names; update this section if the l
 `make up|up-kokoro|down|logs|migrate|test|lint|typecheck|check|fmt` (`make help` lists them). `make up` creates `.env` from `.env.example` and generates `BYOP_SECRET_KEY` if empty; `docker-compose.override.yml` adds dev hot reload. `make test` (and `check`) first starts postgres/redis via compose (`make deps`); tests use the `byop_test` database from `TEST_DATABASE_URL`, created and migrated on demand. `make migrate` applies Alembic migrations. Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
 
 ## Configuration
-All configuration comes from environment variables documented in `.env.example` (single source of truth). Instance defaults for new shows come from `DEFAULT_LLM_PROVIDER`/`DEFAULT_LLM_MODEL`/`DEFAULT_SHOW_STYLE`. Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
+All configuration comes from environment variables documented in `.env.example` (single source of truth). Media goes through `byop/storage` only (`StorageDep`), never `open()` on `MEDIA_ROOT` or boto3 directly; `STORAGE_BACKEND=local|s3` with `S3_*` (see `docs/storage.md`). Instance defaults for new shows come from `DEFAULT_LLM_PROVIDER`/`DEFAULT_LLM_MODEL`/`DEFAULT_SHOW_STYLE`. Settings fail fast with a readable `ConfigError` (e.g. missing `BYOP_SECRET_KEY`). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.
 
 ## Commits
 - Format: `<type>(<area>): <summary>` — types `feat|fix|chore|docs|test|refactor|ci`; areas like `api`, `web`, `infra`, `docs`, `providers`.
@@ -90,7 +91,7 @@ All configuration comes from environment variables documented in `.env.example` 
 
 ## Auth and multi-user
 v0.1 is single-user: one admin seeded from `.env` (bcrypt hash in `users`). Login sets a signed JWT (`byop_session`, httpOnly, SameSite=Lax, Secure over https) valid `BYOP_SESSION_HOURS`; its `pv` claim fingerprints the password hash, so changing the password ends old sessions. Login is limited to 5/min per IP (Redis; keyed on the last `X-Forwarded-For` entry added by nginx; fails open if Redis is down).
-- **Guard is the default**: in `byop/api/__init__.py` only `health` and `auth.public_router` are public; register every other router on the `protected` router (it depends on `current_user`). `tests/api/test_guard.py` enumerates the OpenAPI routes and fails if one answers an anonymous call with anything but 401 — add a route to its `PUBLIC_ROUTES` only for the RSS feed / episode audio and the like.
+- **Guard is the default**: in `byop/api/__init__.py` only `health` and `auth.public_router` are public; register every other router on the `protected` router (it depends on `current_user`). `tests/api/test_guard.py` enumerates the OpenAPI routes and fails if one answers an anonymous call with anything but 401 — add a route to its `PUBLIC_ROUTES` only for the RSS feed / episode audio / show covers and the like.
 - Routers take `CurrentUser` (from `byop.api.deps`) and pass `user.id` to services, which filter every query by it.
 - Web: `useMe`/`useLogin`/`useLogout` in `src/lib/auth.ts`, `RequireAuth` wraps the admin routes, and a 401 from any query clears the session so the guard redirects to `/login`.
 - **Multi-user later**: the `users` table and `user_id` on every owned table already exist. Add an invite/signup flow (and per-user settings) that inserts `User` rows; `current_user`, services and tests already scope by `user_id`, so no schema change to owned tables is needed. `is_admin` gates instance-level settings.

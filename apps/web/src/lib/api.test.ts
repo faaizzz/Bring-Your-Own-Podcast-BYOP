@@ -116,3 +116,17 @@ describe('api client blobs', () => {
     ).rejects.toMatchObject({ status: 409, message: 'No provider' });
   });
 });
+
+describe('api client uploads', () => {
+  it('sends FormData as is, without forcing a JSON content type', async () => {
+    const fetchMock = mockFetch(json({ ok: true }));
+    const form = new FormData();
+    form.append('file', new File(['x'], 'cover.png', { type: 'image/png' }));
+
+    await api.post('/shows/s1/cover', form);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(form);
+    expect(init.headers).not.toHaveProperty('Content-Type');
+  });
+});

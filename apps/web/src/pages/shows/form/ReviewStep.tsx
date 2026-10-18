@@ -5,7 +5,7 @@ import { STYLE_LABELS } from '../../../lib/shows';
 import { PROVIDER_LABELS } from '../../../lib/voices';
 import type { ShowFormValues } from './schema';
 
-export function ReviewStep(): React.JSX.Element {
+export function ReviewStep({ cover }: { cover?: File | null }): React.JSX.Element {
   const { control } = useFormContext<ShowFormValues>();
   const values = useWatch({ control }) as ShowFormValues;
   const schedule = describeSchedule({
@@ -40,6 +40,7 @@ export function ReviewStep(): React.JSX.Element {
         : `${PROVIDER_LABELS[values.llm_provider]}: ${values.llm_model}`,
     ],
     ['Schedule', values.schedule_kind === 'manual' ? schedule : `${schedule} (${values.timezone})`],
+    ['Cover', cover ? cover.name : 'None'],
     ['Publishing', values.auto_publish ? 'Automatic' : 'Review each episode first'],
   ];
 

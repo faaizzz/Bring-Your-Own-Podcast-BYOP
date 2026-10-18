@@ -205,6 +205,70 @@ describe('show detail page', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('slug cannot change');
     });
 
+    it('uploads a new cover right away, without touching other unsaved edits', async () => {
+      const covered = makeShow({ cover_url: '/api/shows/s1/cover?v=2' });
+      const { user, fetchMock } = await openSettings(
+        {},
+        {
+          'POST /api/shows/s1/cover': () => ({ body: covered }),
+        },
+      );
+      await user.type(screen.getByLabelText('Title'), ' (draft)');
+
+      await user.upload(
+        screen.getByLabelText('Cover image (optional)'),
+        new File(['x'], 'new.png', { type: 'image/png' }),
+      );
+
+      expect(await screen.findByText('Cover updated')).toBeInTheDocument();
+      const body = callsTo(fetchMock, 'POST /api/shows/s1/cover')[0]?.[1]?.body;
+      expect(body instanceof FormData && (body.get('file') as File).name).toBe('new.png');
+      await waitFor(() => {
+        expect(screen.getByRole('img', { name: 'Cover preview' })).toHaveAttribute(
+          'src',
+          '/api/shows/s1/cover?v=2',
+        );
+      });
+      expect(screen.getByLabelText('Title')).toHaveValue('Daily AI (draft)');
+      expect(callsTo(fetchMock, 'PATCH /api/shows/s1')).toHaveLength(0);
+    });
+
+    it('shows why the server rejected a cover', async () => {
+      const { user } = await openSettings(
+        {},
+        {
+          'POST /api/shows/s1/cover': () => ({
+            status: 422,
+            body: {
+              detail: 'The image is too small (400x400); it must be at least 600x600 pixels',
+            },
+          }),
+        },
+      );
+
+      await user.upload(
+        screen.getByLabelText('Cover image (optional)'),
+        new File(['x'], 'tiny.png', { type: 'image/png' }),
+      );
+
+      expect(await screen.findByText(/The image is too small/)).toBeInTheDocument();
+    });
+
+    it('removes the stored cover', async () => {
+      const { user, fetchMock } = await openSettings(
+        { cover_url: '/api/shows/s1/cover?v=1' },
+        { 'DELETE /api/shows/s1/cover': () => ({ body: makeShow({ cover_url: null }) }) },
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Remove cover' }));
+
+      expect(await screen.findByText('Cover removed')).toBeInTheDocument();
+      expect(callsTo(fetchMock, 'DELETE /api/shows/s1/cover')).toHaveLength(1);
+      await waitFor(() => {
+        expect(screen.queryByRole('img', { name: 'Cover preview' })).not.toBeInTheDocument();
+      });
+    });
+
     it('deletes the show after confirmation and returns to the list', async () => {
       const { user, fetchMock } = await openSettings({ episode_count: 3 });
 

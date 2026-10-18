@@ -11,6 +11,8 @@ PUBLIC_ROUTES = {
     ("GET", "/api/health"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/logout"),
+    # Covers are fetched by feeds and podcast directories without a session.
+    ("GET", "/api/shows/{show_id}/cover"),
 }
 
 

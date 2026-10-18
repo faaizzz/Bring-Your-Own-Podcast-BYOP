@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from byop.models.enums import ShowStyle
@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # How long a login session (JWT cookie) stays valid.
     byop_session_hours: int = Field(default=168, ge=1)
     media_root: str = "/data/media"
+    # Where media (covers, audio) lives: the local volume, or any S3-compatible service.
+    storage_backend: Literal["local", "s3"] = "local"
+    s3_endpoint_url: str | None = None  # empty for AWS; e.g. http://s3:9000 for the minio profile
+    # Address handed to browsers in links when the server is not reachable under its endpoint.
+    s3_public_endpoint_url: str | None = None
+    s3_bucket: str | None = None
+    s3_region: str = "us-east-1"
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
 
     # Infrastructure
     database_url: str = "postgresql+asyncpg://byop:byop@localhost:5432/byop"
@@ -51,11 +60,37 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    @field_validator("default_llm_provider", "default_llm_model", mode="before")
+    @field_validator(
+        "default_llm_provider",
+        "default_llm_model",
+        "s3_endpoint_url",
+        "s3_public_endpoint_url",
+        "s3_bucket",
+        "s3_access_key_id",
+        "s3_secret_access_key",
+        mode="before",
+    )
     @classmethod
     def _blank_means_unset(cls, value: object) -> object:
         """`DEFAULT_LLM_MODEL=` in .env is an empty string, which should fall back to unset."""
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("s3_region", mode="before")
+    @classmethod
+    def _blank_region_is_default(cls, value: object) -> object:
+        return "us-east-1" if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def _s3_needs_its_settings(self) -> Self:
+        if self.storage_backend == "s3":
+            missing = [
+                name.upper()
+                for name in ("s3_bucket", "s3_access_key_id", "s3_secret_access_key")
+                if not getattr(self, name)
+            ]
+            if missing:
+                raise ValueError(f"STORAGE_BACKEND=s3 needs {', '.join(missing)}")
+        return self
 
     @field_validator("default_show_style", mode="before")
     @classmethod

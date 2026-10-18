@@ -16,8 +16,13 @@ router = APIRouter(prefix="/shows", tags=["shows"])
 RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
-def _response(view: ShowView) -> ShowResponse:
+def response_for(view: ShowView) -> ShowResponse:
     show = view.show
+    cover_url = (
+        f"/api/shows/{show.id}/cover?v={int(show.updated_at.timestamp())}"
+        if show.cover_key
+        else None
+    )
     return ShowResponse(
         id=show.id,
         title=show.title,
@@ -44,6 +49,7 @@ def _response(view: ShowView) -> ShowResponse:
         feed_email=show.feed_email,
         feed_category=show.feed_category,
         feed_explicit=show.feed_explicit,
+        cover_url=cover_url,
         episode_count=view.episode_count,
         last_run_status=view.last_run_status,
         last_episode_at=view.last_episode_at,
@@ -66,7 +72,7 @@ SERVICE_ERRORS = (service.ShowNotFound, service.ShowConflict, service.ShowInvali
 
 @router.get("", response_model=list[ShowResponse])
 async def list_shows(user: CurrentUser, session: SessionDep) -> list[ShowResponse]:
-    return [_response(view) for view in await service.list_shows(session, user.id)]
+    return [response_for(view) for view in await service.list_shows(session, user.id)]
 
 
 @router.post("", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
@@ -82,13 +88,13 @@ async def create_show(
         view = await service.create_show(session, resolver, redis, settings, user.id, body)
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
-    return _response(view)
+    return response_for(view)
 
 
 @router.get("/{show_id}", response_model=ShowResponse)
 async def get_show(show_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> ShowResponse:
     try:
-        return _response(await service.get_show(session, user.id, show_id))
+        return response_for(await service.get_show(session, user.id, show_id))
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
 
@@ -106,7 +112,7 @@ async def update_show(
         view = await service.update_show(session, resolver, redis, user.id, show_id, body)
     except SERVICE_ERRORS as exc:
         raise _http_error(exc) from exc
-    return _response(view)
+    return response_for(view)
 
 
 @router.delete("/{show_id}", status_code=status.HTTP_204_NO_CONTENT)

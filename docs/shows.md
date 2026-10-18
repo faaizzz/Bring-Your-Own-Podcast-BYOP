@@ -82,8 +82,15 @@ curl -b cookies.txt -H 'content-type: application/json' -o preview.mp3 \
   http://localhost:8080/api/voices/preview
 ```
 
+## Cover image
+
+`POST /api/shows/{id}/cover` uploads a PNG/JPEG, `DELETE` removes it, and `cover_url` on the show
+links the public image. See [storage](storage.md#covers) for the processing rules.
+The wizard's first step has a cover picker (uploaded right after the show is created) and the
+Settings tab replaces or removes it immediately.
+
 ## Media
 
 Everything a show owns lives under the storage prefix `shows/<show id>/` (below
-`MEDIA_ROOT` for local storage). Deleting a show removes the database rows first and
+`MEDIA_ROOT` for local storage, or in the S3 bucket). Deleting a show removes the database rows first and
 then that prefix; a cleanup failure is logged but does not fail the request.

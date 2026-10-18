@@ -44,6 +44,7 @@ development; for a production-like run use
 
 - [Model providers (OpenRouter, OpenAI, Ollama, Kokoro)](docs/providers.md)
 - [Shows API](docs/shows.md)
+- [Media storage (local or S3) and covers](docs/storage.md)
 - [Secrets and key rotation](docs/security.md)
 
 ## Roadmap

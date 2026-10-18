@@ -28,6 +28,7 @@ export function makeShow(patch: Partial<Show> = {}): Show {
     episode_count: 0,
     last_run_status: null,
     last_episode_at: null,
+    cover_url: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     warnings: [],

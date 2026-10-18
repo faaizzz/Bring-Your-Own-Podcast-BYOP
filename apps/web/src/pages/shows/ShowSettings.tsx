@@ -6,13 +6,16 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   useDeleteShow,
+  useRemoveCover,
   useSaveSpeakers,
   useSpeakers,
   useUpdateShow,
+  useUploadCover,
   type Show,
   type Speaker,
 } from '../../lib/shows';
 import { useToast } from '../../lib/toast';
+import { CoverPicker } from './form/CoverPicker';
 import { ModelStep } from './form/ModelStep';
 import { ScheduleStep } from './form/ScheduleStep';
 import {
@@ -30,6 +33,41 @@ import { TopicStep } from './form/TopicStep';
 import { firstErrorStep, stepsWithErrors } from './form/useStepper';
 
 const EDIT_STEPS = STEPS.filter((s) => s.id !== 'review');
+
+/** The cover saves immediately, like a file upload should, not with the rest of the form. */
+function CoverSection({ show }: { show: Show }): React.JSX.Element {
+  const upload = useUploadCover();
+  const remove = useRemoveCover(show.id);
+  const notify = useToast();
+  const error = upload.error ?? remove.error;
+
+  return (
+    <CoverPicker
+      currentUrl={show.cover_url}
+      busy={upload.isPending || remove.isPending}
+      error={error?.message}
+      onFile={(file) => {
+        remove.reset();
+        upload.mutate(
+          { showId: show.id, file },
+          {
+            onSuccess: () => {
+              notify('Cover updated', 'success');
+            },
+          },
+        );
+      }}
+      onRemove={() => {
+        upload.reset();
+        remove.mutate(undefined, {
+          onSuccess: () => {
+            notify('Cover removed', 'success');
+          },
+        });
+      }}
+    />
+  );
+}
 
 function EditForm({ show, speakers }: { show: Show; speakers: Speaker[] }): React.JSX.Element {
   const form = useForm<ShowFormValues>({
@@ -121,7 +159,9 @@ function EditForm({ show, speakers }: { show: Show; speakers: Speaker[] }): Reac
         )}
 
         <div hidden={tab !== 'topic'}>
-          <TopicStep />
+          <TopicStep>
+            <CoverSection show={show} />
+          </TopicStep>
         </div>
         <div hidden={tab !== 'speakers'}>
           <SpeakersStep />
@@ -226,12 +266,9 @@ export function ShowSettings({ show }: { show: Show }): React.JSX.Element {
           </Button>
         </Alert>
       ) : (
-        // Remount when the saved data changes so the form always starts from what the server has.
-        <EditForm
-          key={`${show.updated_at}:${String(speakers.dataUpdatedAt)}`}
-          show={show}
-          speakers={speakers.data}
-        />
+        // Remount after a save refetches the speakers, so the form restarts from the server's data;
+        // a cover change does not refetch them, so unsaved edits survive it.
+        <EditForm key={String(speakers.dataUpdatedAt)} show={show} speakers={speakers.data} />
       )}
       <DeleteShow show={show} />
     </>

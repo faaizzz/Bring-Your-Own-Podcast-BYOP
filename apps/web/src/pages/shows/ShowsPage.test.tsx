@@ -63,6 +63,28 @@ describe('ShowsPage', () => {
     expect(screen.getByRole('link', { name: /New show/ })).toHaveAttribute('href', '/shows/new');
   });
 
+  it('shows the cover on the card when there is one, a placeholder otherwise', async () => {
+    await renderApp('/shows', {
+      handlers: {
+        'GET /api/shows': () => ({
+          body: [
+            makeShow({ id: 'a', title: 'With Cover', cover_url: '/api/shows/a/cover?v=3' }),
+            makeShow({ id: 'b', title: 'Without' }),
+          ],
+        }),
+      },
+    });
+
+    const withCover = await screen.findByRole('article', { name: 'With Cover' });
+    expect(withCover.querySelector('img.show-cover-img')).toHaveAttribute(
+      'src',
+      '/api/shows/a/cover?v=3',
+    );
+    const without = screen.getByRole('article', { name: 'Without' });
+    expect(without.querySelector('img')).toBeNull();
+    expect(without.querySelector('.show-cover')).not.toBeNull();
+  });
+
   it('offers a retry when the list cannot be loaded', async () => {
     await renderApp('/shows', {
       handlers: { 'GET /api/shows': () => ({ status: 500, body: { detail: 'database down' } }) },

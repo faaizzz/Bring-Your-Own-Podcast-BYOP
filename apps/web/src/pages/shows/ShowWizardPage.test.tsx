@@ -40,6 +40,12 @@ async function fillTopic(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Topic'), 'News about artificial intelligence');
 }
 
+function uploadedFile(call: [unknown, RequestInit?] | undefined): File | null {
+  const body = call?.[1]?.body;
+  const file = body instanceof FormData ? body.get('file') : null;
+  return file instanceof File ? file : null;
+}
+
 describe('create-show wizard', () => {
   it('blocks the topic step until it is valid, with field messages', async () => {
     const { user, fetchMock } = await openWizard();
@@ -105,6 +111,57 @@ describe('create-show wizard', () => {
       auto_publish: false,
     });
     expect(bodyOf(callsTo(fetchMock, 'PUT /api/shows/s1/speakers')[0])).toEqual(kokoroHosts);
+  });
+
+  it('uploads the chosen cover after creating the show', async () => {
+    const { user, fetchMock } = await openWizard({
+      'POST /api/shows/s1/cover': () => ({
+        body: makeShow({ cover_url: '/api/shows/s1/cover?v=1' }),
+      }),
+    });
+    await fillTopic(user);
+    await user.upload(
+      screen.getByLabelText('Cover image (optional)'),
+      new File(['png-bytes'], 'cover.png', { type: 'image/png' }),
+    );
+    expect(await screen.findByRole('img', { name: 'Cover preview' })).toBeInTheDocument();
+    for (let i = 0; i < 4; i += 1) await user.click(next());
+    expect(screen.getByText('cover.png')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    expect(await screen.findByText('Created "Daily AI"')).toBeInTheDocument();
+    expect(uploadedFile(callsTo(fetchMock, 'POST /api/shows/s1/cover')[0])?.name).toBe('cover.png');
+  });
+
+  it('creates the show without a cover when none is chosen', async () => {
+    const { user, fetchMock } = await openWizard();
+    await fillTopic(user);
+    for (let i = 0; i < 4; i += 1) await user.click(next());
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    await screen.findByText('Created "Daily AI"');
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/cover')).toHaveLength(0);
+  });
+
+  it('keeps the new show when only the cover upload fails', async () => {
+    const { user } = await openWizard({
+      'POST /api/shows/s1/cover': () => ({
+        status: 422,
+        body: { detail: 'The image is too small (400x400)' },
+      }),
+    });
+    await fillTopic(user);
+    await user.upload(
+      screen.getByLabelText('Cover image (optional)'),
+      new File(['x'], 'tiny.png', { type: 'image/png' }),
+    );
+    for (let i = 0; i < 4; i += 1) await user.click(next());
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    expect(
+      await screen.findByText(/The cover was not saved: The image is too small/),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Daily AI' })).toBeInTheDocument();
   });
 
   it('shows the API model price and sends the chosen provider and model', async () => {

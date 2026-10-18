@@ -43,6 +43,7 @@ export const showSchema = z.object({
   episode_count: z.number(),
   last_run_status: z.string().nullable(),
   last_episode_at: z.string().nullable(),
+  cover_url: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   warnings: z.array(z.string()).default([]),
@@ -117,6 +118,35 @@ export function useSaveSpeakers() {
         schema: z.array(speakerSchema),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SHOWS_KEY }),
+  });
+}
+
+/** Replaces the cached show with the response, so a cover change does not refetch (and reset) forms. */
+function useCoverUpdate() {
+  const queryClient = useQueryClient();
+  return (show: Show) => {
+    queryClient.setQueryData([...SHOWS_KEY, show.id], show);
+    return queryClient.invalidateQueries({ queryKey: SHOWS_KEY, exact: true });
+  };
+}
+
+export function useUploadCover() {
+  const apply = useCoverUpdate();
+  return useMutation({
+    mutationFn: ({ showId, file }: { showId: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.post<Show>(`/shows/${showId}/cover`, form, { schema: showSchema });
+    },
+    onSuccess: apply,
+  });
+}
+
+export function useRemoveCover(showId: string) {
+  const apply = useCoverUpdate();
+  return useMutation({
+    mutationFn: () => api.delete<Show>(`/shows/${showId}/cover`, { schema: showSchema }),
+    onSuccess: apply,
   });
 }
 

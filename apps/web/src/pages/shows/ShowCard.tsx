@@ -16,9 +16,13 @@ export function ShowCard({ show }: { show: Show }): React.JSX.Element {
 
   return (
     <Card as="article" aria-labelledby={titleId} className="show-card h-100 mb-0">
-      <div className="show-cover" aria-hidden="true">
-        <FiMic size={40} />
-      </div>
+      {show.cover_url ? (
+        <img className="show-cover show-cover-img" src={show.cover_url} alt="" />
+      ) : (
+        <div className="show-cover" aria-hidden="true">
+          <FiMic size={40} />
+        </div>
+      )}
       <Card.Body className="d-flex flex-column">
         <Card.Title as="h5" id={titleId} className="mb-1">
           <Link to={`/shows/${show.id}`} className="stretched-link text-reset">

@@ -6,7 +6,7 @@ from pathlib import Path
 import anyio
 
 from byop.providers.tts import TTSProvider, wav_to_mp3
-from byop.services.storage import Storage
+from byop.storage import Storage
 
 DEFAULT_TEXT = "Hello, and welcome to the show. This is how I sound."
 PREVIEW_PREFIX = "previews"
@@ -33,7 +33,7 @@ async def render_preview(
     """A short MP3 of `voice_id` speaking `text`, synthesized once and then served from storage."""
     sample = text or DEFAULT_TEXT
     key = preview_key(tts.name, voice_id, params, sample)
-    if (cached := await storage.read(key)) is not None:
+    if (cached := await storage.get(key)) is not None:
         return cached
 
     async with anyio.TemporaryDirectory() as tmp:
@@ -42,5 +42,5 @@ async def render_preview(
         mp3 = work / "preview.mp3"
         await wav_to_mp3(result.audio_path, mp3)
         data = await anyio.Path(mp3).read_bytes()
-    await storage.write(key, data)
+    await storage.put(key, data, content_type="audio/mpeg")
     return data

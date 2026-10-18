@@ -189,6 +189,8 @@ class ShowResponse(BaseModel):
     feed_category: str | None
     feed_explicit: bool
 
+    # Public, versioned URL of the cover image; None until one is uploaded.
+    cover_url: str | None
     episode_count: int
     last_run_status: RunStatus | None
     # When the newest episode was published (or created, for a draft).

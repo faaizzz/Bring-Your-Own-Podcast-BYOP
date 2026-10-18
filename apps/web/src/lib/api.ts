@@ -67,14 +67,16 @@ export async function apiRequest<T = unknown>(
 ): Promise<T> {
   const { method = 'GET', body, query, signal, schema, responseType = 'json' } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // FormData sets its own multipart Content-Type (with the boundary).
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 
   let response: Response;
   try {
     response = await fetch(buildUrl(path, query), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       credentials: 'include',
       signal,
     });

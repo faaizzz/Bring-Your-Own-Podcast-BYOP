@@ -5,8 +5,9 @@ import { FormProvider, useForm, type FieldErrors } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 
 import { useToast } from '../../lib/toast';
-import { useCreateShow, useSaveSpeakers, type SpeakerInput } from '../../lib/shows';
+import { useCreateShow, useSaveSpeakers, useUploadCover, type SpeakerInput } from '../../lib/shows';
 import { useDefaultSpeakers } from '../../lib/voices';
+import { CoverPicker } from './form/CoverPicker';
 import { ModelStep } from './form/ModelStep';
 import { ReviewStep } from './form/ReviewStep';
 import { ScheduleStep } from './form/ScheduleStep';
@@ -32,6 +33,8 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
   });
   const [step, setStep] = useState<StepId>('topic');
   const [general, setGeneral] = useState<string[]>([]);
+  const [cover, setCover] = useState<File | null>(null);
+  const uploadCover = useUploadCover();
   const create = useCreateShow();
   const saveSpeakers = useSaveSpeakers();
   const notify = useToast();
@@ -41,7 +44,7 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
   const current = STEPS[index];
   const isLast = index === STEPS.length - 1;
   const failing = stepsWithErrors(form.formState.errors);
-  const busy = create.isPending || saveSpeakers.isPending;
+  const busy = create.isPending || saveSpeakers.isPending || uploadCover.isPending;
 
   const next = async () => {
     if (!current) return;
@@ -75,6 +78,15 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
       notify(`Show created, but its speakers were not saved: ${message}`, 'danger');
       navigate(`/shows/${created.id}/settings`);
       return;
+    }
+    if (cover) {
+      try {
+        await uploadCover.mutateAsync({ showId: created.id, file: cover });
+      } catch (error) {
+        // The show is complete without a cover; let the user retry from its settings.
+        const message = error instanceof Error ? error.message : 'The upload failed.';
+        notify(`The cover was not saved: ${message}`, 'danger');
+      }
     }
     for (const warning of created.warnings) notify(warning, 'info');
     notify(`Created "${created.title}"`, 'success');
@@ -126,7 +138,15 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
             }}
           >
             <div hidden={step !== 'topic'}>
-              <TopicStep />
+              <TopicStep>
+                <CoverPicker
+                  file={cover}
+                  onFile={setCover}
+                  onRemove={() => {
+                    setCover(null);
+                  }}
+                />
+              </TopicStep>
             </div>
             <div hidden={step !== 'speakers'}>
               <SpeakersStep />
@@ -137,7 +157,7 @@ function WizardForm({ defaultSpeakers }: { defaultSpeakers: SpeakerInput[] }): R
             <div hidden={step !== 'schedule'}>
               <ScheduleStep editing={false} />
             </div>
-            {step === 'review' && <ReviewStep />}
+            {step === 'review' && <ReviewStep cover={cover} />}
 
             <div className="d-flex justify-content-between mt-4">
               <Button

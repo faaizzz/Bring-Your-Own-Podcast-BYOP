@@ -24,7 +24,7 @@ from byop.services.credentials import (
 from byop.services.defaults import default_tts_provider
 from byop.services.models import list_models_cached
 from byop.services.speaker_defaults import default_speakers
-from byop.services.storage import Storage, show_prefix
+from byop.storage import Storage, StorageError, show_prefix
 
 log = structlog.get_logger(__name__)
 
@@ -285,6 +285,6 @@ async def delete_show(
     await session.commit()
     try:
         await storage.delete_prefix(show_prefix(show_id))
-    except OSError:
+    except (OSError, StorageError):
         # The rows are gone; leftover files are harmless and must not fail the request.
         log.warning("show_media_cleanup_failed", show_id=str(show_id), exc_info=True)

@@ -1,7 +1,8 @@
 import { STYLE_LABELS, STYLES } from '../../../lib/shows';
 import { Field } from './Field';
 
-export function TopicStep(): React.JSX.Element {
+/** `children` is rendered after the fields (the cover picker, which differs between create and edit). */
+export function TopicStep({ children }: { children?: React.ReactNode }): React.JSX.Element {
   return (
     <>
       <Field name="title" label="Title" placeholder="Daily AI Briefing" />
@@ -47,6 +48,7 @@ export function TopicStep(): React.JSX.Element {
           />
         </div>
       </div>
+      {children}
     </>
   );
 }

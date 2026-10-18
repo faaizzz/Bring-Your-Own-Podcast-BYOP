@@ -129,12 +129,32 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # Local S3-compatible object storage. Opt in with: docker compose --profile minio up -d
+  # (or `make up-minio`), then set STORAGE_BACKEND=s3 and the S3_* values in .env (see
+  # docs/storage.md). The profile keeps its historical name; the image is RustFS because
+  # MinIO no longer publishes container images.
+  s3:
+    profiles: ["minio"]
+    # Pinned by tag and digest.
+    image: rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:-byop-local}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:-byop-local-secret}
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   # --- Reserved for later stories (uncomment when the story lands) ---
-  # minio:      # S3-compatible object storage (profile "minio")
-  #   profiles: ["minio"]
   # langfuse:   # LLM tracing (profile "langfuse")
   #   profiles: ["langfuse"]
 
 volumes:
   pgdata:
   media:
+  s3data:
