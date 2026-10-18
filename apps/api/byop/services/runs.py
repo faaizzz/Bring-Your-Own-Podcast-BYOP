@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from byop.models import Run
+from byop.models import Episode, Run
 from byop.models.enums import EventLevel, RunStatus, RunTrigger
 from byop.pipeline.orchestrator import ACTIVE, add_event
 from byop.services.shows import get_show
@@ -57,6 +57,20 @@ async def list_runs(
         query.order_by(Run.created_at.desc(), Run.id).limit(limit).offset(offset)
     )
     return list(rows)
+
+
+async def episode_ids(
+    session: AsyncSession, user_id: uuid.UUID, run_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """The draft episode each run produced (or is re-voicing), where there is one."""
+    if not run_ids:
+        return {}
+    rows = await session.execute(
+        select(Episode.run_id, Episode.id).where(
+            Episode.run_id.in_(run_ids), Episode.user_id == user_id
+        )
+    )
+    return {run_id: episode_id for run_id, episode_id in rows if run_id is not None}
 
 
 async def get_run(session: AsyncSession, user_id: uuid.UUID, run_id: uuid.UUID) -> Run:

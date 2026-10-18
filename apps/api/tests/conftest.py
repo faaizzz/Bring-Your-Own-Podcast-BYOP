@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
+from byop.config import Settings, get_settings
 from byop.db import get_session
 from byop.main import create_app
 from byop.models import User
@@ -30,6 +31,10 @@ from byop.security import passwords
 from byop.security.tokens import COOKIE_NAME, create_session_token
 from tests.db_utils import TEST_DATABASE_URL, migrate, recreate_database
 from tests.models.factories import make_user
+
+# ...and neither may a developer's `.env` file (it holds real keys when trying the app locally).
+Settings.model_config["env_file"] = None
+get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True, scope="session")

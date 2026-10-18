@@ -20,17 +20,20 @@ MAX_RETRY_DELAY_S = 120
 
 
 async def _run_stage(run_id: uuid.UUID, stage: str, task_id: str | None) -> str:
-    async with task_deps() as (session, _redis, settings):
-        return (await run_stage(session, settings, run_id, stage, task_id=task_id)).value
+    async with task_deps() as (session, redis, settings):
+        result = await run_stage(session, settings, run_id, stage, task_id=task_id, redis=redis)
+        return result.value
 
 
 async def _give_up(run_id: uuid.UUID, stage: str, message: str) -> None:
     from byop.models import Run
 
-    async with task_deps() as (session, _redis, settings):
+    async with task_deps() as (session, redis, settings):
         run = await session.get(Run, run_id)
         if run is not None:
-            await fail_run(session, run, message, stage=stage, media_root=settings.media_root)
+            await fail_run(
+                session, run, message, stage=stage, media_root=settings.media_root, redis=redis
+            )
 
 
 @celery_app.task(bind=True, name="byop.run_stage")
@@ -62,8 +65,8 @@ def reap_runs_task() -> list[str]:
     """Fail runs that stopped reporting progress (periodic, see `worker.py`)."""
 
     async def reap() -> list[str]:
-        async with task_deps() as (session, _redis, settings):
-            return [str(i) for i in await reap_stuck_runs(session, settings)]
+        async with task_deps() as (session, redis, settings):
+            return [str(i) for i in await reap_stuck_runs(session, settings, redis=redis)]
 
     reaped = asyncio.run(reap())
     if reaped:

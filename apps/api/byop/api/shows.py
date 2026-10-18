@@ -1,19 +1,14 @@
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from redis.asyncio import Redis
+from fastapi import APIRouter, HTTPException, status
 
-from byop.api.deps import CurrentUser, SessionDep, SettingsDep, StorageDep
+from byop.api.deps import CurrentUser, RedisDep, SessionDep, SettingsDep, StorageDep
 from byop.api.integrations import ResolverDep
-from byop.redis_client import get_redis
 from byop.schemas.show import ShowCreate, ShowResponse, ShowUpdate
 from byop.services import shows as service
 from byop.services.shows import ShowView
 
 router = APIRouter(prefix="/shows", tags=["shows"])
-
-RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
 def response_for(view: ShowView) -> ShowResponse:

@@ -29,6 +29,8 @@ class RunResponse(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
+    # The draft episode this run produced (or is re-voicing), once there is one.
+    episode_id: uuid.UUID | None = None
 
 
 class RunDetail(RunResponse):

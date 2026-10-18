@@ -75,11 +75,19 @@ export type Speaker = z.infer<typeof speakerSchema>;
 export type ShowBody = Record<string, string | number | boolean | null>;
 
 export const SHOWS_KEY = ['shows'] as const;
+const RUN_POLL_MS = 3000;
+
+function isRunning(status: string | null | undefined): boolean {
+  return status === 'queued' || status === 'running';
+}
 
 export function useShows() {
   return useQuery({
     queryKey: SHOWS_KEY,
     queryFn: () => api.get<Show[]>('/shows', { schema: z.array(showSchema) }),
+    // A running show enables its "Generate now" button again once the run ends.
+    refetchInterval: (query) =>
+      query.state.data?.some((s) => isRunning(s.last_run_status)) ? RUN_POLL_MS : false,
   });
 }
 
@@ -87,6 +95,8 @@ export function useShow(id: string) {
   return useQuery({
     queryKey: [...SHOWS_KEY, id],
     queryFn: () => api.get<Show>(`/shows/${id}`, { schema: showSchema }),
+    refetchInterval: (query) =>
+      isRunning(query.state.data?.last_run_status) ? RUN_POLL_MS : false,
   });
 }
 

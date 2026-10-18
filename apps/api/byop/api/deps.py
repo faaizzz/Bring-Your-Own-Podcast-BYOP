@@ -1,17 +1,20 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings, get_settings
 from byop.db import get_session
 from byop.models import User
+from byop.redis_client import get_redis
 from byop.security.tokens import COOKIE_NAME
 from byop.services.auth import user_from_token
 from byop.storage import Storage, build_storage
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+RedisDep = Annotated[Redis, Depends(get_redis)]
 
 
 def get_storage(settings: SettingsDep) -> Storage:

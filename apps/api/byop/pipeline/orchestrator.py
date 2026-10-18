@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import structlog
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ from byop.pipeline.stages import finalize, ingest, mix, rank, script, tts
 from byop.pipeline.workdir import remove_work_dir
 from byop.services.credentials import CredentialResolver
 from byop.services.ranking import release_items
+from byop.services.run_stream import announce
 
 log = structlog.get_logger(__name__)
 
@@ -84,6 +86,7 @@ async def fail_run(
     *,
     stage: str | None,
     media_root: str | None = None,
+    redis: Redis | None = None,
 ) -> bool:
     """End an active run as failed, with its reason, give its stories back and (if the media
     root is given) delete its scratch files."""
@@ -95,6 +98,7 @@ async def fail_run(
     run.finished_at = datetime.now(UTC)
     await add_event(session, run, message, level=EventLevel.ERROR, stage=stage)
     await session.commit()
+    await announce(redis, run.id)
     await release_items(session, run.user_id, run.id)
     if media_root:
         await remove_work_dir(media_root, run.id)
@@ -103,7 +107,12 @@ async def fail_run(
 
 
 async def finish_cancelled(
-    session: AsyncSession, run: Run, *, stage: str | None, media_root: str | None = None
+    session: AsyncSession,
+    run: Run,
+    *,
+    stage: str | None,
+    media_root: str | None = None,
+    redis: Redis | None = None,
 ) -> bool:
     await session.refresh(run, ["status"])
     if run.status not in ACTIVE:
@@ -112,6 +121,7 @@ async def finish_cancelled(
     run.finished_at = datetime.now(UTC)
     await add_event(session, run, "Run cancelled", stage=stage)
     await session.commit()
+    await announce(redis, run.id)
     await release_items(session, run.user_id, run.id)
     if media_root:
         await remove_work_dir(media_root, run.id)
@@ -138,6 +148,7 @@ async def run_stage(
     *,
     task_id: str | None = None,
     stages: Sequence[Stage] | None = None,
+    redis: Redis | None = None,
 ) -> StageResult:
     """Run one stage of a run. A `TransientStageError` is raised for the caller to retry;
     every other outcome is recorded on the run and returned."""
@@ -150,7 +161,9 @@ async def run_stage(
     assert show is not None  # runs are deleted with their show
 
     if run.cancel_requested:
-        await finish_cancelled(session, run, stage=stage.name, media_root=settings.media_root)
+        await finish_cancelled(
+            session, run, stage=stage.name, media_root=settings.media_root, redis=redis
+        )
         return StageResult.CANCELLED
     if run.status is RunStatus.QUEUED:
         run.status = RunStatus.RUNNING
@@ -161,6 +174,7 @@ async def run_stage(
         run.celery_task_id = task_id
     await add_event(session, run, f"Started {stage.name}", stage=stage.name)
     await session.commit()
+    await announce(redis, run.id)
 
     context = RunContext(
         session=session,
@@ -171,12 +185,15 @@ async def run_stage(
         stage=stage.name,
         progress_start=stage.start,
         progress_end=stage.end,
+        redis=redis,
     )
     try:
         await stage.run(context)
     except RunStopped:
         await _start_over(session, run, force=False)
-        await finish_cancelled(session, run, stage=stage.name, media_root=settings.media_root)
+        await finish_cancelled(
+            session, run, stage=stage.name, media_root=settings.media_root, redis=redis
+        )
         return StageResult.CANCELLED
     except TransientStageError as exc:
         await _start_over(session, run)
@@ -185,17 +202,20 @@ async def run_stage(
             level=EventLevel.WARNING, stage=stage.name,
         )  # fmt: skip
         await session.commit()
+        await announce(redis, run.id)
         raise
     except StageFailed as exc:
         await _start_over(session, run, force=False)
-        await fail_run(session, run, str(exc), stage=stage.name, media_root=settings.media_root)
+        await fail_run(
+            session, run, str(exc), stage=stage.name, media_root=settings.media_root, redis=redis
+        )
         return StageResult.FAILED
     except Exception as exc:
         log.exception("stage_crashed", run_id=str(run_id), stage=stage.name)
         await _start_over(session, run)
         await fail_run(
             session, run, f"Unexpected error in {stage.name}: {type(exc).__name__}: {exc}",
-            stage=stage.name, media_root=settings.media_root,
+            stage=stage.name, media_root=settings.media_root, redis=redis,
         )  # fmt: skip
         return StageResult.FAILED
 
@@ -204,11 +224,16 @@ async def run_stage(
         run.progress = max(run.progress, stage.end)
         await add_event(session, run, f"Finished {stage.name}", stage=stage.name)
         await session.commit()
+    await announce(redis, run.id)
     return StageResult.DONE
 
 
 async def reap_stuck_runs(
-    session: AsyncSession, settings: Settings, *, now: datetime | None = None
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    now: datetime | None = None,
+    redis: Redis | None = None,
 ) -> list[uuid.UUID]:
     """Fail runs that have not reported any progress for `RUN_TIMEOUT_MINUTES`.
 
@@ -229,6 +254,7 @@ async def reap_stuck_runs(
             f"Timed out: no progress for {minutes} minutes (the worker may have stopped)",
             stage=run.stage,
             media_root=settings.media_root,
+            redis=redis,
         ):
             reaped.append(run.id)
     return reaped

@@ -2,15 +2,17 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from kombu.exceptions import OperationalError
 
-from byop.api.deps import CurrentUser, SessionDep
+from byop.api.deps import CurrentUser, RedisDep, SessionDep
 from byop.celery_control import revoke_quietly
 from byop.models import Run
 from byop.models.enums import RunStatus
 from byop.pipeline.orchestrator import fail_run
 from byop.schemas.run import RunDetail, RunEventResponse, RunResponse
 from byop.services import runs as service
+from byop.services.run_stream import announce, stream_run
 from byop.services.shows import ShowNotFound
 from byop.tasks.pipeline import enqueue_run
 
@@ -18,7 +20,7 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 show_router = APIRouter(prefix="/shows/{show_id}/runs", tags=["runs"])
 
 
-def _response(run: Run) -> RunResponse:
+def _response(run: Run, episode_id: uuid.UUID | None = None) -> RunResponse:
     return RunResponse(
         id=run.id,
         show_id=run.show_id,
@@ -31,12 +33,14 @@ def _response(run: Run) -> RunResponse:
         started_at=run.started_at,
         finished_at=run.finished_at,
         created_at=run.created_at,
+        episode_id=episode_id,
     )
 
 
-def _detail(run: Run) -> RunDetail:
+async def _detail(session: SessionDep, user_id: uuid.UUID, run: Run) -> RunDetail:
+    episode_id = (await service.episode_ids(session, user_id, [run.id])).get(run.id)
     return RunDetail(
-        **_response(run).model_dump(),
+        **_response(run, episode_id).model_dump(),
         events=[
             RunEventResponse(
                 id=e.id, ts=e.ts, level=e.level, stage=e.stage, message=e.message, data=e.data
@@ -79,19 +83,22 @@ async def list_runs(
     runs = await service.list_runs(
         session, user.id, show_id=show_id, status=run_status, limit=limit, offset=offset
     )
-    return [_response(r) for r in runs]
+    episodes = await service.episode_ids(session, user.id, [r.id for r in runs])
+    return [_response(r, episodes.get(r.id)) for r in runs]
 
 
 @router.get("/{run_id}", response_model=RunDetail)
 async def get_run(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> RunDetail:
     try:
-        return _detail(await service.get_run(session, user.id, run_id))
+        return await _detail(session, user.id, await service.get_run(session, user.id, run_id))
     except service.RunNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found") from exc
 
 
 @router.post("/{run_id}/cancel", response_model=RunDetail)
-async def cancel_run(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> RunDetail:
+async def cancel_run(
+    run_id: uuid.UUID, user: CurrentUser, session: SessionDep, redis: RedisDep
+) -> RunDetail:
     """Stop a run: at once if it is still queued, otherwise at its next step."""
     try:
         run = await service.request_cancel(session, user.id, run_id)
@@ -100,4 +107,28 @@ async def cancel_run(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) 
     except service.RunConflict as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     revoke_quietly(run.celery_task_id)
-    return _detail(run)
+    await announce(redis, run.id)
+    return await _detail(session, user.id, run)
+
+
+@router.get("/{run_id}/stream", response_class=StreamingResponse)
+async def stream(
+    run_id: uuid.UUID, user: CurrentUser, session: SessionDep, redis: RedisDep
+) -> StreamingResponse:
+    """Server-Sent Events: the run's state and log as it happens (`snapshot`, `update`, `done`).
+
+    The database is the source of truth, so a client that reconnects after a network drop
+    receives the current state again (EventSource does this by itself).
+    """
+    try:
+        await service.get_run(session, user.id, run_id)  # 404 before the stream starts
+    except service.RunNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found") from exc
+    return StreamingResponse(
+        stream_run(session, redis, user.id, run_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # nginx: do not hold the events back
+        },
+    )

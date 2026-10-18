@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
+from redis.asyncio import Redis
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,7 @@ from byop.models import Run, RunEvent, Show
 from byop.models.enums import EventLevel, RunStatus
 from byop.pipeline.errors import RunStopped
 from byop.services.credentials import CredentialResolver
+from byop.services.run_stream import announce
 
 
 @dataclass
@@ -27,6 +29,7 @@ class RunContext:
     stage: str
     progress_start: int
     progress_end: int
+    redis: Redis | None = None  # to tell open run streams that something changed
 
     @property
     def user_id(self) -> uuid.UUID:
@@ -47,6 +50,7 @@ class RunContext:
             )
         )
         await self.session.commit()
+        await announce(self.redis, self.run.id)
 
     async def progress(self, fraction: float) -> None:
         """Report how far through this stage the work is (0.0 to 1.0).
@@ -58,6 +62,7 @@ class RunContext:
         self.run.progress = self.progress_start + round(span * min(1.0, max(0.0, fraction)))
         self.run.updated_at = func.now()
         await self.session.commit()
+        await announce(self.redis, self.run.id)
 
     async def checkpoint(self) -> None:
         """Stop with `RunStopped` if the run was cancelled or ended; call between steps."""

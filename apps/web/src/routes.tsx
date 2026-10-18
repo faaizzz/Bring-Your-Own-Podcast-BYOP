@@ -6,6 +6,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import EpisodeReviewPage from './pages/episodes/EpisodeReviewPage';
 import HistoryPage from './pages/history/HistoryPage';
 import IntegrationsPage from './pages/settings/IntegrationsPage';
+import RunPage from './pages/runs/RunPage';
 import ShowDetailPage from './pages/shows/ShowDetailPage';
 import ShowsPage from './pages/shows/ShowsPage';
 import ShowWizardPage from './pages/shows/ShowWizardPage';
@@ -27,6 +28,7 @@ export function AppRoutes(): React.JSX.Element {
             <Route path="shows/new" element={<ShowWizardPage />} />
             <Route path="shows/:showId/:tab?" element={<ShowDetailPage />} />
             <Route path="episodes/:episodeId" element={<EpisodeReviewPage />} />
+            <Route path="runs/:runId" element={<RunPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="costs" element={<CostsPage />} />
             <Route path="settings/integrations" element={<IntegrationsPage />} />

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import type { Show } from '../../lib/shows';
+import { GenerateButton } from './GenerateButton';
 
 export function ShowCard({ show }: { show: Show }): React.JSX.Element {
   const titleId = `show-${show.id}-title`;
@@ -43,7 +44,7 @@ export function ShowCard({ show }: { show: Show }): React.JSX.Element {
             </Badge>
           )}
         </div>
-        <ul className="list-unstyled small text-muted mb-0 mt-auto">
+        <ul className="list-unstyled small text-muted mb-3 mt-auto">
           <li>
             <FiClock aria-hidden="true" className="me-1" />
             Last episode: {show.last_episode_at ? formatDate(show.last_episode_at) : 'none yet'}
@@ -53,6 +54,7 @@ export function ShowCard({ show }: { show: Show }): React.JSX.Element {
             Next run: {next}
           </li>
         </ul>
+        <GenerateButton show={show} size="sm" className="show-card-action align-self-start" />
       </Card.Body>
     </Card>
   );

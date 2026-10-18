@@ -7,6 +7,8 @@ import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
 import { PROVIDER_LABELS } from '../../lib/voices';
 import { EpisodesTab } from '../episodes/EpisodesTab';
+import { RunsTab } from '../runs/RunsTab';
+import { GenerateButton } from './GenerateButton';
 import { ShowSettings } from './ShowSettings';
 import { SourcesTab } from './sources/SourcesTab';
 
@@ -78,15 +80,6 @@ function Overview({ show }: { show: Show }): React.JSX.Element {
   );
 }
 
-function Placeholder({ title, children }: { title: string; children: string }): React.JSX.Element {
-  return (
-    <div className="text-center text-muted py-5">
-      <h6>{title}</h6>
-      <p className="mb-0">{children}</p>
-    </div>
-  );
-}
-
 export default function ShowDetailPage(): React.JSX.Element {
   const { showId = '', tab } = useParams();
   const show = useShow(showId);
@@ -141,6 +134,7 @@ export default function ShowDetailPage(): React.JSX.Element {
               Paused
             </Badge>
           )}
+          <GenerateButton show={data} className="ms-auto" />
         </div>
       </Card.Header>
       <Card.Body>
@@ -165,11 +159,7 @@ export default function ShowDetailPage(): React.JSX.Element {
         {active === 'overview' && <Overview show={data} />}
         {active === 'sources' && <SourcesTab show={data} />}
         {active === 'episodes' && <EpisodesTab showId={data.id} />}
-        {active === 'runs' && (
-          <Placeholder title="Runs">
-            Each generation run and its progress will appear here.
-          </Placeholder>
-        )}
+        {active === 'runs' && <RunsTab showId={data.id} />}
         {active === 'settings' && <ShowSettings show={data} />}
       </Card.Body>
     </Card>

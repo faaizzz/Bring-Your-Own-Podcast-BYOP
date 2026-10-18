@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.api import runs as runs_api
-from byop.models import Run, User
+from byop.models import Episode, Run, User
 from byop.models.enums import EventLevel, RunStatus, RunTrigger
 from byop.pipeline.orchestrator import add_event
 from tests.models.factories import make_show, make_user
@@ -246,3 +246,56 @@ async def test_requires_a_session(client: AsyncClient) -> None:
     assert (await client.get("/api/runs")).status_code == 401
     assert (await client.get(f"/api/runs/{some}")).status_code == 401
     assert (await client.post(f"/api/runs/{some}/cancel")).status_code == 401
+
+
+# --- live stream -------------------------------------------------------------------------------
+
+
+async def test_the_stream_is_server_sent_events_with_the_run_state(
+    authed: AsyncClient, db_session: AsyncSession, broker: Spy
+) -> None:
+    show_id = await new_show(authed)
+    run_id = (await authed.post(f"/api/shows/{show_id}/runs")).json()["id"]
+    await finish(db_session, run_id, RunStatus.FAILED)
+
+    response = await authed.get(f"/api/runs/{run_id}/stream")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["x-accel-buffering"] == "no"
+    assert "no-cache" in response.headers["cache-control"]
+    assert "event: snapshot" in response.text and "event: done" in response.text
+    assert f'"id": "{run_id}"' in response.text and "Run queued" in response.text
+
+
+async def test_the_stream_of_an_unknown_or_foreign_run_is_404(
+    authed: AsyncClient, db_session: AsyncSession
+) -> None:
+    other = await make_user(db_session, "other@example.com")
+    run = Run(
+        user_id=other.id,
+        show_id=(await make_show(db_session, other)).id,
+        trigger=RunTrigger.MANUAL,
+    )
+    db_session.add(run)
+    await db_session.flush()
+
+    assert (await authed.get(f"/api/runs/{uuid.uuid4()}/stream")).status_code == 404
+    assert (await authed.get(f"/api/runs/{run.id}/stream")).status_code == 404
+
+
+async def test_a_run_reports_the_episode_it_produced(
+    authed: AsyncClient, db_session: AsyncSession, admin_user: User, broker: Spy
+) -> None:
+    show_id = await new_show(authed)
+    run_id = (await authed.post(f"/api/shows/{show_id}/runs")).json()["id"]
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["episode_id"] is None
+    episode = Episode(
+        user_id=admin_user.id, show_id=uuid.UUID(show_id), run_id=uuid.UUID(run_id), title="Ep"
+    )
+    db_session.add(episode)
+    await db_session.flush()
+
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["episode_id"] == str(episode.id)
+    listed = (await authed.get("/api/runs", params={"show_id": show_id})).json()
+    assert listed[0]["episode_id"] == str(episode.id)
