@@ -4,6 +4,7 @@ from pydantic import SecretStr
 from byop.models.enums import CredentialProvider as P
 from byop.providers.tts import (
     ElevenLabsTTS,
+    KokoroTTS,
     OpenAITTS,
     OpenRouterTTS,
     UnsupportedTTSProvider,
@@ -28,7 +29,7 @@ def test_a_configured_base_url_is_used() -> None:
     assert tts._base_url == "https://proxy.example/v1"
 
 
-@pytest.mark.parametrize("provider", [P.KOKORO, P.LANGFUSE, P.OPENAI_COMPATIBLE])
+@pytest.mark.parametrize("provider", [P.LANGFUSE, P.OPENAI_COMPATIBLE])
 def test_providers_without_a_tts_adapter_are_rejected(provider: P) -> None:
     with pytest.raises(UnsupportedTTSProvider, match="not a TTS provider"):
         get_tts(provider, config(provider))
@@ -37,3 +38,11 @@ def test_providers_without_a_tts_adapter_are_rejected(provider: P) -> None:
 def test_a_key_is_required() -> None:
     with pytest.raises(UnsupportedTTSProvider, match="API key"):
         get_tts(P.OPENAI, config(P.OPENAI, key=None))
+
+
+def test_kokoro_needs_a_base_url_but_no_key() -> None:
+    tts = get_tts(P.KOKORO, config(P.KOKORO, key=None, base_url="http://kokoro:8880/v1"))
+
+    assert isinstance(tts, KokoroTTS)
+    with pytest.raises(UnsupportedTTSProvider, match="base URL"):
+        get_tts(P.KOKORO, config(P.KOKORO, key=None))

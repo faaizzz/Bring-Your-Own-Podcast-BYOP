@@ -32,13 +32,17 @@ from your `.env` (change the example password before exposing the app). The API 
 [`.env.example`](.env.example). Run `make migrate` to apply database migrations. Other targets: `make down`, `make logs`,
 `make migrate`, `make check` (lint + typecheck + tests), `make fmt`.
 
+No paid API keys? `make up-kokoro` (or `docker compose --profile kokoro up -d`) also starts a
+local, free [Kokoro](docs/providers.md#local-voices-with-kokoro-no-api-key) text-to-speech
+server that is preselected whenever no paid TTS key is configured.
+
 `docker-compose.override.yml` bind-mounts the API source for hot reload in
 development; for a production-like run use
 `docker compose -f docker-compose.yml up -d --build`.
 
 ## Documentation
 
-- [Model providers (OpenRouter, OpenAI, Ollama)](docs/providers.md)
+- [Model providers (OpenRouter, OpenAI, Ollama, Kokoro)](docs/providers.md)
 - [Secrets and key rotation](docs/security.md)
 
 ## Roadmap

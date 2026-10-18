@@ -11,6 +11,8 @@ x-api: &api
     DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://byop:byop@postgres:5432/byop}
     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     MEDIA_ROOT: /data/media
+    # Where the optional `kokoro` profile listens; empty/unset in .env falls back to the bundled one.
+    KOKORO_BASE_URL: ${KOKORO_BASE_URL:-http://kokoro:8880/v1}
   # Lets the containers reach a model server on the host (e.g. Ollama) on Linux as well as
   # Docker Desktop: http://host.docker.internal:11434/v1
   extra_hosts:
@@ -109,11 +111,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Local, free text-to-speech. Opt in with: docker compose --profile kokoro up -d
+  # (or `make up-kokoro`). CPU image; for NVIDIA GPUs see docs/providers.md.
+  kokoro:
+    profiles: ["kokoro"]
+    # Pinned by tag and digest (multi-arch: amd64 + arm64).
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.9.0@sha256:ee3111d6a2c903ed62f3b4fa19543c6901205ed39fce3c177e895b34a8386b9c
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8880/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
   # --- Reserved for later stories (uncomment when the story lands) ---
   # minio:      # S3-compatible object storage (profile "minio")
   #   profiles: ["minio"]
-  # kokoro:     # local text-to-speech (profile "kokoro")
-  #   profiles: ["kokoro"]
   # langfuse:   # LLM tracing (profile "langfuse")
   #   profiles: ["langfuse"]
 

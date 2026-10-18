@@ -47,7 +47,7 @@ async def test_lists_elevenlabs_voices(app: FastAPI, authed: AsyncClient) -> Non
 async def test_openai_voices_need_no_network(app: FastAPI, authed: AsyncClient) -> None:
     configure(app, openai_api_key=SecretStr("sk-env-key-0123456789"))
 
-    response = await authed.get("/api/voices")  # openai is the default
+    response = await authed.get("/api/voices", params={"provider": "openai"})
 
     assert response.status_code == 200
     assert "alloy" in {v["id"] for v in response.json()}
@@ -74,7 +74,7 @@ async def test_unconfigured_provider_is_a_conflict(authed: AsyncClient) -> None:
 
 
 async def test_only_tts_providers_are_accepted(authed: AsyncClient) -> None:
-    assert (await authed.get("/api/voices", params={"provider": "kokoro"})).status_code == 422
+    assert (await authed.get("/api/voices", params={"provider": "langfuse"})).status_code == 422
 
 
 @respx.mock
@@ -90,3 +90,87 @@ async def test_upstream_failures_are_a_bad_gateway(app: FastAPI, authed: AsyncCl
 
 async def test_requires_a_session(client: AsyncClient) -> None:
     assert (await client.get("/api/voices")).status_code == 401
+
+
+KOKORO = "http://kokoro:8880/v1"
+
+
+@respx.mock
+async def test_lists_kokoro_voices(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, kokoro_base_url=KOKORO)
+    respx.get(f"{KOKORO}/audio/voices").respond(200, json={"voices": ["af_bella", "bm_george"]})
+
+    response = await authed.get("/api/voices", params={"provider": "kokoro"})
+
+    assert response.status_code == 200
+    assert [(v["id"], v["name"], v["language"], v["gender"]) for v in response.json()] == [
+        ("af_bella", "Bella", "en-US", "female"),
+        ("bm_george", "George", "en-GB", "male"),
+    ]
+
+
+@respx.mock
+async def test_kokoro_can_be_configured_through_the_integrations_api(
+    authed: AsyncClient,
+) -> None:
+    await authed.put("/api/integrations/kokoro", json={"base_url": KOKORO})
+    respx.get(f"{KOKORO}/audio/voices").respond(200, json={"voices": ["af_bella"]})
+
+    response = await authed.get("/api/voices", params={"provider": "kokoro"})
+
+    assert response.status_code == 200 and response.json()[0]["id"] == "af_bella"
+
+
+@respx.mock
+async def test_voices_without_a_provider_use_the_default(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, kokoro_base_url=KOKORO)
+    respx.get(f"{KOKORO}/audio/voices").respond(200, json={"voices": ["af_bella"]})
+
+    response = await authed.get("/api/voices")
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "af_bella"
+
+
+async def test_voices_without_a_provider_and_nothing_configured(authed: AsyncClient) -> None:
+    response = await authed.get("/api/voices")
+
+    assert response.status_code == 409
+    assert "No text-to-speech provider" in response.json()["detail"]
+
+
+@respx.mock
+async def test_default_provider_is_kokoro_without_paid_keys(
+    app: FastAPI, authed: AsyncClient
+) -> None:
+    configure(app, kokoro_base_url=KOKORO)
+    respx.get(f"{KOKORO}/audio/voices").respond(200, json={"voices": []})
+
+    assert (await authed.get("/api/voices/default-provider")).json() == {"provider": "kokoro"}
+
+
+async def test_default_provider_prefers_a_paid_key(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, openai_api_key=SecretStr("sk-env-key-0123456789"), kokoro_base_url=KOKORO)
+
+    assert (await authed.get("/api/voices/default-provider")).json() == {"provider": "openai"}
+
+
+async def test_default_provider_is_null_when_nothing_is_usable(authed: AsyncClient) -> None:
+    assert (await authed.get("/api/voices/default-provider")).json() == {"provider": None}
+
+
+async def test_default_provider_requires_a_session(client: AsyncClient) -> None:
+    assert (await client.get("/api/voices/default-provider")).status_code == 401
+
+
+@respx.mock
+async def test_an_empty_voice_list_is_not_cached(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, kokoro_base_url=KOKORO)
+    route = respx.get(f"{KOKORO}/audio/voices")
+    route.respond(200, json={"voices": []})
+    assert (await authed.get("/api/voices", params={"provider": "kokoro"})).json() == []
+
+    route.respond(200, json={"voices": [{"id": "af_bella"}]})
+    response = await authed.get("/api/voices", params={"provider": "kokoro"})
+
+    assert [v["id"] for v in response.json()] == ["af_bella"]

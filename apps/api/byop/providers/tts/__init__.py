@@ -10,6 +10,7 @@ from byop.providers.tts.base import (
 )
 from byop.providers.tts.elevenlabs_tts import ElevenLabsTTS
 from byop.providers.tts.errors import AudioConversionError, TTSError, TTSParamError
+from byop.providers.tts.kokoro_tts import KokoroTTS
 from byop.providers.tts.openai_tts import OPENAI_BASE_URL, OpenAITTS
 from byop.providers.tts.openrouter_tts import OpenRouterTTS
 from byop.services.credentials import ProviderConfig
@@ -19,6 +20,7 @@ TTS_PROVIDERS = (
     CredentialProvider.OPENAI,
     CredentialProvider.ELEVENLABS,
     CredentialProvider.OPENROUTER,
+    CredentialProvider.KOKORO,
 )
 
 
@@ -36,6 +38,10 @@ def get_tts(
     """Build the TTS client for `provider` from resolved credentials."""
     if provider not in TTS_PROVIDERS:
         raise UnsupportedTTSProvider(f"'{provider.value}' is not a TTS provider")
+    if provider is CredentialProvider.KOKORO:
+        if not config.base_url:
+            raise UnsupportedTTSProvider("Kokoro needs a base URL")
+        return KokoroTTS(base_url=config.base_url, timeout_s=timeout_s, retry=retry)
     if config.api_key is None:
         raise UnsupportedTTSProvider(f"{provider.value} needs an API key")
     key = config.api_key.get_secret_value()
@@ -60,6 +66,7 @@ __all__ = [
     "AudioFormat",
     "CallMetadata",
     "ElevenLabsTTS",
+    "KokoroTTS",
     "OpenAITTS",
     "OpenRouterTTS",
     "ProviderQuirks",

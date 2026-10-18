@@ -8,13 +8,21 @@ from byop.api.integrations import ResolverDep
 from byop.models.enums import CredentialProvider
 from byop.providers.tts import TTSError, UnsupportedTTSProvider, get_tts
 from byop.redis_client import get_redis
-from byop.schemas.voices import VoiceResponse
+from byop.schemas.voices import DefaultProviderResponse, VoiceResponse
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
+from byop.services.defaults import default_tts_provider
 from byop.services.voices import list_voices_cached
 
 router = APIRouter(prefix="/voices", tags=["voices"])
 
-TTSProviderName = Literal["openai", "elevenlabs", "openrouter"]
+TTSProviderName = Literal["openai", "elevenlabs", "openrouter", "kokoro"]
+
+
+@router.get("/default-provider", response_model=DefaultProviderResponse)
+async def get_default_provider(user: CurrentUser, resolver: ResolverDep) -> DefaultProviderResponse:
+    """The TTS provider to preselect: a configured paid one, else Kokoro when it is running."""
+    default = await default_tts_provider(resolver, user.id)
+    return DefaultProviderResponse(provider=default.value if default else None)
 
 
 @router.get("", response_model=list[VoiceResponse])
@@ -22,10 +30,21 @@ async def list_voices(
     user: CurrentUser,
     resolver: ResolverDep,
     redis: Annotated[Redis, Depends(get_redis)],
-    provider: Annotated[TTSProviderName, Query()] = "openai",
+    provider: Annotated[TTSProviderName | None, Query()] = None,
 ) -> list[VoiceResponse]:
-    """Voices offered by a text-to-speech provider (cached for an hour)."""
-    name = CredentialProvider(provider)
+    """Voices offered by a text-to-speech provider (cached for an hour).
+
+    Without `provider` the default one is used (see `/voices/default-provider`).
+    """
+    if provider is None:
+        default = await default_tts_provider(resolver, user.id)
+        if default is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "No text-to-speech provider is configured"
+            )
+        name = default
+    else:
+        name = CredentialProvider(provider)
     try:
         config = await resolver.get(user.id, name)
         tts = get_tts(name, config)

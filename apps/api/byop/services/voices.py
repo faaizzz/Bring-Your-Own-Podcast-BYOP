@@ -46,5 +46,6 @@ async def list_voices_cached(redis: Redis, tts: TTSProvider, config: ProviderCon
             log.warning("voices_cache_corrupt")
 
     voices = await tts.list_voices()
-    await cache.write(redis, key, _encode(voices), CACHE_TTL_SECONDS)
+    if voices:  # never pin an empty answer (e.g. a server still loading) for an hour
+        await cache.write(redis, key, _encode(voices), CACHE_TTL_SECONDS)
     return voices

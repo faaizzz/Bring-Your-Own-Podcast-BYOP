@@ -60,14 +60,16 @@ class OpenAITTS(TTSProvider):
             "voice": voice_id,
             "response_format": audio_format.api_value,
         }
-        for optional in ("speed", "instructions"):
-            if optional in params:
-                payload[optional] = params[optional]
+        # Params were validated against `quirks.supported_params`, so forward every extra one.
+        payload.update({k: v for k, v in params.items() if k not in {"model", "format"}})
         return AudioRequest(
             url=f"{self._base_url}/audio/speech",
             json=payload,
-            headers={"Authorization": f"Bearer {self._api_key}"},
+            headers=self.auth_headers(),
         )
+
+    def auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._api_key}"}
 
     async def list_voices(self) -> list[Voice]:
         return [Voice(id=voice, name=voice.capitalize()) for voice in OPENAI_VOICES]

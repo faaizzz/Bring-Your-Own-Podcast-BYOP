@@ -10,6 +10,7 @@ from byop.providers.common import CallMetadata
 from byop.providers.tts import (
     CANONICAL_SAMPLE_RATE,
     ElevenLabsTTS,
+    KokoroTTS,
     OpenAITTS,
     OpenRouterTTS,
     TTSError,
@@ -49,6 +50,13 @@ CASES = [
         "https://openrouter.ai/api/v1/audio/speech",
         "alloy",
         {"model": "openai/gpt-4o-mini-tts"},
+    ),
+    Case(
+        "kokoro",
+        lambda: KokoroTTS(base_url="http://kokoro:8880/v1", retry=FAST_RETRY),
+        "http://kokoro:8880/v1/audio/speech",
+        "af_bella",
+        {},
     ),
 ]
 every_provider = pytest.mark.parametrize("case", CASES, ids=lambda c: c.name)

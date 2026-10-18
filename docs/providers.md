@@ -97,6 +97,7 @@ temporary files are left behind on failure.
 | `openai` | `OpenAITTS` | `POST /audio/speech` | 4096 | `model`, `speed`, `instructions`, `format` |
 | `elevenlabs` | `ElevenLabsTTS` | `POST /v1/text-to-speech/{voice_id}` | 5000 | `model_id`, `stability`, `similarity_boost`, `style`, `speed`, `use_speaker_boost`, `language_code`, `seed`, `format` |
 | `openrouter` | `OpenRouterTTS` | `POST /audio/speech` on OpenRouter | 4096 | `model` (required), `speed`, `instructions`, `format` |
+| `kokoro` | `KokoroTTS` | `POST /v1/audio/speech` on a local Kokoro server | 4000 | `speed`, `lang_code`, `volume_multiplier`, `format` |
 
 `format` is `pcm` (default) or `mp3`. Each provider's limits, formats, accepted
 parameters and timeout are declared once, in its `ProviderQuirks`; unsupported
@@ -104,8 +105,33 @@ parameters or over-long text raise `TTSParamError` before any request is sent
 (splitting long scripts is the synthesis stage's job). Failures raise `TTSError`;
 429, 5xx and network errors are retried like LLM calls.
 
-`GET /api/voices?provider=openai|elevenlabs|openrouter` returns `id`, `name`,
+`GET /api/voices?provider=openai|elevenlabs|openrouter|kokoro` returns `id`, `name`,
 `language`, `gender` and `preview_url`, cached for an hour per credential. OpenAI
 and OpenRouter have no voice-listing endpoint, so their built-in voice names are
-listed statically. Adding a provider means one new subclass with its quirks plus a
+listed statically; Kokoro's come from the server and are decoded from their ids
+(`af_bella` = American English, female). Without `provider` the default one is used,
+and `GET /api/voices/default-provider` tells the UI which to preselect: the first
+configured paid provider (ElevenLabs, OpenAI, OpenRouter), else Kokoro when its server
+answers, else `null`. Adding a provider means one new subclass with its quirks plus a
 line in `get_tts`; nothing else branches on the provider.
+
+### Local voices with Kokoro (no API key)
+
+The whole product can run without any paid key. The `kokoro` compose profile starts an
+open-source [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) server (CPU image,
+pinned by tag and digest in `docker-compose.yml`) that speaks the OpenAI speech API:
+
+```sh
+docker compose --profile kokoro up -d      # or: make up-kokoro
+curl -b cookies.txt "http://localhost:8080/api/voices?provider=kokoro"
+```
+
+The api, worker and beat containers reach it at `http://kokoro:8880/v1`; set
+`KOKORO_BASE_URL` (or `PUT /api/integrations/kokoro`) to use another server instead. The
+first start downloads the model, so allow a minute before the health check passes, and CPU
+synthesis is slower than a hosted API (the adapter's timeout is five minutes). `make down`
+stops the profile too.
+
+**GPU:** the compose file only ships the CPU image. For an NVIDIA GPU use the
+`ghcr.io/remsky/kokoro-fastapi-gpu` image and a `deploy.resources.reservations.devices`
+entry in a `docker-compose.override.yml`; no BYOP code changes are needed.

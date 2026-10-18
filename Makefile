@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down logs migrate deps test lint typecheck check fmt
+.PHONY: help up up-kokoro down logs migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
@@ -12,8 +12,12 @@ up: ## Build and start the whole stack, wait until healthy
 	./scripts/ensure-env.sh
 	$(COMPOSE) up -d --build --wait
 
+up-kokoro: ## Like `up`, plus the local Kokoro text-to-speech service
+	./scripts/ensure-env.sh
+	$(COMPOSE) --profile kokoro up -d --build --wait
+
 down: ## Stop the stack (keeps volumes)
-	$(COMPOSE) down
+	$(COMPOSE) --profile kokoro down
 
 logs: ## Follow logs of all services
 	$(COMPOSE) logs -f --tail=100
