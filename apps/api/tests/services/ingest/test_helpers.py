@@ -29,6 +29,16 @@ from byop.services.ingest.language import detect_language, matches_language
             "https://example.com/s?utm_source=x&id=7&utm_medium=y&fbclid=abc&gclid=1",
             "https://example.com/s?id=7",
         ),
+        (
+            "https://www.bbc.co.uk/news/articles/c8vg?at_campaign=rss&at_medium=RSS&at_custom1=x",
+            "https://bbc.co.uk/news/articles/c8vg",
+        ),
+        (
+            "https://example.com/p?pk_campaign=a&mtm_source=b&id=9&si=abc",
+            "https://example.com/p?id=9",
+        ),
+        # parameters that can identify content are kept
+        ("https://example.com/p?cid=77&source=feed", "https://example.com/p?cid=77&source=feed"),
         ("https://example.com/s?b=2&a=1", "https://example.com/s?a=1&b=2"),
         ("https://example.com/s?a=1&utm_campaign=z#top", "https://example.com/s?a=1"),
         ("https://example.com/s?UTM_Source=x&ref=twitter&page=2", "https://example.com/s?page=2"),
