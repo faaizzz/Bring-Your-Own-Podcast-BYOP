@@ -1,13 +1,42 @@
-.PHONY: check test lint typecheck
+.DEFAULT_GOAL := help
+.PHONY: help up down logs migrate test lint typecheck check fmt
 
-# Placeholder targets: story #2 replaces these with the full set (up, down, logs, ...).
-check: lint typecheck test
+COMPOSE ?= docker compose
+API_DIR := apps/api
+WEB_DIR := apps/web
 
-lint:
-	@echo "lint: nothing to lint yet"
+help: ## Show available targets
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
 
-typecheck:
-	@echo "typecheck: nothing to typecheck yet"
+up: ## Build and start the whole stack, wait until healthy
+	./scripts/ensure-env.sh
+	$(COMPOSE) up -d --build --wait
 
-test:
+down: ## Stop the stack (keeps volumes)
+	$(COMPOSE) down
+
+logs: ## Follow logs of all services
+	$(COMPOSE) logs -f --tail=100
+
+migrate: ## Apply database migrations
+	@if [ -f $(API_DIR)/alembic.ini ]; then \
+		$(COMPOSE) run --rm api alembic upgrade head; \
+	else \
+		echo "migrate: no migrations yet"; \
+	fi
+
+lint: ## Lint api and web
+	cd $(API_DIR) && uv run ruff check . && uv run ruff format --check .
+
+typecheck: ## Typecheck api
+	cd $(API_DIR) && uv run mypy
+
+test: ## Run repo checks, api tests and web tests
 	./scripts/check-repo.sh
+	cd $(API_DIR) && uv run pytest -q
+	cd $(WEB_DIR) && npm test --silent
+
+check: lint typecheck test ## lint + typecheck + test
+
+fmt: ## Format code
+	cd $(API_DIR) && uv run ruff check --fix . && uv run ruff format .

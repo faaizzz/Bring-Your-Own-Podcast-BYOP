@@ -17,7 +17,21 @@ and text-to-speech keys (or run everything locally) and keep full control.
 
 ## Quickstart
 
-_Coming soon — the docker compose quickstart lands with the first runnable stack._
+Requires Docker with the compose plugin.
+
+```sh
+cp .env.example .env   # optional: `make up` creates it and generates BYOP_SECRET_KEY
+make up                # builds and starts postgres, redis, api, worker, beat, web
+```
+
+Open <http://localhost:8080>; the API health check is at
+<http://localhost:8080/api/health>. Every variable is documented in
+[`.env.example`](.env.example). Other targets: `make down`, `make logs`,
+`make migrate`, `make check` (lint + typecheck + tests), `make fmt`.
+
+`docker-compose.override.yml` bind-mounts the API source for hot reload in
+development; for a production-like run use
+`docker compose -f docker-compose.yml up -d --build`.
 
 ## Roadmap
 

@@ -67,7 +67,7 @@ New directories or modules must follow these names; update this section if the l
 - `make check` = lint + typecheck + tests for every part of the repo that exists. It must pass before each commit.
 
 ## Commands
-`make up|down|logs|migrate|test|lint|typecheck|check|fmt` (full set arrives with story #2). Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
+`make up|down|logs|migrate|test|lint|typecheck|check|fmt` (`make help` lists them). `make up` creates `.env` from `.env.example` and generates `BYOP_SECRET_KEY` if empty; `docker-compose.override.yml` adds dev hot reload. Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
 
 ## Configuration
 All configuration comes from environment variables documented in `.env.example` (single source of truth). Adding or changing a variable means updating `.env.example`, the README/docs and this file together.

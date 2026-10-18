@@ -1,0 +1,15 @@
+# Development overrides, applied automatically by `docker compose` (and `make up`).
+# For a production-like run use: docker compose -f docker-compose.yml up -d
+x-dev-source: &dev-source
+  volumes:
+    - ./apps/api:/app
+    - media:/data/media
+
+services:
+  api:
+    <<: *dev-source
+    command: ["uvicorn", "byop.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+  worker:
+    <<: *dev-source
+  beat:
+    <<: *dev-source

@@ -1,0 +1,114 @@
+# BYOP local stack: `cp .env.example .env && make up`, then open http://localhost:8080
+x-api: &api
+  build:
+    context: .
+    dockerfile: docker/api.Dockerfile
+  image: byop-api:local
+  env_file:
+    - path: .env
+      required: false
+  environment: &api-env
+    DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://byop:byop@postgres:5432/byop}
+    REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    MEDIA_ROOT: /data/media
+  volumes:
+    - media:/data/media
+  depends_on: &api-deps
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-byop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-byop}
+      POSTGRES_DB: ${POSTGRES_DB:-byop}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    <<: *api
+    command: ["uvicorn", "byop.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    <<: *api
+    command: ["celery", "-A", "byop.worker", "worker", "--loglevel=info", "--hostname=worker@%h"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A byop.worker inspect ping -d worker@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+  beat:
+    <<: *api
+    command: ["celery", "-A", "byop.worker", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+    healthcheck:
+      # Beat exposes no ping; check that its process is alive.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import glob,sys; sys.exit(0 if any(b'celery' in (c:=open(p,'rb').read()) and b'bea'+b't' in c for p in glob.glob('/proc/[0-9]*/cmdline')) else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: byop-web:local
+    ports:
+      - "${BYOP_WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Reserved for later stories (uncomment when the story lands) ---
+  # minio:      # S3-compatible object storage (profile "minio")
+  #   profiles: ["minio"]
+  # kokoro:     # local text-to-speech (profile "kokoro")
+  #   profiles: ["kokoro"]
+  # langfuse:   # LLM tracing (profile "langfuse")
+  #   profiles: ["langfuse"]
+
+volumes:
+  pgdata:
+  media:
