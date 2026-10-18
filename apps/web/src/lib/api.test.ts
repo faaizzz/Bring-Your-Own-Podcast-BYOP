@@ -93,3 +93,26 @@ describe('api client', () => {
     await expect(api.get('/health', { schema })).rejects.toThrow('unexpected response');
   });
 });
+
+describe('api client blobs', () => {
+  it('returns the raw body when asked for a blob', async () => {
+    mockFetch(new Response('audio-bytes', { headers: { 'Content-Type': 'audio/mpeg' } }));
+
+    const blob = await api.post<Blob>(
+      '/voices/preview',
+      { provider: 'kokoro' },
+      { responseType: 'blob' },
+    );
+
+    expect(blob.type).toBe('audio/mpeg');
+    expect(await blob.text()).toBe('audio-bytes');
+  });
+
+  it('still reports JSON errors for blob requests', async () => {
+    mockFetch(json({ detail: 'No provider' }, { status: 409 }));
+
+    await expect(
+      api.post<Blob>('/voices/preview', {}, { responseType: 'blob' }),
+    ).rejects.toMatchObject({ status: 409, message: 'No provider' });
+  });
+});

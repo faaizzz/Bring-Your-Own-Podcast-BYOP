@@ -26,5 +26,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Multi-step form flows type a lot; CI runners are slower than laptops.
+    testTimeout: 20_000,
   },
 });

@@ -236,7 +236,16 @@ async def test_list_has_counts_last_run_and_next_run(
     )
     db_session.add_all(
         [older, newer]
-        + [Episode(user_id=admin_user.id, show_id=busy.id, title=f"Ep {n}") for n in range(3)]
+        + [Episode(user_id=admin_user.id, show_id=busy.id, title=f"Ep {n}") for n in range(2)]
+        + [
+            Episode(
+                user_id=admin_user.id,
+                show_id=busy.id,
+                title="Live",
+                status=EpisodeStatus.PUBLISHED,
+                published_at=datetime(2027, 5, 6, 7, 0, tzinfo=UTC),
+            )
+        ]
     )
     await db_session.flush()
 
@@ -246,6 +255,8 @@ async def test_list_has_counts_last_run_and_next_run(
     by_slug = {s["slug"]: s for s in response.json()}
     assert by_slug["busy"]["episode_count"] == 3
     assert by_slug["busy"]["last_run_status"] == "succeeded"
+    assert by_slug["busy"]["last_episode_at"].startswith("2027-05-06T07:00")
+    assert by_slug["quiet"]["last_episode_at"] is None
     assert by_slug["busy"]["next_run_at"].startswith("2030-01-01T08:00")
     assert by_slug["quiet"]["episode_count"] == 0
     assert by_slug["quiet"]["last_run_status"] is None

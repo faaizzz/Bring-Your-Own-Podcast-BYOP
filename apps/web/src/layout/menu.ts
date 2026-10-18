@@ -46,5 +46,8 @@ export const menuItems: MenuItem[] = menu.flatMap((group) => group.items);
 
 export function findMenuItem(pathname: string): MenuItem | undefined {
   const normalised = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  return menuItems.find((item) => item.url === normalised);
+  const exact = menuItems.find((item) => item.url === normalised);
+  if (exact) return exact;
+  // Child pages (/shows/new, /shows/:id) belong to their section.
+  return menuItems.find((item) => item.url !== '/' && normalised.startsWith(`${item.url}/`));
 }

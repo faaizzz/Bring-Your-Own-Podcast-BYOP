@@ -191,6 +191,8 @@ class ShowResponse(BaseModel):
 
     episode_count: int
     last_run_status: RunStatus | None
+    # When the newest episode was published (or created, for a draft).
+    last_episode_at: datetime | None
     created_at: datetime
     updated_at: datetime
     # Non-blocking notes from the last create/update, e.g. a model that could not be verified.

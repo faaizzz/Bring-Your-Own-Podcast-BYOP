@@ -5,7 +5,9 @@ import { AdminLayout } from './layout/AdminLayout';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import HistoryPage from './pages/history/HistoryPage';
 import IntegrationsPage from './pages/settings/IntegrationsPage';
+import ShowDetailPage from './pages/shows/ShowDetailPage';
 import ShowsPage from './pages/shows/ShowsPage';
+import ShowWizardPage from './pages/shows/ShowWizardPage';
 import LoginPage from './pages/auth/LoginPage';
 import RequireAuth from './pages/auth/RequireAuth';
 
@@ -21,6 +23,8 @@ export function AppRoutes(): React.JSX.Element {
           <Route element={<AdminLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="shows" element={<ShowsPage />} />
+            <Route path="shows/new" element={<ShowWizardPage />} />
+            <Route path="shows/:showId/:tab?" element={<ShowDetailPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="costs" element={<CostsPage />} />
             <Route path="settings/integrations" element={<IntegrationsPage />} />

@@ -219,3 +219,18 @@ async def test_requires_a_session(client: AsyncClient) -> None:
     url = "/api/shows/00000000-0000-4000-8000-000000000000/speakers"
     assert (await client.get(url)).status_code == 401
     assert (await client.put(url, json=[])).status_code == 401
+
+
+async def test_the_wizard_can_fetch_the_default_hosts_before_a_show_exists(
+    app: FastAPI, authed: AsyncClient
+) -> None:
+    kokoro = await authed.get("/api/voices/default-speakers")
+    configure(app, openai_api_key=SecretStr("sk-env-key-0123456789"))
+    openai = await authed.get("/api/voices/default-speakers")
+
+    assert [(s["name"], s["tts_provider"]) for s in kokoro.json()] == [
+        ("Alex", "kokoro"),
+        ("Sam", "kokoro"),
+    ]
+    assert {s["tts_provider"] for s in openai.json()} == {"openai"}
+    assert openai.json()[0]["voice_params"] == {}

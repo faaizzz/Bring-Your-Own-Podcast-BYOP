@@ -41,7 +41,7 @@ function GroupItems({
       </li>
       {group.items.map(({ id, title, url, icon: Icon }) => (
         <li key={id} className="nav-item">
-          <NavLink to={url} end className="nav-link" onClick={onNavigate}>
+          <NavLink to={url} end={url === '/'} className="nav-link" onClick={onNavigate}>
             <span className="pcoded-micon">
               <Icon aria-hidden="true" />
             </span>

@@ -46,6 +46,7 @@ def _response(view: ShowView) -> ShowResponse:
         feed_explicit=show.feed_explicit,
         episode_count=view.episode_count,
         last_run_status=view.last_run_status,
+        last_episode_at=view.last_episode_at,
         created_at=show.created_at,
         updated_at=show.updated_at,
         warnings=view.warnings,

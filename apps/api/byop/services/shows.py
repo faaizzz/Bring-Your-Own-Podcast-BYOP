@@ -2,6 +2,7 @@ import re
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -49,6 +50,7 @@ class ShowView:
     show: Show
     episode_count: int
     last_run_status: RunStatus | None
+    last_episode_at: datetime | None
     slug_locked: bool
     warnings: list[str] = field(default_factory=list)
 
@@ -87,13 +89,23 @@ def _stats_query(user_id: uuid.UUID) -> Any:
         .correlate(Show)
         .scalar_subquery()
     )
+    last_episode_at = (
+        select(func.max(func.coalesce(Episode.published_at, Episode.created_at)))
+        .where(Episode.show_id == Show.id)
+        .correlate(Show)
+        .scalar_subquery()
+    )
     slug_locked = exists().where(Episode.show_id == Show.id, Episode.published_at.is_not(None))
-    return select(Show, episode_count, last_run_status, slug_locked).where(Show.user_id == user_id)
+    return select(Show, episode_count, last_run_status, last_episode_at, slug_locked).where(
+        Show.user_id == user_id
+    )
 
 
 def _view(row: Any, warnings: list[str] | None = None) -> ShowView:
-    show, count, last_status, locked = row
-    return ShowView(show, int(count or 0), last_status, bool(locked), warnings or [])
+    show, count, last_status, last_episode_at, locked = row
+    return ShowView(
+        show, int(count or 0), last_status, last_episode_at, bool(locked), warnings or []
+    )
 
 
 async def list_shows(session: AsyncSession, user_id: uuid.UUID) -> list[ShowView]:
@@ -201,7 +213,9 @@ async def create_show(
         )
     await session.commit()
     view = await get_show(session, user_id, show.id, refresh=True)
-    return ShowView(view.show, view.episode_count, view.last_run_status, False, warnings)
+    return ShowView(
+        view.show, view.episode_count, view.last_run_status, view.last_episode_at, False, warnings
+    )
 
 
 async def update_show(
@@ -252,7 +266,14 @@ async def update_show(
         await session.rollback()
         raise ShowConflict("The slug is already taken") from exc
     view = await get_show(session, user_id, show_id, refresh=True)
-    return ShowView(view.show, view.episode_count, view.last_run_status, view.slug_locked, warnings)
+    return ShowView(
+        view.show,
+        view.episode_count,
+        view.last_run_status,
+        view.last_episode_at,
+        view.slug_locked,
+        warnings,
+    )
 
 
 async def delete_show(

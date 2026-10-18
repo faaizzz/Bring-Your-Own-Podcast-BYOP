@@ -6,7 +6,12 @@ function requestUrl(input: RequestInfo | URL): URL {
   return new URL(raw, 'http://localhost');
 }
 
-export type MockRequest = { method: string; path: string; body: unknown };
+export type MockRequest = {
+  method: string;
+  path: string;
+  query: URLSearchParams;
+  body: unknown;
+};
 type Reply = { status?: number; body?: unknown };
 export type Handler = (request: MockRequest) => Reply;
 
@@ -17,7 +22,9 @@ export function mockApi(handlers: Record<string, Handler>) {
     const method = init?.method ?? 'GET';
     const handler = handlers[`${method} ${url.pathname}`];
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
-    const reply = handler ? handler({ method, path: url.pathname, body }) : { status: 404 };
+    const reply = handler
+      ? handler({ method, path: url.pathname, query: url.searchParams, body })
+      : { status: 404 };
     const status = reply.status ?? 200;
     const payload = status === 204 ? null : JSON.stringify(reply.body ?? { detail: 'Not found' });
     return Promise.resolve(

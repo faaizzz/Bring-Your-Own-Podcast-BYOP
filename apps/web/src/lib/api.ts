@@ -22,6 +22,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   /** Validates (and types) the JSON response. */
   schema?: ZodType;
+  /** `blob` returns the raw body (audio); errors are still read as JSON. */
+  responseType?: 'json' | 'blob';
 };
 
 function buildUrl(path: string, query: RequestOptions['query']): string {
@@ -63,7 +65,7 @@ export async function apiRequest<T = unknown>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, query, signal, schema } = options;
+  const { method = 'GET', body, query, signal, schema, responseType = 'json' } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -80,6 +82,8 @@ export async function apiRequest<T = unknown>(
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
     throw new ApiError('Cannot reach the server. Check your connection and try again.', 0, cause);
   }
+
+  if (response.ok && responseType === 'blob') return (await response.blob()) as T;
 
   const payload = await readBody(response);
   if (!response.ok) {

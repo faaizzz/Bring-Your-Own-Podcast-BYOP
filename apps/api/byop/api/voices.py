@@ -14,10 +14,11 @@ from byop.providers.tts import (
     voice_param_problems,
 )
 from byop.redis_client import get_redis
-from byop.schemas.speaker import TTSProviderName
+from byop.schemas.speaker import SpeakerIn, TTSProviderName
 from byop.schemas.voices import DefaultProviderResponse, VoicePreviewRequest, VoiceResponse
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
+from byop.services.speaker_defaults import default_speakers
 from byop.services.validation import error_detail, param_errors
 from byop.services.voice_preview import render_preview
 from byop.services.voices import list_voices_cached
@@ -30,6 +31,13 @@ async def get_default_provider(user: CurrentUser, resolver: ResolverDep) -> Defa
     """The TTS provider to preselect: a configured paid one, else Kokoro when it is running."""
     default = await default_tts_provider(resolver, user.id)
     return DefaultProviderResponse(provider=default.value if default else None)
+
+
+@router.get("/default-speakers", response_model=list[SpeakerIn])
+async def get_default_speakers(user: CurrentUser, resolver: ResolverDep) -> list[SpeakerIn]:
+    """The two hosts a new show starts with (what the create-show wizard pre-fills)."""
+    provider = await default_tts_provider(resolver, user.id) or CredentialProvider.KOKORO
+    return default_speakers(provider)
 
 
 @router.get("", response_model=list[VoiceResponse])

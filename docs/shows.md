@@ -32,6 +32,19 @@ another user's show is a `404`.
 - **Schedule fields** are stored as sent; `next_run_at` is computed by the scheduler
   and is read-only here.
 
+## In the app
+
+**Shows** lists one card per show (placeholder cover, schedule badge, last episode, next
+run); an empty list offers *Create your first show*. **New show** is a five-step wizard:
+Topic, Speakers & voices (1–4 speakers with searchable voice pickers, an inline preview
+player, per-provider voice settings and an optional fallback voice), Models (provider and
+model with the price per 1M tokens), Schedule, Review. A show opens at `/shows/<id>` with the
+tabs Overview, Sources, Episodes, Runs and Settings (Sources, Episodes and Runs are
+placeholders until those features land). *Settings* edits the same four steps as sections
+and holds *Delete show*. Client-side validation mirrors the API's rules; any 422 from the API
+is shown on the matching field and opens its step. `GET /api/voices/default-speakers` gives
+the wizard the two hosts it starts with.
+
 ## Speakers
 
 Each show has 1–4 speakers; the order is the speaking order. New shows start with two
