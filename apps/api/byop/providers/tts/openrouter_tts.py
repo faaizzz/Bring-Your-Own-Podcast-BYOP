@@ -19,6 +19,7 @@ class OpenRouterTTS(OpenAITTS):
         # There is no sensible default model: the caller must pick one OpenRouter offers.
         required_params=frozenset({"model"}),
         timeout_s=120.0,
+        param_specs=OpenAITTS.quirks.param_specs,
     )
     default_model: ClassVar[str | None] = None
 

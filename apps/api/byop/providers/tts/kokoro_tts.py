@@ -1,7 +1,7 @@
 from typing import ClassVar
 
 from byop.providers.common import RetryPolicy
-from byop.providers.tts.base import ProviderQuirks, Voice
+from byop.providers.tts.base import ParamSpec, ProviderQuirks, Voice
 from byop.providers.tts.openai_tts import OpenAITTS
 
 # Kokoro voice ids are `<language><gender>_<name>`, e.g. `af_bella` or `bm_george`.
@@ -44,6 +44,11 @@ class KokoroTTS(OpenAITTS):
         supported_params=frozenset({"speed", "lang_code", "volume_multiplier"}),
         # CPU synthesis is far slower than a hosted API.
         timeout_s=300.0,
+        param_specs={
+            "speed": ParamSpec("number", minimum=0.25, maximum=4.0),
+            "lang_code": ParamSpec("string", max_length=8),
+            "volume_multiplier": ParamSpec("number", minimum=0.0, maximum=4.0),
+        },
     )
     default_model: ClassVar[str | None] = "kokoro"
 

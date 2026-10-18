@@ -52,6 +52,21 @@ async def to_canonical_wav(source: Path, audio_format: AudioFormat, destination:
         "-ar", str(CANONICAL_SAMPLE_RATE), "-ac", "1", "-c:a", "pcm_s16le",
         str(destination),
     ]  # fmt: skip
+    await _run_ffmpeg(command)
+
+
+async def wav_to_mp3(source: Path, destination: Path) -> None:
+    """Encode `source` as a small mono MP3, good enough for voice previews."""
+    command = [
+        "ffmpeg", "-nostdin", "-y", "-loglevel", "error",
+        "-i", str(source),
+        "-ac", "1", "-c:a", "libmp3lame", "-b:a", "64k",
+        str(destination),
+    ]  # fmt: skip
+    await _run_ffmpeg(command)
+
+
+async def _run_ffmpeg(command: list[str]) -> None:
     try:
         process = await asyncio.create_subprocess_exec(
             *command, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE

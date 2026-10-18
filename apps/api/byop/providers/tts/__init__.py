@@ -1,8 +1,11 @@
+from collections.abc import Mapping
+
 from byop.models.enums import CredentialProvider
 from byop.providers.common import CallMetadata, RetryPolicy
-from byop.providers.tts.audio import CANONICAL_SAMPLE_RATE, AudioFormat
+from byop.providers.tts.audio import CANONICAL_SAMPLE_RATE, AudioFormat, wav_to_mp3
 from byop.providers.tts.base import (
     CANONICAL_FORMAT,
+    ParamSpec,
     ProviderQuirks,
     TTSProvider,
     TTSResult,
@@ -26,6 +29,40 @@ TTS_PROVIDERS = (
 
 class UnsupportedTTSProvider(ValueError):
     pass
+
+
+_CLASSES: dict[CredentialProvider, type[TTSProvider]] = {
+    CredentialProvider.OPENAI: OpenAITTS,
+    CredentialProvider.ELEVENLABS: ElevenLabsTTS,
+    CredentialProvider.OPENROUTER: OpenRouterTTS,
+    CredentialProvider.KOKORO: KokoroTTS,
+}
+
+
+def quirks_for(provider: CredentialProvider) -> ProviderQuirks:
+    """The declared limits and parameters of a TTS provider, without creating a client."""
+    if provider not in _CLASSES:
+        raise UnsupportedTTSProvider(f"'{provider.value}' is not a TTS provider")
+    return _CLASSES[provider].quirks
+
+
+def voice_param_problems(
+    provider: CredentialProvider, params: Mapping[str, object]
+) -> dict[str, str]:
+    """Parameter name -> problem for a speaker's `voice_params` (empty when they are fine).
+
+    Checks names, required ones, and types/bounds from the provider's `ProviderQuirks`
+    without creating a client. `format` is chosen by the pipeline, never by a speaker.
+    """
+    quirks = quirks_for(provider)
+    problems: dict[str, str] = {}
+    for key in sorted(set(params) - quirks.supported_params):
+        problems[key] = "is not supported by this provider"
+    for key in sorted(quirks.required_params - set(params)):
+        problems[key] = "is required for this provider"
+    supported = {k: v for k, v in params.items() if k in quirks.supported_params}
+    problems.update(quirks.value_problems(supported))
+    return problems
 
 
 def get_tts(
@@ -69,6 +106,7 @@ __all__ = [
     "KokoroTTS",
     "OpenAITTS",
     "OpenRouterTTS",
+    "ParamSpec",
     "ProviderQuirks",
     "RetryPolicy",
     "TTSError",
@@ -76,6 +114,9 @@ __all__ = [
     "TTSProvider",
     "TTSResult",
     "UnsupportedTTSProvider",
+    "quirks_for",
+    "voice_param_problems",
+    "wav_to_mp3",
     "Voice",
     "get_tts",
 ]

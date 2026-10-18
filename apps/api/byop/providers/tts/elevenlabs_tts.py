@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from byop.providers.common import RetryPolicy
 from byop.providers.tts.audio import AudioFormat
-from byop.providers.tts.base import AudioRequest, ProviderQuirks, TTSProvider, Voice
+from byop.providers.tts.base import AudioRequest, ParamSpec, ProviderQuirks, TTSProvider, Voice
 
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
 DEFAULT_MODEL = "eleven_multilingual_v2"
@@ -30,6 +30,16 @@ class ElevenLabsTTS(TTSProvider):
         default_format="pcm",
         supported_params=frozenset({"model_id", *_VOICE_SETTINGS, *_TOP_LEVEL}),
         timeout_s=120.0,
+        param_specs={
+            "model_id": ParamSpec("string", max_length=100),
+            "stability": ParamSpec("number", minimum=0.0, maximum=1.0),
+            "similarity_boost": ParamSpec("number", minimum=0.0, maximum=1.0),
+            "style": ParamSpec("number", minimum=0.0, maximum=1.0),
+            "speed": ParamSpec("number", minimum=0.7, maximum=1.2),
+            "use_speaker_boost": ParamSpec("boolean"),
+            "language_code": ParamSpec("string", max_length=16),
+            "seed": ParamSpec("integer", minimum=0, maximum=4294967295),
+        },
     )
 
     def __init__(

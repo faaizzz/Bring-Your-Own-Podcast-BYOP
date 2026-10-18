@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import anyio
 import httpx
@@ -56,6 +56,36 @@ class TTSResult:
 
 
 @dataclass(frozen=True)
+class ParamSpec:
+    """Type and bounds of one voice parameter."""
+
+    kind: Literal["number", "integer", "string", "boolean"]
+    minimum: float | None = None
+    maximum: float | None = None
+    max_length: int = 500  # strings only
+
+    def problem(self, value: object) -> str | None:
+        """Why `value` is not acceptable, or None."""
+        if self.kind == "boolean":
+            return None if isinstance(value, bool) else "must be true or false"
+        if self.kind == "string":
+            if not isinstance(value, str) or not value.strip():
+                return "must be a non-empty string"
+            if len(value) > self.max_length:
+                return f"must be at most {self.max_length} characters"
+            return None
+        is_number = isinstance(value, int | float) and not isinstance(value, bool)
+        if not is_number or (self.kind == "integer" and not isinstance(value, int)):
+            return "must be a whole number" if self.kind == "integer" else "must be a number"
+        number = float(value)  # type: ignore[arg-type]  # narrowed to int | float above
+        if self.minimum is not None and number < self.minimum:
+            return f"must be at least {self.minimum:g}"
+        if self.maximum is not None and number > self.maximum:
+            return f"must be at most {self.maximum:g}"
+        return None
+
+
+@dataclass(frozen=True)
 class ProviderQuirks:
     max_chars_per_request: int
     # What the API can return, by our format name ("pcm", "mp3"), and which one we ask for.
@@ -65,6 +95,17 @@ class ProviderQuirks:
     supported_params: frozenset[str]
     required_params: frozenset[str] = frozenset()
     timeout_s: float = 120.0
+    # Types and bounds for `supported_params`; a parameter without a spec is not checked.
+    param_specs: Mapping[str, ParamSpec] = field(default_factory=dict)
+
+    def value_problems(self, params: Mapping[str, object]) -> dict[str, str]:
+        """Parameter name -> why its value is unacceptable (supported parameters only)."""
+        problems: dict[str, str] = {}
+        for key, value in params.items():
+            spec = self.param_specs.get(key)
+            if spec is not None and (message := spec.problem(value)):
+                problems[key] = message
+        return problems
 
 
 @dataclass(frozen=True)
@@ -138,6 +179,9 @@ class TTSProvider(ABC):
         missing = quirks.required_params - set(params)
         if missing:
             raise TTSParamError(f"{self.name} requires parameter(s): {', '.join(sorted(missing))}")
+        if problems := quirks.value_problems(params):
+            key, message = next(iter(sorted(problems.items())))
+            raise TTSParamError(f"{self.name} parameter '{key}' {message}")
         format_name = str(params.get("format", quirks.default_format))
         if format_name not in quirks.formats:
             raise TTSParamError(

@@ -111,7 +111,7 @@ temporary files are left behind on failure.
 | `kokoro` | `KokoroTTS` | `POST /v1/audio/speech` on a local Kokoro server | 4000 | `speed`, `lang_code`, `volume_multiplier`, `format` |
 
 `format` is `pcm` (default) or `mp3`. Each provider's limits, formats, accepted
-parameters and timeout are declared once, in its `ProviderQuirks`; unsupported
+parameters (with type and range, `ParamSpec`) and timeout are declared once, in its `ProviderQuirks`; unsupported
 parameters or over-long text raise `TTSParamError` before any request is sent
 (splitting long scripts is the synthesis stage's job). Failures raise `TTSError`;
 429, 5xx and network errors are retried like LLM calls.
@@ -123,7 +123,7 @@ listed statically; Kokoro's come from the server and are decoded from their ids
 (`af_bella` = American English, female). Without `provider` the default one is used,
 and `GET /api/voices/default-provider` tells the UI which to preselect: the first
 configured paid provider (ElevenLabs, OpenAI, OpenRouter), else Kokoro when its server
-answers, else `null`. Adding a provider means one new subclass with its quirks plus a
+answers, else `null`. Speaker voice settings are validated from the same declarations (`voice_param_problems`) and clips can be auditioned with `POST /api/voices/preview` (see [shows](shows.md#voice-preview)). Adding a provider means one new subclass with its quirks plus a
 line in `get_tts`; nothing else branches on the provider.
 
 ### Local voices with Kokoro (no API key)

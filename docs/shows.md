@@ -32,6 +32,43 @@ another user's show is a `404`.
 - **Schedule fields** are stored as sent; `next_run_at` is computed by the scheduler
   and is read-only here.
 
+## Speakers
+
+Each show has 1–4 speakers; the order is the speaking order. New shows start with two
+hosts (Alex and Sam) on the default TTS provider: the first configured paid provider,
+else Kokoro (see [providers](providers.md#text-to-speech)).
+
+| Method | Path | |
+| --- | --- | --- |
+| `GET` | `/api/shows/{id}/speakers` | The ordered list |
+| `PUT` | `/api/shows/{id}/speakers` | Replace the whole list (a JSON array of 1–4 speakers) |
+
+A speaker has `name` (unique within the show, case-insensitive), `persona` (role and
+speaking style given to the script writer), `tts_provider` (`openai`, `elevenlabs`,
+`openrouter`, `kokoro`), `voice_id`, `voice_params`, and an optional fallback pair
+`fallback_tts_provider` + `fallback_voice_id` used if the main provider fails.
+
+`voice_params` are checked against the provider's declared parameters (name, type and
+range, e.g. OpenAI `speed` 0.25–4, ElevenLabs `stability` 0–1, OpenRouter requires
+`model`). A fallback carries no parameters, so a provider that requires one (OpenRouter)
+cannot be a fallback. Problems come back as `422` with one entry per field, located like
+FastAPI's own errors, e.g. `{"loc": ["body", 1, "voice_params", "speed"], "msg": "must be at most 4"}`.
+Replacing keeps the ids of speakers that stay in the same position.
+
+## Voice preview
+
+`POST /api/voices/preview` with `{"provider", "voice_id", "params"?, "text"?}` returns a
+short `audio/mpeg` clip (the default sentence, or up to 300 characters of `text`). Clips
+are cached in media storage under `previews/<sha256>.mp3`, keyed by provider, voice,
+parameters and text, so repeating a request costs nothing. Parameters are validated like
+speaker `voice_params`.
+
+```sh
+curl -b cookies.txt -H 'content-type: application/json' -o preview.mp3 \
+  -d '{"provider":"kokoro","voice_id":"af_bella","params":{"speed":1.1}}' \
+  http://localhost:8080/api/voices/preview
+```
+
 ## Media
 
 Everything a show owns lives under the storage prefix `shows/<show id>/` (below

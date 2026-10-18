@@ -1,21 +1,28 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from redis.asyncio import Redis
 
-from byop.api.deps import CurrentUser
+from byop.api.deps import CurrentUser, StorageDep
 from byop.api.integrations import ResolverDep
 from byop.models.enums import CredentialProvider
-from byop.providers.tts import TTSError, UnsupportedTTSProvider, get_tts
+from byop.providers.tts import (
+    TTSError,
+    TTSParamError,
+    UnsupportedTTSProvider,
+    get_tts,
+    voice_param_problems,
+)
 from byop.redis_client import get_redis
-from byop.schemas.voices import DefaultProviderResponse, VoiceResponse
+from byop.schemas.speaker import TTSProviderName
+from byop.schemas.voices import DefaultProviderResponse, VoicePreviewRequest, VoiceResponse
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
+from byop.services.validation import error_detail, param_errors
+from byop.services.voice_preview import render_preview
 from byop.services.voices import list_voices_cached
 
 router = APIRouter(prefix="/voices", tags=["voices"])
-
-TTSProviderName = Literal["openai", "elevenlabs", "openrouter", "kokoro"]
 
 
 @router.get("/default-provider", response_model=DefaultProviderResponse)
@@ -68,3 +75,38 @@ async def list_voices(
         )
         for v in voices
     ]
+
+
+@router.post("/preview", response_class=Response, responses={200: {"content": {"audio/mpeg": {}}}})
+async def preview_voice(
+    body: VoicePreviewRequest, user: CurrentUser, resolver: ResolverDep, storage: StorageDep
+) -> Response:
+    """A short MP3 of a voice with the given parameters. Identical requests are cached."""
+    name = CredentialProvider(body.provider)
+    if problems := voice_param_problems(name, body.params):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=error_detail(param_errors(("body", "params"), problems)),
+        )
+    try:
+        config = await resolver.get(user.id, name)
+        tts = get_tts(name, config)
+    except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedTTSProvider) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    try:
+        try:
+            clip = await render_preview(
+                storage, tts, voice_id=body.voice_id, params=body.params, text=body.text
+            )
+        finally:
+            await tts.aclose()
+    except TTSParamError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    except TTSError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Could not create the preview: {exc}"
+        ) from exc
+    return Response(
+        clip, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=3600"}
+    )

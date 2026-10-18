@@ -3,7 +3,7 @@ from typing import ClassVar
 
 from byop.providers.common import RetryPolicy
 from byop.providers.tts.audio import AudioFormat
-from byop.providers.tts.base import AudioRequest, ProviderQuirks, TTSProvider, Voice
+from byop.providers.tts.base import AudioRequest, ParamSpec, ProviderQuirks, TTSProvider, Voice
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini-tts"
@@ -13,6 +13,12 @@ OPENAI_VOICES = (
     "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx",
     "sage", "shimmer", "verse",
 )  # fmt: skip
+
+OPENAI_PARAM_SPECS = {
+    "model": ParamSpec("string", max_length=200),
+    "speed": ParamSpec("number", minimum=0.25, maximum=4.0),
+    "instructions": ParamSpec("string", max_length=2000),
+}
 
 _FORMATS = {
     # Raw 24 kHz signed 16-bit mono: needs only a WAV header.
@@ -31,6 +37,7 @@ class OpenAITTS(TTSProvider):
         default_format="pcm",
         supported_params=frozenset({"model", "speed", "instructions"}),
         timeout_s=120.0,
+        param_specs=OPENAI_PARAM_SPECS,
     )
     default_model: ClassVar[str | None] = DEFAULT_MODEL
 

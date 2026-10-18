@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Episode, Run, Show
+from byop.models import Episode, Run, Show, Speaker
 from byop.models.enums import CredentialProvider, RunStatus
 from byop.providers.llm import UnsupportedLLMProvider, get_llm
 from byop.schemas.show import ShowCreate, ShowUpdate, schedule_problem
@@ -20,7 +20,9 @@ from byop.services.credentials import (
     CredentialResolver,
     ProviderNotConfigured,
 )
+from byop.services.defaults import default_tts_provider
 from byop.services.models import list_models_cached
+from byop.services.speaker_defaults import default_speakers
 from byop.services.storage import Storage, show_prefix
 
 log = structlog.get_logger(__name__)
@@ -182,6 +184,21 @@ async def create_show(
             session.add(show)
     except IntegrityError as exc:  # lost a race for the slug
         raise ShowConflict(f"The slug '{slug}' is already taken") from exc
+    # Two hosts on the best available voice provider; the wizard lets the user change them.
+    provider = await default_tts_provider(resolver, user_id) or CredentialProvider.KOKORO
+    for position, speaker in enumerate(default_speakers(provider)):
+        session.add(
+            Speaker(
+                user_id=user_id,
+                show_id=show.id,
+                position=position,
+                name=speaker.name,
+                persona=speaker.persona,
+                tts_provider=speaker.tts_provider,
+                voice_id=speaker.voice_id,
+                voice_params=dict(speaker.voice_params),
+            )
+        )
     await session.commit()
     view = await get_show(session, user_id, show.id, refresh=True)
     return ShowView(view.show, view.episode_count, view.last_run_status, False, warnings)
