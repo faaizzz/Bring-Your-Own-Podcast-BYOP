@@ -11,7 +11,7 @@ voice previews) wrap the work in `capture_usage`.
 """
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import structlog
@@ -34,11 +34,17 @@ log = structlog.get_logger(__name__)
 class UsageCollector:
     """Holds the usage reported while it is the active sink, until it is written."""
 
-    def __init__(self) -> None:
+    def __init__(self, listener: Callable[[UsageRecord], None] | None = None) -> None:
         self._pending: list[UsageRecord] = []
+        self._listener = listener  # e.g. a tracer that wants to see the same calls
 
     def record(self, usage: UsageRecord) -> None:
         self._pending.append(usage)
+        if self._listener is not None:
+            try:
+                self._listener(usage)
+            except Exception:  # noqa: BLE001 - observers must never break the call they observe
+                log.warning("usage_listener_failed", exc_info=True)
 
     @property
     def pending(self) -> int:

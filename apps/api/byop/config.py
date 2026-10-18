@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
+    # Where *your browser* reaches Langfuse, if that differs from `langfuse_host` (which BYOP's
+    # own containers use): the trace links in the app are built from it.
+    langfuse_public_url: str | None = None
 
     # Sources are fetched from user-supplied URLs. By default only public internet addresses are
     # allowed; set this to reach feeds on your own network (e.g. a self-hosted RSS bridge).

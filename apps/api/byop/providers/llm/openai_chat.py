@@ -3,6 +3,7 @@
 import json
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -205,6 +206,7 @@ class OpenAIChatProvider(LLMProvider):
         metadata: CallMetadata | None = None,
     ) -> LLMResult[BaseModel]:
         started = time.perf_counter()
+        started_at = datetime.now(UTC)
         totals = _Totals()
         parsed: BaseModel | None = None
 
@@ -249,6 +251,10 @@ class OpenAIChatProvider(LLMProvider):
                 input_tokens=totals.usage.input_tokens,
                 output_tokens=totals.usage.output_tokens,
                 cost_usd=totals.cost,
+                started_at=started_at,
+                prompt=json.dumps([{"role": m.role, "content": m.content} for m in messages]),
+                completion=text,
+                tags=dict(meta.tags),
             )
         )
         return LLMResult(

@@ -25,6 +25,7 @@ from byop.pipeline.stages import finalize, ingest, mix, rank, script, tts
 from byop.pipeline.workdir import remove_work_dir
 from byop.providers.common import reset_usage_sink, set_usage_sink
 from byop.services.credentials import CredentialResolver
+from byop.services.langfuse import open_tracer
 from byop.services.ranking import release_items
 from byop.services.run_stream import announce
 from byop.services.usage import UsageCollector, refresh_run_totals
@@ -205,7 +206,9 @@ async def run_stage(
         progress_end=stage.end,
         redis=redis,
     )
-    collector = UsageCollector()
+    tracer = await open_tracer(session, context.resolver, run, show, stage.name)
+    await tracer.start()
+    collector = UsageCollector(listener=tracer.record)
     token = set_usage_sink(collector)
     try:
         try:
@@ -218,8 +221,10 @@ async def run_stage(
         await finish_cancelled(
             session, run, stage=stage.name, media_root=settings.media_root, redis=redis
         )
+        await tracer.finish("cancelled", "Run cancelled")
         return StageResult.CANCELLED
     except TransientStageError as exc:
+        await tracer.finish("retry", f"Will retry: {exc}")
         await _start_over(session, run)
         await add_event(
             session, run, f"Temporary problem, will retry: {exc}",
@@ -229,13 +234,16 @@ async def run_stage(
         await announce(redis, run.id)
         raise
     except StageFailed as exc:
+        message = str(exc)
+        await tracer.finish("failed", message)
         await _start_over(session, run, force=False)
         await fail_run(
-            session, run, str(exc), stage=stage.name, media_root=settings.media_root, redis=redis
+            session, run, message, stage=stage.name, media_root=settings.media_root, redis=redis
         )
         return StageResult.FAILED
     except Exception as exc:
         log.exception("stage_crashed", run_id=str(run_id), stage=stage.name)
+        await tracer.finish("failed", f"Unexpected error in {stage.name}: {type(exc).__name__}")
         await _start_over(session, run)
         await fail_run(
             session, run, f"Unexpected error in {stage.name}: {type(exc).__name__}: {exc}",
@@ -244,6 +252,7 @@ async def run_stage(
         return StageResult.FAILED
 
     await session.refresh(run, ["status"])
+    await tracer.finish("ok", last=run.status not in ACTIVE)
     if run.status in ACTIVE:  # the last stage ends the run itself; the others just advance it
         run.progress = max(run.progress, stage.end)
         await add_event(session, run, f"Finished {stage.name}", stage=stage.name)

@@ -31,8 +31,8 @@ function ev(message: string, ts: string, stage: string | null = null): RunEvent 
   return { id: `e${String(eventCount)}`, ts, level: 'info', stage, message, data: null };
 }
 
-function detail(patch: Partial<Run> = {}, events: RunEvent[] = []): RunDetail {
-  return { ...makeRun(patch), events };
+function detail(patch: Partial<RunDetail> = {}, events: RunEvent[] = []): RunDetail {
+  return { ...makeRun(patch), trace_url: null, events, ...patch };
 }
 
 function runApi(initial: RunDetail, extra: Record<string, Handler> = {}) {
@@ -157,6 +157,39 @@ describe('run page', () => {
     expect(within(log).getByText(/Episode published/)).toBeInTheDocument();
     expect(source.closed).toBe(true);
     expect(screen.queryByRole('button', { name: 'Cancel run' })).not.toBeInTheDocument();
+  });
+
+  it('links to the Langfuse trace and keeps the link while the stream updates the run', async () => {
+    const { handlers } = runApi({
+      ...detail({}, [ev('Run queued', '2026-01-01T10:00:00Z')]),
+      trace_url: 'http://localhost:3000/trace/abc123',
+    });
+    await renderApp('/runs/r1', { handlers });
+
+    const link = await screen.findByRole('link', { name: /Open trace in Langfuse/ });
+    expect(link).toHaveAttribute('href', 'http://localhost:3000/trace/abc123');
+    expect(link).toHaveAttribute('target', '_blank');
+    await waitFor(() => {
+      expect(FakeEventSource.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      FakeEventSource.last.emit('update', {
+        run: makeRun({ progress: 40, stage: 'script' }),
+        events: [ev('Started script', '2026-01-01T10:00:30Z', 'script')],
+      });
+    });
+
+    expect(await screen.findByText(/Started script/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open trace in Langfuse/ })).toBeInTheDocument();
+  });
+
+  it('shows no trace link for a run that is not traced', async () => {
+    const { handlers } = runApi(detail({}, [ev('Run queued', '2026-01-01T10:00:00Z')]));
+    await renderApp('/runs/r1', { handlers });
+
+    await screen.findByTestId('run-status');
+    expect(screen.queryByRole('link', { name: /Langfuse/ })).not.toBeInTheDocument();
   });
 
   it('does not repeat log lines the stream sends again after a reconnect', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, ProgressBar, Spinner } from 'react-bootstrap';
 import { useQueryClient } from '@tanstack/react-query';
+import { FiExternalLink } from 'react-icons/fi';
 import { Link, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../lib/api';
@@ -137,6 +138,11 @@ export default function RunPage(): React.JSX.Element {
           <span className="text-muted small ms-auto">
             Started {formatDateTime(data.started_at ?? data.created_at)}
           </span>
+          {data.trace_url && (
+            <a className="small" href={data.trace_url} target="_blank" rel="noreferrer noopener">
+              Open trace in Langfuse <FiExternalLink aria-hidden="true" />
+            </a>
+          )}
         </div>
       </Card.Header>
       <Card.Body>

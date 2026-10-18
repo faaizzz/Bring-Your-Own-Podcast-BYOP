@@ -4,6 +4,7 @@ import random
 import uuid
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Protocol
 
@@ -55,6 +56,12 @@ class UsageRecord:
     characters: int | None = None
     # What the provider itself says the call cost (OpenRouter does); None when it does not.
     cost_usd: Decimal | None = None
+    # For tracing only (never stored in the database): when the call began, what was sent and
+    # what came back (language models), and the call's tags such as the speaker of a voice.
+    started_at: datetime | None = None
+    prompt: str | None = None
+    completion: str | None = None
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 class UsageSink(Protocol):

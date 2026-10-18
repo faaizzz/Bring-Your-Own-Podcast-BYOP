@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up up-kokoro up-minio down logs migrate deps test lint typecheck check fmt
+.PHONY: help up up-kokoro up-minio up-langfuse down logs migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
@@ -19,6 +19,10 @@ up-kokoro: ## Like `up`, plus the local Kokoro text-to-speech service
 up-minio: ## Like `up`, plus a local S3-compatible object store (see docs/storage.md)
 	./scripts/ensure-env.sh
 	$(COMPOSE) --profile minio up -d --build --wait
+
+up-langfuse: ## Like `up`, plus self-hosted Langfuse tracing (see docs/langfuse.md)
+	./scripts/ensure-env.sh
+	$(COMPOSE) --profile langfuse up -d --build --wait
 
 down: ## Stop the stack (keeps volumes)
 	$(COMPOSE) --profile kokoro --profile minio down

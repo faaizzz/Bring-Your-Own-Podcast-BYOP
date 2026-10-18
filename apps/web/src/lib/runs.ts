@@ -42,7 +42,11 @@ export const runEventSchema = z.object({
 });
 export type RunEvent = z.infer<typeof runEventSchema>;
 
-export const runDetailSchema = runSchema.extend({ events: z.array(runEventSchema) });
+export const runDetailSchema = runSchema.extend({
+  events: z.array(runEventSchema),
+  // Where to open the run's trace in Langfuse, when it is traced.
+  trace_url: z.string().nullable().default(null),
+});
 export type RunDetail = z.infer<typeof runDetailSchema>;
 
 /** The stages of a generation run, in order, as the timeline shows them. */
@@ -175,7 +179,12 @@ function applyMessage(
 ): RunDetail {
   const known = replace || !previous ? [] : previous.events;
   const seen = new Set(known.map((e) => e.id));
-  return { ...message.run, events: [...known, ...message.events.filter((e) => !seen.has(e.id))] };
+  return {
+    trace_url: null,
+    ...previous, // what the stream does not carry, such as the trace link
+    ...message.run,
+    events: [...known, ...message.events.filter((e) => !seen.has(e.id))],
+  };
 }
 
 /**

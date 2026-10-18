@@ -150,11 +150,159 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # --- Reserved for later stories (uncomment when the story lands) ---
-  # langfuse:   # LLM tracing (profile "langfuse")
-  #   profiles: ["langfuse"]
+  # --- Langfuse: self-hosted LLM tracing -------------------------------------------------------
+  # Opt in with: docker compose --profile langfuse up -d   (or `make up-langfuse`), then follow
+  # docs/langfuse.md. Langfuse 3 needs its own Postgres, ClickHouse, Redis and S3-compatible store
+  # (RustFS, as for the `minio` profile), none of which touch BYOP's own data. The project keys
+  # below are created on first start so BYOP can use it without any clicking; they are for a
+  # machine only you can reach: change LANGFUSE_INIT_* and the secrets in .env before exposing it.
+  langfuse-web:
+    profiles: ["langfuse"]
+    image: langfuse/langfuse:3@sha256:a343f64e035eb01aeea358703a0428945d909d01e19452509a5a830862dda878
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT:-3000}:3000"
+    depends_on: &langfuse-deps
+      langfuse-db:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-s3-init:
+        condition: service_completed_successfully
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse-local}@langfuse-db:5432/langfuse
+      SALT: ${LANGFUSE_SALT:-byop-local-salt-change-me}
+      # 64 hex characters; encrypts API keys stored inside Langfuse.
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse-local}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-redis-local}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY:-langfuse-local}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_KEY:-langfuse-local-secret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-s3:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      NEXTAUTH_URL: ${LANGFUSE_PUBLIC_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-byop-local-nextauth-change-me}
+      # Create the organisation, project, API keys and a user on first start.
+      LANGFUSE_INIT_ORG_ID: byop
+      LANGFUSE_INIT_ORG_NAME: BYOP
+      LANGFUSE_INIT_PROJECT_ID: byop
+      LANGFUSE_INIT_PROJECT_NAME: BYOP
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-byop-local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-byop-local}
+      LANGFUSE_INIT_USER_EMAIL: ${BYOP_ADMIN_EMAIL:-admin@example.com}
+      LANGFUSE_INIT_USER_NAME: admin
+      LANGFUSE_INIT_USER_PASSWORD: ${BYOP_ADMIN_PASSWORD:-change-me-now}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/public/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  langfuse-worker:
+    profiles: ["langfuse"]
+    image: langfuse/langfuse-worker:3@sha256:8a28c946bb5401eef488153fa294db5a79bd99dd5c90db8e4d39559374c9ebd3
+    depends_on: *langfuse-deps
+    environment: *langfuse-env
+    restart: unless-stopped
+
+  langfuse-db:
+    profiles: ["langfuse"]
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse-local}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  langfuse-clickhouse:
+    profiles: ["langfuse"]
+    image: clickhouse/clickhouse-server:25.3-alpine@sha256:a4e8cf46e526a06f4f52d22f7fa8d07472b55d3c896d7ca3f159e249be38ae62
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse-local}
+    volumes:
+      - langfuse_clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  langfuse-redis:
+    profiles: ["langfuse"]
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${LANGFUSE_REDIS_PASSWORD:-redis-local}", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD:-redis-local}\" ping 2>/dev/null | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${LANGFUSE_REDIS_PASSWORD:-redis-local}
+    restart: unless-stopped
+
+  langfuse-s3:
+    profiles: ["langfuse"]
+    image: rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    environment:
+      RUSTFS_ACCESS_KEY: ${LANGFUSE_S3_ACCESS_KEY:-langfuse-local}
+      RUSTFS_SECRET_KEY: ${LANGFUSE_S3_SECRET_KEY:-langfuse-local-secret}
+    volumes:
+      - langfuse_s3:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # One-shot: makes the bucket Langfuse writes its events to.
+  langfuse-s3-init:
+    profiles: ["langfuse"]
+    image: amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab
+    depends_on:
+      langfuse-s3:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY:-langfuse-local}
+      AWS_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_KEY:-langfuse-local-secret}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["sh", "-c"]
+    command:
+      - aws --endpoint-url http://langfuse-s3:9000 s3api head-bucket --bucket langfuse 2>/dev/null || aws --endpoint-url http://langfuse-s3:9000 s3 mb s3://langfuse
+    restart: "no"
 
 volumes:
   pgdata:
   media:
   s3data:
+  langfuse_db:
+  langfuse_clickhouse:
+  langfuse_s3:

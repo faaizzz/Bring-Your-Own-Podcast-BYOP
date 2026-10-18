@@ -10,6 +10,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import ClassVar, Literal
@@ -255,6 +256,7 @@ class TTSProvider(ABC):
     ) -> TTSResult:
         """Synthesize `text` into a canonical WAV (24 kHz, mono, 16-bit) inside `output_dir`."""
         started = time.perf_counter()
+        started_at = datetime.now(UTC)
         params = params or {}
         audio_format = self._validate(text, params)
         request = self.build_request(text, voice_id, params, audio_format)
@@ -297,6 +299,8 @@ class TTSProvider(ABC):
                 show_id=meta.show_id,
                 latency_ms=latency_ms,
                 characters=len(text),
+                started_at=started_at,
+                tags={**meta.tags, "voice": voice_id},
             )
         )
         return TTSResult(

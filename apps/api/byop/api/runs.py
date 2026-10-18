@@ -5,15 +5,23 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from kombu.exceptions import OperationalError
 
-from byop.api.deps import CurrentUser, RedisDep, SessionDep
+from byop.api.deps import CurrentUser, RedisDep, SessionDep, SettingsDep
+from byop.api.integrations import ResolverDep
 from byop.celery_control import revoke_quietly
+from byop.config import Settings
 from byop.models import Run
-from byop.models.enums import RunStatus
+from byop.models.enums import CredentialProvider, RunStatus
 from byop.pipeline.orchestrator import fail_run
 from byop.schemas.costs import UsageLine
 from byop.schemas.run import RunDetail, RunEventResponse, RunResponse
 from byop.services import costs as costs_service
 from byop.services import runs as service
+from byop.services.credentials import (
+    CredentialDecryptionError,
+    CredentialResolver,
+    ProviderNotConfigured,
+)
+from byop.services.langfuse import trace_url
 from byop.services.run_stream import announce, stream_run
 from byop.services.shows import ShowNotFound
 from byop.tasks.pipeline import enqueue_run
@@ -39,10 +47,29 @@ def _response(run: Run, episode_id: uuid.UUID | None = None) -> RunResponse:
     )
 
 
-async def _detail(session: SessionDep, user_id: uuid.UUID, run: Run) -> RunDetail:
+async def _trace_url(
+    resolver: CredentialResolver, settings: Settings, user_id: uuid.UUID, run: Run
+) -> str | None:
+    if run.trace_id is None:
+        return None
+    try:
+        config = await resolver.get(user_id, CredentialProvider.LANGFUSE)
+    except (ProviderNotConfigured, CredentialDecryptionError):
+        return None
+    return trace_url(config, settings.langfuse_public_url, run.trace_id)
+
+
+async def _detail(
+    session: SessionDep,
+    user_id: uuid.UUID,
+    run: Run,
+    resolver: CredentialResolver,
+    settings: Settings,
+) -> RunDetail:
     episode_id = (await service.episode_ids(session, user_id, [run.id])).get(run.id)
     return RunDetail(
         **_response(run, episode_id).model_dump(),
+        trace_url=await _trace_url(resolver, settings, user_id, run),
         events=[
             RunEventResponse(
                 id=e.id, ts=e.ts, level=e.level, stage=e.stage, message=e.message, data=e.data
@@ -90,9 +117,16 @@ async def list_runs(
 
 
 @router.get("/{run_id}", response_model=RunDetail)
-async def get_run(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> RunDetail:
+async def get_run(
+    run_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    resolver: ResolverDep,
+    settings: SettingsDep,
+) -> RunDetail:
     try:
-        return await _detail(session, user.id, await service.get_run(session, user.id, run_id))
+        run = await service.get_run(session, user.id, run_id)
+        return await _detail(session, user.id, run, resolver, settings)
     except service.RunNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found") from exc
 
@@ -109,7 +143,12 @@ async def run_usage(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -
 
 @router.post("/{run_id}/cancel", response_model=RunDetail)
 async def cancel_run(
-    run_id: uuid.UUID, user: CurrentUser, session: SessionDep, redis: RedisDep
+    run_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    redis: RedisDep,
+    resolver: ResolverDep,
+    settings: SettingsDep,
 ) -> RunDetail:
     """Stop a run: at once if it is still queued, otherwise at its next step."""
     try:
@@ -120,7 +159,7 @@ async def cancel_run(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     revoke_quietly(run.celery_task_id)
     await announce(redis, run.id)
-    return await _detail(session, user.id, run)
+    return await _detail(session, user.id, run, resolver, settings)
 
 
 @router.get("/{run_id}/stream", response_class=StreamingResponse)

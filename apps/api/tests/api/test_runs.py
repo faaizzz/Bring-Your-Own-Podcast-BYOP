@@ -1,16 +1,21 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from httpx import AsyncClient
 from kombu.exceptions import OperationalError
+from pydantic import SecretStr
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.api import runs as runs_api
+from byop.config import get_settings
 from byop.models import Episode, Run, User
 from byop.models.enums import EventLevel, RunStatus, RunTrigger
 from byop.pipeline.orchestrator import add_event
+from tests.helpers import make_settings
 from tests.models.factories import make_show, make_user
 
 
@@ -299,3 +304,56 @@ async def test_a_run_reports_the_episode_it_produced(
     assert (await authed.get(f"/api/runs/{run_id}")).json()["episode_id"] == str(episode.id)
     listed = (await authed.get("/api/runs", params={"show_id": show_id})).json()
     assert listed[0]["episode_id"] == str(episode.id)
+
+
+# --- Langfuse trace link -----------------------------------------------------------------------
+
+
+async def test_a_traced_run_links_to_its_langfuse_trace(
+    authed: AsyncClient, app: FastAPI, db_session: AsyncSession, broker: Spy
+) -> None:
+    run_id = (await authed.post(f"/api/shows/{await new_show(authed)}/runs")).json()["id"]
+    run = await db_session.get(Run, uuid.UUID(run_id))
+    assert run is not None
+    run.trace_id = "abc123"
+    await db_session.flush()
+
+    # Langfuse not set up: no link, even though the run has a trace id.
+    app.dependency_overrides[get_settings] = lambda: make_settings()
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["trace_url"] is None
+
+    keys: dict[str, Any] = {
+        "langfuse_public_key": SecretStr("pk-lf-1"),
+        "langfuse_secret_key": SecretStr("sk-lf-1"),
+        "langfuse_host": "http://langfuse-web:3000",
+    }
+    app.dependency_overrides[get_settings] = lambda: make_settings(**keys)
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["trace_url"] == (
+        "http://langfuse-web:3000/trace/abc123"
+    )
+
+    # The address the browser uses can differ from the one the containers use.
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        **keys, langfuse_public_url="http://localhost:3000/"
+    )
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["trace_url"] == (
+        "http://localhost:3000/trace/abc123"
+    )
+    assert (
+        (await authed.post(f"/api/runs/{run_id}/cancel"))
+        .json()["trace_url"]
+        .endswith("/trace/abc123")
+    )
+
+
+async def test_an_untraced_run_has_no_trace_link(
+    authed: AsyncClient, app: FastAPI, broker: Spy
+) -> None:
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        langfuse_public_key=SecretStr("pk"),
+        langfuse_secret_key=SecretStr("sk"),
+        langfuse_host="http://langfuse-web:3000",
+    )
+    run_id = (await authed.post(f"/api/shows/{await new_show(authed)}/runs")).json()["id"]
+
+    assert (await authed.get(f"/api/runs/{run_id}")).json()["trace_url"] is None

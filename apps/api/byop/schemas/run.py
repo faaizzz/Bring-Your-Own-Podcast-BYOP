@@ -36,6 +36,8 @@ class RunResponse(BaseModel):
 
 class RunDetail(RunResponse):
     events: list[RunEventResponse] = Field(default_factory=list)
+    # Where to open this run's trace in Langfuse; None when it is not traced.
+    trace_url: str | None = None
 
 
 class HistoryRow(BaseModel):
