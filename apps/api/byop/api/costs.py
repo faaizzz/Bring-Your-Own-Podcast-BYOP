@@ -1,7 +1,11 @@
+import csv
+import io
+from collections.abc import AsyncIterator
 from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 
 from byop.api.deps import CurrentUser, SessionDep
@@ -13,6 +17,34 @@ from byop.services.pricing import default_prices, list_overrides
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 pricing_router = APIRouter(prefix="/pricing", tags=["costs"])
+
+
+@router.get("/export.csv", response_class=StreamingResponse)
+async def export_usage(
+    user: CurrentUser,
+    session: SessionDep,
+    from_date: Annotated[date | None, Query(alias="from", description="First day, UTC")] = None,
+    to_date: Annotated[date | None, Query(alias="to", description="Last day, UTC")] = None,
+) -> StreamingResponse:
+    """Every usage event of the period (all time by default) as a CSV file."""
+    if from_date and to_date and to_date < from_date:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "`to` is before `from`")
+
+    async def lines() -> AsyncIterator[str]:
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        async for row in service.usage_csv_rows(session, user.id, from_date, to_date):
+            writer.writerow(row)
+            yield buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate()
+
+    name = f"byop-usage-{from_date or 'start'}-{to_date or 'today'}.csv"
+    return StreamingResponse(
+        lines(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.get("/summary", response_model=CostSummary, response_model_by_alias=True)

@@ -16,6 +16,7 @@ import {
 } from '../../lib/runs';
 import { SHOWS_KEY, useShow } from '../../lib/shows';
 import { useToast } from '../../lib/toast';
+import { RunCosts } from './RunCosts';
 import { Timeline } from './Timeline';
 
 const LEVEL_CLASS: Record<RunEvent['level'], string> = {
@@ -190,6 +191,8 @@ export default function RunPage(): React.JSX.Element {
             <Log events={data.events} />
           </div>
         </div>
+        <h6 className="mt-4">Cost</h6>
+        <RunCosts key={`${data.id}:${data.status}`} runId={data.id} />
       </Card.Body>
     </Card>
   );

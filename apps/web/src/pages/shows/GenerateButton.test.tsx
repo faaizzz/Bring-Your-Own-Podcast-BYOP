@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { makeShow } from '../../test/fixtures';
@@ -22,6 +22,18 @@ const queuedRun = {
   episode_id: null,
 };
 
+const estimate = {
+  show_id: 's1',
+  llm_usd: '0.0125',
+  tts_usd: '0.054',
+  total_usd: '0.0665',
+  characters: 9000,
+  input_tokens: 9000,
+  output_tokens: 4000,
+  model: 'gpt-4o-mini',
+  notes: ['Assumes about 900 spoken characters per minute and 5 stories.'],
+};
+
 function handlers(show: Show, extra: Record<string, Handler> = {}): Record<string, Handler> {
   return {
     'GET /api/shows': () => ({ body: [show] }),
@@ -29,6 +41,7 @@ function handlers(show: Show, extra: Record<string, Handler> = {}): Record<strin
     'GET /api/shows/s1/speakers': () => ({ body: [] }),
     'GET /api/shows/s1/sources': () => ({ body: [] }),
     'GET /api/shows/s1/episodes': () => ({ body: [] }),
+    'GET /api/shows/s1/estimate': () => ({ body: estimate }),
     ...extra,
   };
 }
@@ -44,10 +57,12 @@ describe('Generate now', () => {
       handlers: handlers(makeShow(), {
         'POST /api/shows/s1/runs': () => ({ status: 202, body: queuedRun }),
         'GET /api/runs/r9': () => ({ body: { ...queuedRun, events: [] } }),
+        'GET /api/runs/r9/usage': () => ({ body: [] }),
       }),
     });
 
     await user.click(await screen.findByRole('button', { name: 'Generate now: Daily AI' }));
+    await user.click(await screen.findByRole('button', { name: 'Generate' }));
 
     expect(callsTo(fetchMock, 'POST /api/shows/s1/runs')).toHaveLength(1);
     expect(await screen.findByTestId('run-status')).toHaveTextContent('Queued');
@@ -82,10 +97,77 @@ describe('Generate now', () => {
     });
 
     await user.click(await screen.findByRole('button', { name: 'Generate now: Daily AI' }));
+    await user.click(await screen.findByRole('button', { name: 'Generate' }));
 
     expect(
       await screen.findByText('Could not start a run: This show already has a run in progress'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('cost estimate before generating', () => {
+  it('shows what the episode should cost and starts nothing until confirmed', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = await renderApp('/shows/s1', { handlers: handlers(makeShow()) });
+
+    await user.click(await screen.findByRole('button', { name: 'Generate now: Daily AI' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('$0.0665')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Language model \(gpt-4o-mini\): \$0.0125/),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Voices: \$0.054/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/900 spoken characters per minute/)).toBeInTheDocument();
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/runs')).toHaveLength(0);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(callsTo(fetchMock, 'POST /api/shows/s1/runs')).toHaveLength(0);
+  });
+
+  it('says unknown for what it cannot price, and still lets you generate', async () => {
+    const user = userEvent.setup();
+    await renderApp('/shows/s1', {
+      handlers: handlers(makeShow(), {
+        'GET /api/shows/s1/estimate': () => ({
+          body: {
+            ...estimate,
+            llm_usd: null,
+            total_usd: null,
+            notes: ['No price is known for mystery-model; set one under Settings › Pricing.'],
+          },
+        }),
+        'POST /api/shows/s1/runs': () => ({ status: 202, body: queuedRun }),
+        'GET /api/runs/r9': () => ({ body: { ...queuedRun, events: [] } }),
+        'GET /api/runs/r9/usage': () => ({ body: [] }),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Generate now: Daily AI' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('unknown')).toBeInTheDocument();
+    expect(within(dialog).getByText(/No price is known for mystery-model/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+    expect(await screen.findByTestId('run-status')).toBeInTheDocument();
+  });
+
+  it('still lets you generate when the estimate cannot be had', async () => {
+    const user = userEvent.setup();
+    await renderApp('/shows/s1', {
+      handlers: handlers(makeShow(), {
+        'GET /api/shows/s1/estimate': () => ({ status: 500, body: { detail: 'down' } }),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Generate now: Daily AI' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText(/could not be estimated/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Generate' })).toBeEnabled();
   });
 });
 

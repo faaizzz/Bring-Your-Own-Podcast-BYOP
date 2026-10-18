@@ -371,7 +371,38 @@ describe('episode details', () => {
       ],
     });
     await renderApp('/episodes/e1', {
-      handlers: { ...handlers, 'GET /api/runs/r1': () => ({ body: runDetail }) },
+      handlers: {
+        ...handlers,
+        'GET /api/runs/r1': () => ({ body: runDetail }),
+        'GET /api/runs/r1/usage': () => ({
+          body: [
+            {
+              stage: 'script',
+              kind: 'llm',
+              provider: 'openrouter',
+              model: 'vendor/model',
+              calls: 2,
+              unknown_calls: 0,
+              input_tokens: 3000,
+              output_tokens: 900,
+              characters: 0,
+              cost_usd: '0.004',
+            },
+            {
+              stage: 'tts',
+              kind: 'tts',
+              provider: 'elevenlabs',
+              model: null,
+              calls: 9,
+              unknown_calls: 9,
+              input_tokens: 0,
+              output_tokens: 0,
+              characters: 2600,
+              cost_usd: '0',
+            },
+          ],
+        }),
+      },
     });
 
     const link = await screen.findByRole('link', { name: /Sonar maps the ocean/ });
@@ -391,7 +422,12 @@ describe('episode details', () => {
       'href',
       '/api/episodes/e1/audio?v=1',
     );
-    expect(screen.getByText(/once usage is tracked/)).toBeInTheDocument();
+    const costs = await screen.findByRole('table', { name: 'Cost by stage and model' });
+    expect(within(costs).getByText('vendor/model')).toBeInTheDocument();
+    expect(within(costs).getByText('$0.004', { selector: 'td' })).toBeInTheDocument();
+    expect(within(costs).getByText(/3,000 in \/ 900 out tokens/)).toBeInTheDocument();
+    expect(within(costs).getByText('unpriced')).toBeInTheDocument(); // the voices have no price
+    expect(screen.getByText(/9 calls have no known price/)).toBeInTheDocument();
   });
 
   it('shows a published script as a transcript with one colour per speaker', async () => {

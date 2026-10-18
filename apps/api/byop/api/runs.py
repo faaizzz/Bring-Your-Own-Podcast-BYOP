@@ -10,7 +10,9 @@ from byop.celery_control import revoke_quietly
 from byop.models import Run
 from byop.models.enums import RunStatus
 from byop.pipeline.orchestrator import fail_run
+from byop.schemas.costs import UsageLine
 from byop.schemas.run import RunDetail, RunEventResponse, RunResponse
+from byop.services import costs as costs_service
 from byop.services import runs as service
 from byop.services.run_stream import announce, stream_run
 from byop.services.shows import ShowNotFound
@@ -93,6 +95,16 @@ async def get_run(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> 
         return await _detail(session, user.id, await service.get_run(session, user.id, run_id))
     except service.RunNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found") from exc
+
+
+@router.get("/{run_id}/usage", response_model=list[UsageLine])
+async def run_usage(run_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> list[UsageLine]:
+    """What the run's model and voice calls used and cost, by stage and model."""
+    try:
+        await service.get_run(session, user.id, run_id)
+    except service.RunNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found") from exc
+    return await costs_service.run_usage(session, user.id, run_id)
 
 
 @router.post("/{run_id}/cancel", response_model=RunDetail)

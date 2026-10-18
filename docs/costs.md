@@ -42,7 +42,9 @@ are set to the sums of its events, so they always equal the sum of the rows.
 
 | Method | Path | |
 | --- | --- | --- |
-| `GET` | `/api/costs/summary` | Spend grouped by `group_by=show\|month\|provider\|stage`, optional `from` and `to` (days, UTC, inclusive). Each group has `cost_usd`, `llm_cost_usd`, `tts_cost_usd`, `calls`, `unknown_calls`, tokens and characters, and the response carries the `total` |
+| `GET` | `/api/costs/summary` | Spend grouped by `group_by=show\|month\|provider\|stage`, optional `from` and `to` (days, UTC, inclusive). The response also has `episodes` (runs in the period that made an episode) and `avg_episode_cost_usd` (their mean cost). Each group has `cost_usd`, `llm_cost_usd`, `tts_cost_usd`, `calls`, `unknown_calls`, tokens and characters, and the response carries the `total` |
+| `GET` | `/api/costs/export.csv` | The usage events of the period (`from`, `to`; all time by default) as a CSV file, oldest first. Show titles that would run as a spreadsheet formula are prefixed with `'` |
+| `GET` | `/api/runs/{id}/usage` | A run's calls grouped by stage, provider and model, with `unknown_calls` per line |
 | `GET` | `/api/shows/{id}/estimate` | What one episode of the show should cost, from its target length, model and voices (`llm_usd`, `tts_usd`, `total_usd`, with `notes` for anything it could not price) |
 | `GET` | `/api/pricing` | The effective prices (`source`: `default` or `override`) |
 | `PUT` | `/api/pricing/overrides` | Set your price: `{kind: "llm", name, input_per_million, output_per_million}` or `{kind: "tts", name, per_million_chars}` |
@@ -54,3 +56,14 @@ cleared), so history stays accurate after a show is deleted; those rows are grou
 The estimate assumes about 900 spoken characters per minute and the show's number of stories, and
 takes a model's price from the price table, else from the provider's model list (OpenRouter
 publishes prices there). It is a guide, not a quote.
+
+## In the app
+
+- **Costs** shows four tiles (this month, last month, the average cost of an episode, the most
+  expensive show), a stacked bar chart of the last 12 months (language models and voices), a donut
+  of the providers that charged anything, and a table per show. The period filter applies to the
+  table, the donut and the CSV export. If any call has no known price a banner says so and the
+  affected rows are marked "unpriced": the figures are then a minimum.
+- A run's page and an episode's page list the **cost by stage and model**.
+- **Generate now** asks for confirmation and shows the estimate first (or "unknown" with the
+  reason when a price is missing).

@@ -67,3 +67,14 @@ const MONEY = new Intl.NumberFormat(undefined, {
 export function formatCost(usd: string | null): string {
   return usd === null ? '—' : MONEY.format(Number(usd));
 }
+
+/** "2026-05" → "May 2026". */
+export function formatMonth(key: string): string {
+  const [year, month] = key.split('-').map(Number);
+  if (!year || !month) return key;
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}

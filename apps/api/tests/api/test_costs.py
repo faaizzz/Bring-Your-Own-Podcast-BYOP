@@ -351,3 +351,143 @@ async def test_the_estimate_says_what_it_could_not_price(authed: AsyncClient, ap
 async def test_the_estimate_of_an_unknown_show_is_404(authed: AsyncClient) -> None:
     response = await authed.get("/api/shows/00000000-0000-0000-0000-000000000000/estimate")
     assert response.status_code == 404
+
+
+# --- episodes, run usage, export ------------------------------------------------------------------
+
+
+async def test_the_summary_reports_how_many_episodes_cost_what_on_average(
+    authed: AsyncClient, db_session: AsyncSession, admin_user: User
+) -> None:
+    from byop.models import Run
+    from byop.models.enums import RunStatus, RunTrigger
+
+    show = await make_show(db_session, admin_user)
+    for status, cost, day in (
+        (RunStatus.SUCCEEDED, "0.20", 10),
+        (RunStatus.AWAITING_REVIEW, "0.40", 11),
+        (RunStatus.FAILED, "5.00", 12),  # made no episode
+        (RunStatus.SUCCEEDED, "9.00", 20),  # outside the range below
+    ):
+        db_session.add(
+            Run(
+                user_id=admin_user.id,
+                show_id=show.id,
+                trigger=RunTrigger.MANUAL,
+                status=status,
+                cost_usd=Decimal(cost),
+                created_at=datetime(2026, 5, day, tzinfo=UTC),
+            )
+        )
+    await db_session.flush()
+
+    body = await summary(authed, group_by="month", **{"from": "2026-05-01", "to": "2026-05-15"})
+    assert body["episodes"] == 2 and Decimal(body["avg_episode_cost_usd"]) == Decimal("0.30")
+
+    assert (await summary(authed, **{"from": "2027-01-01"}))["avg_episode_cost_usd"] is None
+
+
+async def test_a_runs_usage_is_grouped_by_stage_and_model(
+    authed: AsyncClient, db_session: AsyncSession, admin_user: User
+) -> None:
+    from byop.models import Run
+    from byop.models.enums import RunStatus, RunTrigger
+
+    show = await make_show(db_session, admin_user)
+    run = Run(
+        user_id=admin_user.id,
+        show_id=show.id,
+        trigger=RunTrigger.MANUAL,
+        status=RunStatus.SUCCEEDED,
+    )
+    db_session.add(run)
+    await db_session.flush()
+    for stage, kind, provider, cost, source, when in (
+        ("rank", UsageKind.LLM, "openrouter", "0.01", CostSource.PROVIDER, 1),
+        ("script", UsageKind.LLM, "openrouter", "0.02", CostSource.PROVIDER, 2),
+        ("script", UsageKind.LLM, "openrouter", "0.03", CostSource.PROVIDER, 3),
+        ("tts", UsageKind.TTS, "openai", "0.10", CostSource.PRICE_TABLE, 4),
+        ("tts", UsageKind.TTS, "openai", "0", CostSource.UNKNOWN, 5),
+    ):
+        e = event(
+            admin_user,
+            show,
+            cost=cost,
+            kind=kind,
+            provider=provider,
+            stage=stage,
+            source=source,
+            when=datetime(2026, 5, 1, when, tzinfo=UTC),
+            characters=100 if kind is UsageKind.TTS else None,
+        )
+        e.run_id = run.id
+        db_session.add(e)
+    await db_session.flush()
+
+    lines = (await authed.get(f"/api/runs/{run.id}/usage")).json()
+
+    assert [(line["stage"], line["calls"]) for line in lines] == [
+        ("rank", 1),
+        ("script", 2),
+        ("tts", 2),
+    ]
+    assert Decimal(lines[1]["cost_usd"]) == Decimal("0.05")
+    assert lines[2]["unknown_calls"] == 1 and lines[2]["characters"] == 200
+    assert (await authed.get(f"/api/runs/{uuid_zero()}/usage")).status_code == 404
+
+
+def uuid_zero() -> str:
+    return "00000000-0000-0000-0000-000000000000"
+
+
+async def test_the_export_is_a_csv_of_the_periods_events(
+    authed: AsyncClient, db_session: AsyncSession, admin_user: User
+) -> None:
+    import csv
+    import io
+
+    a, _ = await seed(db_session, admin_user)
+
+    response = await authed.get("/api/costs/export.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    rows = list(csv.reader(io.StringIO(response.text)))
+    assert rows[0][:6] == ["created_at", "show", "run_id", "stage", "kind", "provider"]
+    assert len(rows) == 7  # header + six events
+    assert [r[0] for r in rows[1:]] == sorted(r[0] for r in rows[1:])  # oldest first
+    first = next(r for r in rows[1:] if r[3] == "tts")
+    assert first[1:2] == ["Daily AI"] and first[4] == "tts" and first[9] == "2000"
+    assert first[10] == "0.400000" and first[11] == "provider"
+
+    june = await authed.get(
+        "/api/costs/export.csv", params={"from": "2026-06-01", "to": "2026-06-30"}
+    )
+    assert len(list(csv.reader(io.StringIO(june.text)))) == 2  # header + the one June event
+    assert "2026-06-01-2026-06-30" in june.headers["content-disposition"]
+    backwards = await authed.get(
+        "/api/costs/export.csv", params={"from": "2026-06-02", "to": "2026-06-01"}
+    )
+    assert backwards.status_code == 422
+
+
+async def test_the_export_does_not_let_a_show_title_run_as_a_formula(
+    authed: AsyncClient, db_session: AsyncSession, admin_user: User
+) -> None:
+    import csv
+    import io
+
+    show = await make_show(db_session, admin_user)
+    show.title = '=HYPERLINK("http://evil.example","click")'
+    db_session.add(event(admin_user, show, cost="1"))
+    await db_session.flush()
+
+    rows = list(csv.reader(io.StringIO((await authed.get("/api/costs/export.csv")).text)))
+
+    assert rows[1][1].startswith("'=")
+
+
+async def test_export_and_run_usage_need_a_session(client: AsyncClient) -> None:
+    assert (await client.get("/api/costs/export.csv")).status_code == 401
+    assert (await client.get(f"/api/runs/{uuid_zero()}/usage")).status_code == 401

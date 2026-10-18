@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../lib/api';
 import { ME_KEY } from '../../lib/auth';
 import { createQueryClient } from '../../lib/queryClient';
+import { emptyCostsHandler } from '../../test/fixtures';
 import { callsTo } from '../../test/mockApi';
 import { adminUser, renderApp } from '../../test/render';
 
@@ -53,7 +54,7 @@ describe('login', () => {
     const user = userEvent.setup();
     const { fetchMock } = await renderApp('/costs', {
       user: null,
-      handlers: { 'POST /api/auth/login': () => ({ body: adminUser }) },
+      handlers: { ...emptyCostsHandler(), 'POST /api/auth/login': () => ({ body: adminUser }) },
     });
 
     await user.type(screen.getByPlaceholderText('Email address'), 'admin@example.com');
@@ -61,7 +62,7 @@ describe('login', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(await screen.findByRole('navigation', { name: 'Main' })).toBeInTheDocument();
-    expect(await screen.findByText('Cost per generation')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing has been spent yet')).toBeInTheDocument();
     const [, init] = callsTo(fetchMock, 'POST /api/auth/login')[0] ?? [];
     expect(JSON.parse(typeof init?.body === 'string' ? init.body : '')).toEqual({
       email: 'admin@example.com',

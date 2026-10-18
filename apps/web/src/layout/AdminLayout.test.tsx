@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { emptyCostsHandler } from '../test/fixtures';
 import { renderApp } from '../test/render';
 
 describe('AdminLayout', () => {
@@ -44,8 +45,8 @@ describe('AdminLayout', () => {
   });
 
   it('loads the lazy Costs page', async () => {
-    await renderApp('/costs');
+    await renderApp('/costs', { handlers: emptyCostsHandler() });
 
-    expect(await screen.findByText('Cost per generation')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing has been spent yet')).toBeInTheDocument();
   });
 });

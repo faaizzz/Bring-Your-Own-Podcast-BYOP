@@ -32,6 +32,25 @@ class CostSummary(BaseModel):
     to_date: date | None = Field(serialization_alias="to")
     total: CostGroup
     groups: list[CostGroup]
+    # Runs in the period that produced an episode, and what such a run cost on average
+    # (None when there was none).
+    episodes: int
+    avg_episode_cost_usd: Decimal | None
+
+
+class UsageLine(BaseModel):
+    """What one kind of call used within a run: one row per stage, model and provider."""
+
+    stage: str | None
+    kind: UsageKind
+    provider: str
+    model: str | None
+    calls: int
+    unknown_calls: int
+    input_tokens: int
+    output_tokens: int
+    characters: int
+    cost_usd: Decimal
 
 
 class PriceEntry(BaseModel):

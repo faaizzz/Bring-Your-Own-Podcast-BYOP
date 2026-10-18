@@ -107,3 +107,31 @@ export function formHandlers(): Record<string, Handler> {
         : { status: 409, body: { detail: 'Provider is not configured' } },
   };
 }
+
+/** A cost summary with no spend at all (what a new installation answers). */
+export function emptyCostsHandler(): Record<string, Handler> {
+  return {
+    'GET /api/costs/summary': ({ query }) => ({
+      body: {
+        group_by: query.get('group_by') ?? 'show',
+        from: null,
+        to: null,
+        total: {
+          key: 'total',
+          label: 'Total',
+          cost_usd: '0',
+          llm_cost_usd: '0',
+          tts_cost_usd: '0',
+          calls: 0,
+          unknown_calls: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          characters: 0,
+        },
+        groups: [],
+        episodes: 0,
+        avg_episode_cost_usd: null,
+      },
+    }),
+  };
+}

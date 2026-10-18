@@ -1,6 +1,7 @@
 """Spend overviews and the estimate for the next episode, from `usage_events` and the prices."""
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -10,10 +11,10 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Show, Speaker, UsageEvent
-from byop.models.enums import CostSource, UsageKind
+from byop.models import Run, Show, Speaker, UsageEvent
+from byop.models.enums import CostSource, RunStatus, UsageKind
 from byop.providers.llm import UnsupportedLLMProvider, get_llm
-from byop.schemas.costs import CostEstimate, CostGroup, CostSummary, GroupBy
+from byop.schemas.costs import CostEstimate, CostGroup, CostSummary, GroupBy, UsageLine
 from byop.services.credentials import (
     CredentialDecryptionError,
     CredentialResolver,
@@ -119,13 +120,140 @@ async def cost_summary(
         groups.sort(key=lambda g: g.key)
     else:
         groups.sort(key=lambda g: (-g.cost_usd, g.label))
+    episodes, average = await _episode_average(session, user_id, start, end)
     return CostSummary(
         group_by=group_by,
         from_date=start,
         to_date=end,
         total=_group("total", "Total", tuple(total_row)),
         groups=groups,
+        episodes=episodes,
+        avg_episode_cost_usd=average,
     )
+
+
+async def _episode_average(
+    session: AsyncSession, user_id: uuid.UUID, start: date | None, end: date | None
+) -> tuple[int, Decimal | None]:
+    """How many runs made an episode in the period and their mean cost (from the run totals)."""
+    query = select(func.count(), func.avg(Run.cost_usd)).where(
+        Run.user_id == user_id,
+        Run.status.in_((RunStatus.SUCCEEDED, RunStatus.AWAITING_REVIEW)),
+    )
+    if start is not None:
+        query = query.where(Run.created_at >= datetime.combine(start, time.min, UTC))
+    if end is not None:
+        query = query.where(
+            Run.created_at < datetime.combine(end + timedelta(days=1), time.min, UTC)
+        )
+    count, average = (await session.execute(query)).one()
+    return int(count), (Decimal(str(average)) if average is not None else None)
+
+
+async def run_usage(
+    session: AsyncSession, user_id: uuid.UUID, run_id: uuid.UUID
+) -> list[UsageLine]:
+    """A run's calls grouped by stage, kind, provider and model, in the order the stages run."""
+    unknown = case((UsageEvent.cost_source == CostSource.UNKNOWN, 1), else_=0)
+    rows = await session.execute(
+        select(
+            UsageEvent.stage,
+            UsageEvent.kind,
+            UsageEvent.provider,
+            UsageEvent.model,
+            func.count(),
+            func.coalesce(func.sum(unknown), 0),
+            func.coalesce(func.sum(UsageEvent.input_tokens), 0),
+            func.coalesce(func.sum(UsageEvent.output_tokens), 0),
+            func.coalesce(func.sum(UsageEvent.characters), 0),
+            func.coalesce(func.sum(UsageEvent.cost_usd), 0),
+        )
+        .where(UsageEvent.run_id == run_id, UsageEvent.user_id == user_id)
+        .group_by(UsageEvent.stage, UsageEvent.kind, UsageEvent.provider, UsageEvent.model)
+        .order_by(func.min(UsageEvent.created_at), UsageEvent.provider)
+    )
+    return [
+        UsageLine(
+            stage=stage,
+            kind=kind,
+            provider=provider,
+            model=model,
+            calls=int(calls),
+            unknown_calls=int(unknown_calls),
+            input_tokens=int(tokens_in),
+            output_tokens=int(tokens_out),
+            characters=int(chars),
+            cost_usd=Decimal(str(cost)),
+        )
+        for (
+            stage,
+            kind,
+            provider,
+            model,
+            calls,
+            unknown_calls,
+            tokens_in,
+            tokens_out,
+            chars,
+            cost,
+        ) in rows.all()
+    ]
+
+
+CSV_HEADER = (
+    "created_at",
+    "show",
+    "run_id",
+    "stage",
+    "kind",
+    "provider",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "characters",
+    "cost_usd",
+    "cost_source",
+    "latency_ms",
+)
+CSV_BATCH = 1000
+
+
+def csv_cell(value: object) -> str:
+    """A cell that a spreadsheet will not run as a formula (show titles are user text)."""
+    text = "" if value is None else str(value)
+    return f"'{text}" if text[:1] in {"=", "+", "-", "@", "\t", "\r"} else text
+
+
+async def usage_csv_rows(
+    session: AsyncSession, user_id: uuid.UUID, start: date | None, end: date | None
+) -> AsyncIterator[list[str]]:
+    """The usage events of the period, oldest first, one CSV row at a time."""
+    query = (
+        select(UsageEvent, Show.title)
+        .outerjoin(Show, Show.id == UsageEvent.show_id)
+        .where(UsageEvent.user_id == user_id)
+        .order_by(UsageEvent.created_at, UsageEvent.id)
+        .execution_options(yield_per=CSV_BATCH)
+    )
+    query = _in_range(query, start, end)
+    yield list(CSV_HEADER)
+    result = await session.stream(query)
+    async for event, title in result:
+        yield [
+            event.created_at.astimezone(UTC).isoformat(),
+            csv_cell(title or ""),
+            str(event.run_id or ""),
+            csv_cell(event.stage),
+            event.kind.value,
+            csv_cell(event.provider),
+            csv_cell(event.model),
+            "" if event.input_tokens is None else str(event.input_tokens),
+            "" if event.output_tokens is None else str(event.output_tokens),
+            "" if event.characters is None else str(event.characters),
+            str(event.cost_usd),
+            event.cost_source.value,
+            "" if event.latency_ms is None else str(event.latency_ms),
+        ]
 
 
 # --- estimate ------------------------------------------------------------------------------------

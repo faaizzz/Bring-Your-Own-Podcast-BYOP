@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import type { Episode } from '../../lib/episodes';
 import { formatDate } from '../../lib/format';
 import { useRun } from '../../lib/runs';
+import { RunCosts } from '../runs/RunCosts';
 import { Timeline } from '../runs/Timeline';
 
 function fileName(title: string): string {
@@ -63,10 +64,12 @@ export function EpisodeDetails({ episode }: { episode: Episode }): React.JSX.Ele
         ) : (
           <p className="text-muted small mb-0">The run that made this episode no longer exists.</p>
         )}
-        <h6 className="mt-4">Cost</h6>
-        <p className="text-muted small mb-0">
-          The cost of each step will be listed here once usage is tracked.
-        </p>
+        {episode.run && (
+          <>
+            <h6 className="mt-4">Cost</h6>
+            <RunCosts runId={episode.run.id} />
+          </>
+        )}
       </section>
       {episode.audio_url && (
         <div className="col-12">
