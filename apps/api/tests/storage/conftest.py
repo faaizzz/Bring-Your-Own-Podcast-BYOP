@@ -52,14 +52,18 @@ def container_endpoint() -> Iterator[str]:
     except Exception as exc:  # no Docker daemon, image not pullable, ...
         pytest.skip(f"S3-compatible container unavailable: {exc}")
     try:
-        endpoint = f"http://127.0.0.1:{container.get_exposed_port(9000)}"
+        # Docker publishes the port a moment after the container starts, so wait for the mapping
+        # and for the server; give up (skip) rather than fail if either never shows up.
         deadline = time.monotonic() + 90
+        endpoint = ""
         while True:
             try:
+                if not endpoint:
+                    endpoint = f"http://127.0.0.1:{container.get_exposed_port(9000)}"
                 if httpx.get(f"{endpoint}/health", timeout=2).status_code < 500:
                     break
-            except httpx.HTTPError:
-                pass
+            except (httpx.HTTPError, ConnectionError):
+                endpoint = ""
             if time.monotonic() > deadline:
                 pytest.skip("S3-compatible container did not become ready")
             time.sleep(1)
