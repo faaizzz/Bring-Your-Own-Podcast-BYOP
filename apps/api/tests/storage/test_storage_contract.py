@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -129,3 +131,46 @@ async def test_url_for_is_a_working_direct_link_or_none(storage: Storage) -> Non
         response = await client.get(url)
     assert response.status_code == 200
     assert response.content == b"image-bytes"
+
+
+async def test_files_go_in_and_out_without_being_read_into_memory(
+    storage: Storage, tmp_path: Path
+) -> None:
+    source = tmp_path / "episode.mp3"
+    payload = bytes(range(256)) * 4096  # 1 MB
+    source.write_bytes(payload)
+
+    await storage.put_file("shows/a/episode.mp3", source, content_type="audio/mpeg")
+
+    assert await storage.get("shows/a/episode.mp3") == payload
+    info = await storage.head("shows/a/episode.mp3")
+    assert info is not None and info.size == len(payload) and info.content_type == "audio/mpeg"
+    copy = tmp_path / "copy.mp3"
+    assert await storage.get_file("shows/a/episode.mp3", copy) is True
+    assert copy.read_bytes() == payload
+
+
+async def test_put_file_replaces_and_get_file_reports_a_missing_object(
+    storage: Storage, tmp_path: Path
+) -> None:
+    first, second = tmp_path / "one", tmp_path / "two"
+    first.write_bytes(b"one")
+    second.write_bytes(b"second")
+
+    await storage.put_file("a/file.bin", first)
+    await storage.put_file("a/file.bin", second)
+
+    assert await storage.get("a/file.bin") == b"second"
+    target = tmp_path / "out"
+    assert await storage.get_file("a/missing.bin", target) is False
+    assert not target.exists()
+
+
+async def test_file_keys_are_validated_too(storage: Storage, tmp_path: Path) -> None:
+    source = tmp_path / "f"
+    source.write_bytes(b"x")
+
+    with pytest.raises(ValueError):
+        await storage.put_file("../escape", source)
+    with pytest.raises(ValueError):
+        await storage.get_file("/abs", tmp_path / "out")

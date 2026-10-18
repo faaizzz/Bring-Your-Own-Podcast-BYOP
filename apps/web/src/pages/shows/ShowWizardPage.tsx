@@ -18,7 +18,7 @@ import {
   emptyValues,
   showFormSchema,
   speakerToApi,
-  STEPS,
+  WIZARD_STEPS as STEPS,
   toCreateBody,
   type ShowFormValues,
   type StepId,

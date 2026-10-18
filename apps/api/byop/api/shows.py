@@ -18,6 +18,11 @@ RedisDep = Annotated[Redis, Depends(get_redis)]
 
 def response_for(view: ShowView) -> ShowResponse:
     show = view.show
+    version = int(show.updated_at.timestamp())
+
+    def audio_url(kind: str, key: str | None) -> str | None:
+        return f"/api/shows/{show.id}/audio/{kind}?v={version}" if key else None
+
     cover_url = (
         f"/api/shows/{show.id}/cover?v={int(show.updated_at.timestamp())}"
         if show.cover_key
@@ -51,6 +56,9 @@ def response_for(view: ShowView) -> ShowResponse:
         feed_category=show.feed_category,
         feed_explicit=show.feed_explicit,
         cover_url=cover_url,
+        intro_url=audio_url("intro", show.intro_key),
+        outro_url=audio_url("outro", show.outro_key),
+        music_url=audio_url("music", show.music_key),
         episode_count=view.episode_count,
         last_run_status=view.last_run_status,
         last_episode_at=view.last_episode_at,

@@ -236,9 +236,15 @@ export const showFormSchema = z
 export type ShowFormValues = z.infer<typeof showFormSchema>;
 export type FormPath = FieldPath<ShowFormValues>;
 
-export type StepId = 'topic' | 'speakers' | 'models' | 'sources' | 'schedule' | 'review';
+export type StepId = 'topic' | 'speakers' | 'models' | 'sources' | 'schedule' | 'audio' | 'review';
 
-export type StepDef = { id: StepId; label: string; fields: FormPath[] };
+export type StepDef = {
+  id: StepId;
+  label: string;
+  fields: FormPath[];
+  /** Where the step appears: the create wizard, the show's settings, or both (default). */
+  only?: 'wizard' | 'settings';
+};
 
 export const STEPS: StepDef[] = [
   {
@@ -257,7 +263,7 @@ export const STEPS: StepDef[] = [
   { id: 'speakers', label: 'Speakers & voices', fields: ['speakers'] },
   { id: 'models', label: 'Models', fields: ['llm_provider', 'llm_model'] },
   // Sources are not form fields: the wizard keeps its own list and saves it after creating the show.
-  { id: 'sources', label: 'Sources', fields: [] },
+  { id: 'sources', label: 'Sources', fields: [], only: 'wizard' },
   {
     id: 'schedule',
     label: 'Schedule',
@@ -270,8 +276,13 @@ export const STEPS: StepDef[] = [
       'auto_publish',
     ],
   },
-  { id: 'review', label: 'Review', fields: [] },
+  // Uploaded clips need the show to exist, so they are managed in its settings.
+  { id: 'audio', label: 'Audio', fields: [], only: 'settings' },
+  { id: 'review', label: 'Review', fields: [], only: 'wizard' },
 ];
+
+export const WIZARD_STEPS = STEPS.filter((s) => s.only !== 'settings');
+export const SETTINGS_STEPS = STEPS.filter((s) => s.only !== 'wizard');
 
 /** The step that owns a form path such as `speakers.1.params.speed`. */
 export function stepOfPath(path: string): StepId | null {

@@ -197,10 +197,13 @@ async def test_the_real_pipeline_runs_end_to_end_with_a_stub_mix(
     assert chose.data is not None and len(cast(list[object], chose.data["stories"])) == 2
     assert any(e.message.startswith("Wrote “Oceans and bikes”") for e in log)
     assert any(e.message.startswith("Voiced 3 chunks") for e in log)
+    assert any(e.message.startswith("Episode audio ready") for e in log)
     assert not (tmp_path / "work").exists() or not any((tmp_path / "work").iterdir())
     episode = await db_session.scalar(select(Episode).where(Episode.run_id == run.id))
     assert episode is not None and episode.title == "Oceans and bikes"
     assert episode.status is EpisodeStatus.DRAFT and episode.script is not None
+    assert episode.audio_key is not None and (tmp_path / episode.audio_key).is_file()
+    assert episode.duration_s and episode.duration_s > 0 and episode.size_bytes
     # The stories now belong to the draft episode, and nothing is left reserved.
     items = list(await db_session.scalars(select(Item).where(Item.show_id == show.id)))
     assert {i.used_in_episode_id for i in items} == {episode.id}

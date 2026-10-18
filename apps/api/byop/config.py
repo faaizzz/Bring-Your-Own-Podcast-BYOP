@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     run_stage_max_retries: int = Field(default=3, ge=0)  # for transient errors, per stage
     run_reaper_interval_s: int = Field(default=60, ge=5)  # how often stuck runs are looked for
 
+    # Mixing the episode audio.
+    audio_target_lufs: float = Field(default=-16.0, ge=-30.0, le=-5.0)  # podcast standard
+    audio_bitrate_kbps: int = Field(default=128, ge=32, le=320)
+    audio_channels: int = Field(default=1, ge=1, le=2)  # mono is plenty for speech, half the size
+    audio_segment_gap_ms: int = Field(default=400, ge=0, le=5000)  # between lines
+    audio_transition_gap_ms: int = Field(default=900, ge=0, le=5000)  # between stories
+    audio_music_volume_db: float = Field(default=-22.0, ge=-60.0, le=0.0)  # bed, before ducking
+
     # Text-to-speech stage.
     tts_concurrency: int = Field(default=4, ge=1, le=16)  # chunks synthesized at once
     tts_chunk_retries: int = Field(default=2, ge=0)  # extra attempts per chunk before the fallback

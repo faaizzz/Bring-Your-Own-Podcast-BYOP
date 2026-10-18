@@ -196,6 +196,10 @@ class ShowResponse(BaseModel):
 
     # Public, versioned URL of the cover image; None until one is uploaded.
     cover_url: str | None
+    # Versioned URLs (for the signed-in owner) of the show's intro, outro and music bed clips.
+    intro_url: str | None
+    outro_url: str | None
+    music_url: str | None
     episode_count: int
     last_run_status: RunStatus | None
     # When the newest episode was published (or created, for a draft).

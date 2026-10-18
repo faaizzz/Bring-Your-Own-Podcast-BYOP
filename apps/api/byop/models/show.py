@@ -85,6 +85,11 @@ class Show(Base):
     feed_category: Mapped[str | None] = mapped_column(String(100))
     feed_explicit: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     cover_key: Mapped[str | None] = mapped_column(String(500))
+    # Optional audio branding, stored under the show's prefix: a clip before and after the
+    # speech, and a music bed that plays (ducked) under it.
+    intro_key: Mapped[str | None] = mapped_column(String(500))
+    outro_key: Mapped[str | None] = mapped_column(String(500))
+    music_key: Mapped[str | None] = mapped_column(String(500))
 
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()

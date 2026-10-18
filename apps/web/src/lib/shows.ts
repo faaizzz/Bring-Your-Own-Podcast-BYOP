@@ -45,6 +45,9 @@ export const showSchema = z.object({
   last_run_status: z.string().nullable(),
   last_episode_at: z.string().nullable(),
   cover_url: z.string().nullable(),
+  intro_url: z.string().nullable(),
+  outro_url: z.string().nullable(),
+  music_url: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   warnings: z.array(z.string()).default([]),
@@ -147,6 +150,30 @@ export function useRemoveCover(showId: string) {
   const apply = useCoverUpdate();
   return useMutation({
     mutationFn: () => api.delete<Show>(`/shows/${showId}/cover`, { schema: showSchema }),
+    onSuccess: apply,
+  });
+}
+
+export const AUDIO_KINDS = ['intro', 'outro', 'music'] as const;
+export type AudioKind = (typeof AUDIO_KINDS)[number];
+
+export function useUploadAudio() {
+  const apply = useCoverUpdate();
+  return useMutation({
+    mutationFn: ({ showId, kind, file }: { showId: string; kind: AudioKind; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.post<Show>(`/shows/${showId}/audio/${kind}`, form, { schema: showSchema });
+    },
+    onSuccess: apply,
+  });
+}
+
+export function useRemoveAudio(showId: string) {
+  const apply = useCoverUpdate();
+  return useMutation({
+    mutationFn: (kind: AudioKind) =>
+      api.delete<Show>(`/shows/${showId}/audio/${kind}`, { schema: showSchema }),
     onSuccess: apply,
   });
 }

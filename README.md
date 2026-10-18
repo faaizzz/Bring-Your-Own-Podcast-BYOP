@@ -50,6 +50,7 @@ development; for a production-like run use
 - [Runs (the generation pipeline)](docs/runs.md)
 - [Scripts (the multi-speaker script writer)](docs/scripts.md)
 - [Voicing the script (text-to-speech stage)](docs/tts.md)
+- [Episode audio (mixing, loudness, intro/outro/music)](docs/audio.md)
 - [Media storage (local or S3) and covers](docs/storage.md)
 - [Secrets and key rotation](docs/security.md)
 

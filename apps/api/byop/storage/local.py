@@ -34,6 +34,23 @@ class LocalStorage:
         finally:
             await partial.unlink(missing_ok=True)
 
+    async def put_file(self, key: str, path: Path, *, content_type: str | None = None) -> None:
+        target = anyio.Path(self._path(key))
+        await target.parent.mkdir(parents=True, exist_ok=True)
+        partial = target.with_name(f"{target.name}.{uuid.uuid4().hex}.part")
+        try:
+            await anyio.to_thread.run_sync(shutil.copyfile, path, partial)
+            await partial.replace(target)
+        finally:
+            await partial.unlink(missing_ok=True)
+
+    async def get_file(self, key: str, path: Path) -> bool:
+        source = self._path(key)
+        if not await anyio.Path(source).is_file():
+            return False
+        await anyio.to_thread.run_sync(shutil.copyfile, source, path)
+        return True
+
     async def get(self, key: str) -> bytes | None:
         try:
             return await anyio.Path(self._path(key)).read_bytes()

@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 DEFAULT_CHUNK_SIZE = 64 * 1024
@@ -27,6 +28,14 @@ class Storage(Protocol):
 
     async def put(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
         """Store `data`, replacing any previous object (readers never see a partial write)."""
+        ...
+
+    async def put_file(self, key: str, path: Path, *, content_type: str | None = None) -> None:
+        """Store the file at `path` without reading it into memory (episode audio is large)."""
+        ...
+
+    async def get_file(self, key: str, path: Path) -> bool:
+        """Copy the object to the file `path` in a streaming fashion; False if it does not exist."""
         ...
 
     async def get(self, key: str) -> bytes | None:

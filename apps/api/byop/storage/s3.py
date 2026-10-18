@@ -5,6 +5,7 @@ boto3 is synchronous, so every call runs in a worker thread.
 
 import threading
 from collections.abc import AsyncIterator, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 
 import anyio.to_thread
@@ -108,6 +109,25 @@ class S3Storage:
             )
 
         await self._run(upload)
+
+    async def put_file(self, key: str, path: Path, *, content_type: str | None = None) -> None:
+        validate_key(key)
+
+        def upload() -> None:
+            self._ensure_bucket()
+            extra = {"ContentType": content_type} if content_type else {}
+            # upload_file streams from disk and switches to multipart for large files
+            self._client.upload_file(str(path), self._bucket, key, ExtraArgs=extra or None)
+
+        await self._run(upload)
+
+    async def get_file(self, key: str, path: Path) -> bool:
+        validate_key(key)
+        try:
+            await self._run(lambda: self._client.download_file(self._bucket, key, str(path)))
+        except StorageKeyNotFound:
+            return False
+        return True
 
     async def get(self, key: str) -> bytes | None:
         validate_key(key)

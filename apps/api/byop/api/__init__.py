@@ -8,6 +8,7 @@ from byop.api import (
     integrations,
     models,
     runs,
+    show_audio,
     shows,
     sources,
     speakers,
@@ -30,6 +31,7 @@ protected.include_router(integrations.router)
 protected.include_router(models.router)
 protected.include_router(shows.router)
 protected.include_router(covers.router)
+protected.include_router(show_audio.router)
 protected.include_router(sources.router)
 protected.include_router(discovery.router)
 protected.include_router(speakers.router)

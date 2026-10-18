@@ -15,6 +15,7 @@ import {
   type Speaker,
 } from '../../lib/shows';
 import { useToast } from '../../lib/toast';
+import { AudioSection } from './form/AudioSection';
 import { CoverPicker } from './form/CoverPicker';
 import { ModelStep } from './form/ModelStep';
 import { ScheduleStep } from './form/ScheduleStep';
@@ -23,7 +24,7 @@ import {
   showFormSchema,
   showToValues,
   speakerToApi,
-  STEPS,
+  SETTINGS_STEPS,
   toUpdateBody,
   type ShowFormValues,
   type StepId,
@@ -31,9 +32,6 @@ import {
 import { SpeakersStep } from './form/SpeakersStep';
 import { TopicStep } from './form/TopicStep';
 import { firstErrorStep, stepsWithErrors } from './form/useStepper';
-
-// Sources have their own tab on the show; the review step only exists in the wizard.
-const EDIT_STEPS = STEPS.filter((s) => s.id !== 'review' && s.id !== 'sources');
 
 /** The cover saves immediately, like a file upload should, not with the rest of the form. */
 function CoverSection({ show }: { show: Show }): React.JSX.Element {
@@ -128,7 +126,7 @@ function EditForm({ show, speakers }: { show: Show; speakers: Speaker[] }): Reac
         }}
       >
         <Nav variant="pills" className="mb-4" aria-label="Settings sections">
-          {EDIT_STEPS.map((s) => (
+          {SETTINGS_STEPS.map((s) => (
             <Nav.Item key={s.id}>
               <Nav.Link
                 as="button"
@@ -172,6 +170,9 @@ function EditForm({ show, speakers }: { show: Show; speakers: Speaker[] }): Reac
         </div>
         <div hidden={tab !== 'schedule'}>
           <ScheduleStep editing />
+        </div>
+        <div hidden={tab !== 'audio'}>
+          <AudioSection show={show} />
         </div>
 
         <Button type="submit" disabled={busy || !form.formState.isDirty}>
