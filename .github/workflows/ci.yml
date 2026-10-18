@@ -49,6 +49,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install ffmpeg (audio conversion tests)
+        working-directory: .
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .

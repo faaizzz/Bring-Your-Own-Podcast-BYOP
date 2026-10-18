@@ -75,7 +75,7 @@ New directories or modules must follow these names; update this section if the l
 `docker/nginx.conf` resolves `api` at request time (Docker resolver + variable `proxy_pass`) so recreating the api container never leaves the web proxy on a stale IP; keep that pattern for any new upstream.
 
 ## CI
-`.github/workflows/ci.yml` runs on push and PR: `api` (ruff, mypy, pytest with postgres+redis services), `web` (eslint, tsc, vitest, build on Node 22), `compose` (repo checks + `docker compose build`). Keep it in step with `make check`; GitHub-hosted runners only.
+`.github/workflows/ci.yml` runs on push and PR: `api` (installs ffmpeg, then ruff, mypy, pytest with postgres+redis services), `web` (eslint, tsc, vitest, build on Node 22), `compose` (repo checks + `docker compose build`). Keep it in step with `make check`; GitHub-hosted runners only.
 
 ## Commands
 `make up|down|logs|migrate|test|lint|typecheck|check|fmt` (`make help` lists them). `make up` creates `.env` from `.env.example` and generates `BYOP_SECRET_KEY` if empty; `docker-compose.override.yml` adds dev hot reload. `make test` (and `check`) first starts postgres/redis via compose (`make deps`); tests use the `byop_test` database from `TEST_DATABASE_URL`, created and migrated on demand. `make migrate` applies Alembic migrations. Local stack: `cp .env.example .env && make up`, then web on http://localhost:8080 (API under `/api`).
