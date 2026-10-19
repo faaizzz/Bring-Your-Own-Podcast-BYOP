@@ -17,15 +17,21 @@ class JobRecord(BaseModel):
     status: DiscoveryStatus = DiscoveryStatus.QUEUED
     candidates: list[DiscoveredSource] = []
     error: str | None = None
+    warnings: list[str] = []
 
 
 def _key(job_id: str) -> str:
     return f"discovery:{job_id}"
 
 
-async def create_job(redis: Redis, user_id: uuid.UUID, show_id: uuid.UUID | None) -> str:
+async def create_job(
+    redis: Redis,
+    user_id: uuid.UUID,
+    show_id: uuid.UUID | None,
+    warnings: list[str] | None = None,
+) -> str:
     job_id = uuid.uuid4().hex
-    record = JobRecord(user_id=user_id, show_id=show_id)
+    record = JobRecord(user_id=user_id, show_id=show_id, warnings=warnings or [])
     await redis.set(_key(job_id), record.model_dump_json(), ex=JOB_TTL_SECONDS)
     return job_id
 
@@ -48,4 +54,5 @@ def to_response(job_id: str, record: JobRecord) -> DiscoveryJob:
         show_id=record.show_id,
         candidates=record.candidates,
         error=record.error,
+        warnings=record.warnings,
     )

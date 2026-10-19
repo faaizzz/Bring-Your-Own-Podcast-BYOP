@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Spinner } from 'react-bootstrap';
 import { FiSearch } from 'react-icons/fi';
 
+import { Link } from 'react-router-dom';
+
 import {
   useDiscoveryJob,
+  useDiscoveryModel,
   useStartDiscovery,
   type DiscoveredSource,
+  type DiscoveryModel,
   type DiscoveryTarget,
 } from '../../../lib/discovery';
 import { KIND_LABELS } from '../../../lib/sources';
@@ -16,6 +20,8 @@ type DiscoverSourcesProps = {
   onAccept: (candidate: DiscoveredSource) => Promise<void>;
   /** Disables starting, e.g. while the wizard has no topic yet. */
   disabled?: boolean;
+  /** The wizard's current model choice (a show's own is read from the show). */
+  draftModel?: { provider: string; model: string };
 };
 
 type Row = { state: 'open' | 'accepting' | 'accepted' | 'rejected'; error?: string };
@@ -24,12 +30,67 @@ function keyOf(candidate: DiscoveredSource): string {
   return `${candidate.kind}|${candidate.value}`;
 }
 
+const SOURCE_TEXT = {
+  discovery_setting: 'set by DISCOVERY_LLM_PROVIDER / DISCOVERY_LLM_MODEL',
+  show: 'the show’s model',
+  default: 'the instance default model',
+} as const;
+
+/** Which model will search, and whether it can, before anything runs. */
+function ModelNotice({
+  model,
+  error,
+  target,
+}: {
+  model: DiscoveryModel | undefined;
+  error: string | undefined;
+  target: DiscoveryTarget;
+}): React.JSX.Element | null {
+  if (error !== undefined) {
+    return (
+      <Alert variant="warning" role="note" data-testid="discovery-model">
+        {error}
+      </Alert>
+    );
+  }
+  if (!model) return null;
+  const change =
+    target.kind === 'show' ? (
+      <Link to={`/shows/${target.showId}/settings`}>Change the show’s model</Link>
+    ) : (
+      'Change the model in the Models step.'
+    );
+  return (
+    <div className="mb-3" data-testid="discovery-model">
+      <div className="small">
+        Model: <strong>{model.provider_label}</strong> · <code>{model.model}</code>{' '}
+        <span className="text-muted">({SOURCE_TEXT[model.source]})</span>{' '}
+        {model.web_search === 'yes' && <Badge bg="success">Web search</Badge>}
+        {model.web_search === 'unknown' && <Badge bg="secondary">Web search not confirmed</Badge>}
+        {model.web_search === 'no' && <Badge bg="danger">No web search</Badge>}
+      </div>
+      {model.web_search !== 'yes' && model.message && (
+        <Alert
+          variant={model.web_search === 'no' ? 'warning' : 'light'}
+          role="note"
+          className="mt-2 mb-0"
+        >
+          {model.message} {change}
+          {model.source === 'discovery_setting' && ' (or change DISCOVERY_LLM_* in .env)'}
+        </Alert>
+      )}
+    </div>
+  );
+}
+
 export function DiscoverSources({
   target,
   onAccept,
   disabled = false,
+  draftModel,
 }: DiscoverSourcesProps): React.JSX.Element {
   const start = useStartDiscovery(target);
+  const modelInfo = useDiscoveryModel(target, draftModel);
   const [jobId, setJobId] = useState<string | null>(null);
   const [rows, setRows] = useState<Record<string, Row>>({});
   const job = useDiscoveryJob(jobId);
@@ -37,8 +98,8 @@ export function DiscoverSources({
   const begin = () => {
     setRows({});
     start.mutate(undefined, {
-      onSuccess: (id) => {
-        setJobId(id);
+      onSuccess: (started) => {
+        setJobId(started.job_id);
       },
     });
   };
@@ -88,7 +149,17 @@ export function DiscoverSources({
         )}
       </div>
 
+      <ModelNotice
+        model={modelInfo.data}
+        error={modelInfo.isError ? modelInfo.error.message : undefined}
+        target={target}
+      />
       {start.isError && <Alert variant="danger">{start.error.message}</Alert>}
+      {(job.data?.warnings ?? start.data?.warnings ?? []).map((warning) => (
+        <Alert key={warning} variant="warning" role="note" data-testid="discovery-warning">
+          {warning}
+        </Alert>
+      ))}
       {job.isError && <Alert variant="danger">{job.error.message}</Alert>}
       {running && !start.isError && (
         <div className="text-muted" role="status">

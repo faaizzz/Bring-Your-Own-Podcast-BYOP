@@ -28,6 +28,9 @@ def _encode(models: list[ModelInfo]) -> str:
                 "completion": (
                     str(m.completion_price_per_million) if m.completion_price_per_million else None
                 ),
+                "parameters": list(m.supported_parameters),
+                "outputs": list(m.output_modalities),
+                "web_search": m.web_search,
             }
             for m in models
         ]
@@ -44,6 +47,10 @@ def _decode(raw: str) -> list[ModelInfo]:
             completion_price_per_million=Decimal(item["completion"])
             if item["completion"]
             else None,
+            # Absent in entries cached before capabilities were captured.
+            supported_parameters=tuple(item.get("parameters", ())),
+            output_modalities=tuple(item.get("outputs", ())),
+            web_search=item.get("web_search"),
         )
         for item in json.loads(raw)
     ]

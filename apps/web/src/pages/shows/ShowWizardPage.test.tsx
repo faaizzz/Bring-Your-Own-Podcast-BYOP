@@ -293,6 +293,38 @@ describe('create-show wizard', () => {
       expect(within(first).getByText('Story A')).toBeInTheDocument();
     });
 
+    it('shows the model discovery will use, following the model chosen in the form', async () => {
+      const { user, fetchMock } = await openWizard({
+        ...discoveryHandlers(),
+        'GET /api/sources/discover/model': ({ query }) => ({
+          body: {
+            provider: query.get('llm_provider') ?? 'openrouter',
+            provider_label: 'OpenRouter',
+            model: query.get('llm_model') ?? 'default/model',
+            source: query.get('llm_provider') ? 'show' : 'default',
+            web_search: 'yes',
+            message: null,
+          },
+        }),
+      });
+      await fillTopic(user);
+      await user.click(next());
+      await user.click(next());
+      await choose(user, 'Language model provider', 'OpenRouter');
+      await screen.findByLabelText('Model');
+      await choose(user, 'Model', /perplexity|meta\/llama/);
+      await user.click(next());
+
+      const notice = await screen.findByTestId('discovery-model');
+
+      expect(notice).toHaveTextContent('OpenRouter');
+      const asked = callsTo(fetchMock, 'GET /api/sources/discover/model').map(([input]) =>
+        requestUrl(input),
+      );
+      expect(asked.at(-1)?.searchParams.get('llm_provider')).toBe('openrouter');
+      expect(asked.at(-1)?.searchParams.get('llm_model')).toBe('meta/llama');
+    });
+
     it('keeps accepted sources, drops rejected ones, and saves them with the new show', async () => {
       const { user, fetchMock } = await onSources();
       await user.click(screen.getByRole('button', { name: 'Discover sources' }));

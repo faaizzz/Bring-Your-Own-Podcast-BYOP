@@ -1,6 +1,6 @@
 import enum
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -47,10 +47,26 @@ class DiscoveryJob(BaseModel):
     show_id: uuid.UUID | None = None
     candidates: list[DiscoveredSource] = Field(default_factory=list)
     error: str | None = None
+    # Caveats that do not stop discovery, e.g. that web search could not be confirmed.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class DiscoveryStarted(BaseModel):
     job_id: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DiscoveryModel(BaseModel):
+    """The model discovery would use now and whether it can search the web."""
+
+    provider: str
+    provider_label: str
+    model: str
+    # Where it comes from: DISCOVERY_LLM_*, the show's own choice, or the instance default.
+    source: Literal["discovery_setting", "show", "default"]
+    web_search: Literal["yes", "no", "unknown"]
+    # Why discovery would be refused (`no`) or what could not be confirmed (`unknown`).
+    message: str | None = None
 
 
 class DraftDiscoverRequest(BaseModel):

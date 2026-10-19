@@ -68,6 +68,8 @@ class ProviderConfig:
     headers: Mapping[str, str] = field(default_factory=dict, repr=False)
     connection_id: uuid.UUID | None = None
     label: str | None = None
+    # Connections only: the user says the server's models can search the web.
+    web_search: bool = False
 
     @property
     def usage_name(self) -> str:
@@ -194,6 +196,7 @@ class CredentialResolver:
             headers=headers,
             connection_id=record.id,
             label=record.name,
+            web_search=record.web_search,
         )
 
     def open_connection(self, record: ProviderConnection) -> tuple[str | None, dict[str, str]]:

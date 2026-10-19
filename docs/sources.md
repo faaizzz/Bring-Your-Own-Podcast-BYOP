@@ -63,7 +63,7 @@ How it works (`byop/services/discovery.py`, run by the Celery worker):
    for the topic, in the show's language, as structured JSON. On OpenRouter `:online` is appended
    to the model id so it can search the web (`perplexity/…` models, which search natively, and ids
    already ending in `:online` are left alone). On other providers the configured model is
-   used as is, so pick one that can search.
+   used as is, so pick one that can search (see *Can the model search?* below).
 2. Every candidate is **checked**: an RSS feed must be fetchable, parse, have entries and (when
    its entries carry dates) a newest one under 90 days old; a page must be fetchable. The same
    address rules as for manual sources apply. Failures are dropped; sources the show already has
@@ -76,11 +76,36 @@ own model, else `DEFAULT_LLM_PROVIDER` + `DEFAULT_LLM_MODEL`. If none is set the
 a message saying so. The call is logged and attributed to the show with `stage=discovery`
 (usage capture records it with the others).
 
+### Can the model search?
+
+Before a job is queued BYOP checks that the model can search the web (`byop/services/web_search.py`)
+and answers `yes`, `no` or `unknown`:
+
+| Provider | Answer |
+| --- | --- |
+| OpenRouter | `yes` for `perplexity/…` and ids ending in `:online`; for any other model that is listed and produces text (the `:online` plugin then searches for it); `no` if the model produces no text or OpenRouter does not offer it; `unknown` if the model list cannot be read |
+| OpenAI | `yes` only for the search models (ids containing `search`, e.g. `gpt-4o-search-preview`), otherwise `no` |
+| A connection (`conn:<id>`) | the connection's **Web search** switch (Settings › Integrations): on is `yes`, off is `no` |
+| anything else | `unknown` |
+
+`no` refuses the request with `422` and a message that names the model and provider and says how
+to fix it (nothing is queued); `unknown` is allowed, with the reason in the response's and the job's
+`warnings`. The Discover dialog and the wizard's Sources step show the model that will be used, where
+it comes from and this answer before you run anything. The worker applies the same check as a
+safety net.
+
+If the provider rejects the request anyway, the job's `error` explains it from what the provider
+said (status, code and message, stripped of anything that looks like a key): a rejected key, no
+credit, an unknown model, rate limiting, or a model that refuses the web-search request. It always
+includes the provider's own words, and an unexpected failure names its kind instead of a bare
+"failed".
+
 | Method | Path | |
 | --- | --- | --- |
-| `POST` | `/api/shows/{id}/sources/discover` | Start for a show's topic; `202 {job_id}` |
-| `POST` | `/api/sources/discover` | Start for a draft `{topic, language?, llm_provider?, llm_model?}` (before the show exists) |
-| `GET` | `/api/sources/discover/{job_id}` | `{status: queued\|running\|done\|failed, candidates, error}`; kept for an hour |
+| `POST` | `/api/shows/{id}/sources/discover` | Start for a show's topic; `202 {job_id, warnings}`, or `422` if the model cannot search |
+| `POST` | `/api/sources/discover` | Start for a draft `{topic, language?, llm_provider?, llm_model?}` (before the show exists); same answers |
+| `GET` | `/api/sources/discover/model` | The model discovery would use: `?show_id=` for a show, or `?llm_provider=&llm_model=` for a draft. `{provider, provider_label, model, source: discovery_setting\|show\|default, web_search: yes\|no\|unknown, message}`; `404` if no model is set up |
+| `GET` | `/api/sources/discover/{job_id}` | `{status: queued\|running\|done\|failed, candidates, error, warnings}`; kept for an hour |
 
 A candidate is `{kind, name, value, reason, recent_titles}`. Accepting one means creating the
 source with `origin: "discovered"` through the normal sources API. Discovery is run on demand;

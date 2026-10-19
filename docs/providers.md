@@ -83,6 +83,9 @@ Behaviour worth knowing:
   sees its own answer and what was wrong with it; after that `LLMResponseError`
   is raised. If a server rejects `response_format` (HTTP 400) the schema is put in
   the prompt instead.
+- **Errors** keep what the provider said: `LLMError` has `status_code`, `code` and `detail` (its
+  own message, with anything key-like removed), and the message reads `request failed (HTTP 400):
+  <the provider's reason>`.
 - **Retries**: 429, 5xx and network errors are retried with exponential backoff,
   jitter and `Retry-After` (4 attempts, up to 30 s by default; `RetryPolicy`
   changes that). Other 4xx errors fail immediately. The request timeout is
@@ -94,7 +97,9 @@ Behaviour worth knowing:
 
 `GET /api/models?provider=openrouter|openai|conn:<id>` returns
 `id`, `name`, `context_length` and prompt/completion prices (USD per million
-tokens, where the provider publishes them). Results are cached for an hour per
+tokens, where the provider publishes them). OpenRouter's list also carries what each model
+accepts and produces (`supported_parameters`, `output_modalities`) and `web_search`: true when the
+model searches the web by itself. The pickers show that as a "Web search" badge. Results are cached for an hour per
 provider and credential. It answers `409` when the provider is not configured and
 `502` when the provider cannot be reached.
 

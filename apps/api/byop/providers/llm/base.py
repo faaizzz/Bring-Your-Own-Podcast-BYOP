@@ -9,11 +9,25 @@ from byop.providers.common import CallMetadata
 
 
 class LLMError(Exception):
-    """A request to the model provider failed (after retries)."""
+    """A request to the model provider failed (after retries).
 
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    `status_code`, `code` and `detail` are what the provider itself said (HTTP status, its error
+    code and its message, already stripped of anything that looks like a key), so callers can
+    explain the failure instead of guessing.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        code: str | None = None,
+        detail: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.code = code
+        self.detail = detail
 
 
 class LLMResponseError(LLMError):
@@ -60,6 +74,12 @@ class ModelInfo:
     context_length: int | None = None
     prompt_price_per_million: Decimal | None = None
     completion_price_per_million: Decimal | None = None
+    # What the provider says the model accepts (OpenRouter: `supported_parameters`).
+    supported_parameters: tuple[str, ...] = ()
+    # What the model produces ("text", "image", ...); empty when the provider does not say.
+    output_modalities: tuple[str, ...] = ()
+    # True when the model searches the web by itself; None when the provider does not say.
+    web_search: bool | None = None
 
 
 class LLMProvider(ABC):

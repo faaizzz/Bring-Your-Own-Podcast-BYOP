@@ -80,7 +80,7 @@ connection under Settings › Integrations ([providers](providers.md#connections
 | --- | --- | --- |
 | `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL` | empty | Model given to a new show that does not choose its own (used only as a pair; `openrouter`, `openai` or `conn:<id>` of a connection) |
 | `DEFAULT_SHOW_STYLE` | `news_briefing` | `news_briefing`, `conversational`, `deep_dive` or `interview` |
-| `DISCOVERY_LLM_PROVIDER`, `DISCOVERY_LLM_MODEL` | empty | The model that searches the web for sources; empty uses the show's model, then the default above. On OpenRouter `:online` is added to the model id |
+| `DISCOVERY_LLM_PROVIDER`, `DISCOVERY_LLM_MODEL` | empty | The model that searches the web for sources; empty uses the show's model, then the default above. On OpenRouter `:online` is added to the model id. The Discover dialog shows which model is used and whether it can search ([sources](sources.md#can-the-model-search)). `openrouter` with `perplexity/sonar` is a good choice |
 
 ## Public routes
 

@@ -39,6 +39,9 @@ async def test_lists_openrouter_models_with_prices(app: FastAPI, authed: AsyncCl
             "context_length": 8000,
             "prompt_price_per_million": "1",
             "completion_price_per_million": "2",
+            "supported_parameters": [],
+            "output_modalities": [],
+            "web_search": False,
         }
     ]
 

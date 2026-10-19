@@ -51,6 +51,9 @@ async def list_models(
             context_length=m.context_length,
             prompt_price_per_million=m.prompt_price_per_million,
             completion_price_per_million=m.completion_price_per_million,
+            supported_parameters=list(m.supported_parameters),
+            output_modalities=list(m.output_modalities),
+            web_search=m.web_search,
         )
         for m in models
     ]

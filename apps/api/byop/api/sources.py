@@ -6,6 +6,7 @@ from kombu.exceptions import OperationalError
 from redis.asyncio import Redis
 
 from byop.api.deps import CurrentUser, SessionDep, SettingsDep
+from byop.api.integrations import ResolverDep
 from byop.models import Source
 from byop.redis_client import get_redis
 from byop.schemas.discovery import DiscoveryStarted
@@ -17,7 +18,7 @@ from byop.schemas.source import (
     SourceValidation,
 )
 from byop.services import sources as service
-from byop.services.discovery import DiscoveryRequest
+from byop.services.discovery import DiscoveryRefused, DiscoveryRequest, precheck_discovery
 from byop.services.shows import ShowNotFound, get_show
 from byop.services.validation import FieldValidationError, error_detail
 from byop.tasks.discovery import enqueue_discovery
@@ -112,8 +113,12 @@ async def discover_sources(
     user: CurrentUser,
     session: SessionDep,
     redis: Annotated[Redis, Depends(get_redis)],
+    resolver: ResolverDep,
+    settings: SettingsDep,
 ) -> DiscoveryStarted:
-    """Start finding sources for the show's topic. Poll `GET /api/sources/discover/{job_id}`."""
+    """Start finding sources for the show's topic. Poll `GET /api/sources/discover/{job_id}`.
+
+    `422` when the model that would be used cannot search the web (nothing is queued)."""
     try:
         show = (await get_show(session, user.id, show_id)).show
     except ShowNotFound as exc:
@@ -127,12 +132,16 @@ async def discover_sources(
         llm_model=show.llm_model,
     )
     try:
-        job_id = await enqueue_discovery(redis, request)
+        warnings = await precheck_discovery(resolver, redis, settings, request)
+    except DiscoveryRefused as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    try:
+        job_id = await enqueue_discovery(redis, request, warnings)
     except OperationalError as exc:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "The job queue is unavailable"
         ) from exc
-    return DiscoveryStarted(job_id=job_id)
+    return DiscoveryStarted(job_id=job_id, warnings=warnings)
 
 
 @router.patch("/{source_id}", response_model=SourceResponse)

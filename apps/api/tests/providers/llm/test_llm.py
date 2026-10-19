@@ -463,3 +463,90 @@ async def test_a_failed_call_reports_nothing_and_no_sink_is_fine() -> None:
 
     respx.post(OPENROUTER_URL).respond(200, json=completion("ok"))
     await openrouter().complete(MESSAGES, model="m")  # no sink at all
+
+
+# --- what the provider said ----------------------------------------------------------------
+
+
+@respx.mock
+async def test_a_failed_request_keeps_the_providers_status_code_and_message() -> None:
+    respx.post(OPENROUTER_URL).respond(
+        400,
+        json={
+            "error": {
+                "code": 400,
+                "message": "Provider returned error",
+                "metadata": {"raw": "this model does not support the web plugin"},
+            }
+        },
+    )
+
+    with pytest.raises(LLMError) as excinfo:
+        await openrouter().complete(MESSAGES, model="m")
+
+    error = excinfo.value
+    assert error.status_code == 400 and error.code == "400"
+    assert error.detail == "Provider returned error — this model does not support the web plugin"
+    assert "HTTP 400" in str(error) and "does not support the web plugin" in str(error)
+
+
+@respx.mock
+async def test_the_providers_message_never_carries_a_key() -> None:
+    respx.post(OPENROUTER_URL).respond(
+        401,
+        json={"error": {"message": "Invalid key sk-or-v1-abcdef0123456789 for Bearer abc.def"}},
+    )
+
+    with pytest.raises(LLMError) as excinfo:
+        await openrouter().complete(MESSAGES, model="m")
+
+    assert "sk-or-v1-abcdef0123456789" not in str(excinfo.value)
+    assert "abc.def" not in str(excinfo.value)
+    assert "[redacted]" in str(excinfo.value)
+
+
+@respx.mock
+async def test_a_reply_without_a_json_error_body_still_reports_the_status() -> None:
+    respx.post(OPENROUTER_URL).respond(502, text="Bad gateway")
+
+    with pytest.raises(LLMError) as excinfo:
+        await openrouter(retry=RetryPolicy(max_attempts=1)).complete(MESSAGES, model="m")
+
+    assert excinfo.value.status_code == 502
+    assert "HTTP 502" in str(excinfo.value)
+
+
+@respx.mock
+async def test_openrouter_models_carry_their_capabilities() -> None:
+    respx.get("https://openrouter.ai/api/v1/models").respond(
+        200,
+        json={
+            "data": [
+                {
+                    "id": "openai/gpt-4o",
+                    "name": "GPT-4o",
+                    "supported_parameters": ["tools", "web_search_options", 7],
+                    "architecture": {"output_modalities": ["text"]},
+                },
+                {
+                    "id": "perplexity/sonar",
+                    "name": "Sonar",
+                    "architecture": {"output_modalities": ["text"]},
+                },
+                {
+                    "id": "image/maker",
+                    "name": "Maker",
+                    "supported_parameters": ["seed"],
+                    "architecture": {"output_modalities": ["image"]},
+                },
+                {"id": "plain/model", "name": "Plain"},
+            ]
+        },
+    )
+
+    gpt, sonar, image, plain = await openrouter().list_models()
+
+    assert gpt.supported_parameters == ("tools", "web_search_options")  # junk entries dropped
+    assert gpt.web_search is True and sonar.web_search is True  # native search
+    assert image.web_search is False and image.output_modalities == ("image",)
+    assert plain.supported_parameters == () and plain.output_modalities == ()

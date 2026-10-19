@@ -1,6 +1,7 @@
 """Shared implementation for providers that speak the OpenAI chat-completions protocol."""
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -67,6 +68,37 @@ def _decimal(value: object) -> Decimal | None:
         return Decimal(str(value))
     except InvalidOperation:
         return None
+
+
+_KEYLIKE = re.compile(r"(sk-[A-Za-z0-9_\-]{6,}|Bearer\s+\S+)")
+MAX_DETAIL_CHARS = 400
+
+
+def provider_error(exc: openai.APIStatusError) -> tuple[str | None, str | None]:
+    """The error code and message the provider sent, without anything that looks like a key.
+
+    OpenAI-style servers answer `{"error": {"message", "code", "type"}}`; OpenRouter may add the
+    upstream provider's own words under `metadata.raw`.
+    """
+    body = exc.body
+    # The SDK hands over the inner error object, or the whole reply when it has none.
+    error = body.get("error", body) if isinstance(body, dict) else None
+    code: str | None = None
+    parts: list[str] = []
+    if isinstance(error, dict):
+        raw_code = error.get("code") or error.get("type")
+        code = str(raw_code) if raw_code is not None else None
+        if isinstance(error.get("message"), str):
+            parts.append(error["message"])
+        metadata = error.get("metadata")
+        if isinstance(metadata, dict) and isinstance(metadata.get("raw"), str):
+            parts.append(metadata["raw"])
+    elif isinstance(body, str):
+        parts.append(body)
+    detail = " — ".join(p.strip() for p in parts if p.strip())
+    if not detail:
+        return code, None
+    return code, _KEYLIKE.sub("[redacted]", detail)[:MAX_DETAIL_CHARS]
 
 
 def is_retryable(exc: BaseException) -> bool:
@@ -185,8 +217,13 @@ class OpenAIChatProvider(LLMProvider):
         except openai.APIConnectionError as exc:
             raise LLMError(f"Could not reach {self.name}") from exc
         except openai.APIStatusError as exc:
+            code, detail = provider_error(exc)
+            reason = f": {detail}" if detail else ""
             raise LLMError(
-                f"{self.name} request failed (HTTP {exc.status_code})", status_code=exc.status_code
+                f"{self.name} request failed (HTTP {exc.status_code}){reason}",
+                status_code=exc.status_code,
+                code=code,
+                detail=detail,
             ) from exc
 
         totals.add(completion, with_cost=self.reports_cost)

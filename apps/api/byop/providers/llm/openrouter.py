@@ -21,6 +21,15 @@ def _price_per_million(value: object) -> Decimal | None:
     return (price * ONE_MILLION).quantize(Decimal("0.0001")).normalize()
 
 
+def _strings(value: object) -> tuple[str, ...]:
+    return tuple(v for v in value if isinstance(v, str)) if isinstance(value, list) else ()
+
+
+def _searches_natively(model_id: str, parameters: tuple[str, ...]) -> bool:
+    """Search built into the model: it takes `web_search_options`, or it is a Perplexity Sonar."""
+    return "web_search_options" in parameters or model_id.startswith("perplexity/")
+
+
 class OpenRouterLLM(OpenAIChatProvider):
     name = "openrouter"
     reports_cost = True
@@ -55,6 +64,11 @@ class OpenRouterLLM(OpenAIChatProvider):
             raw_pricing = entry.get("pricing")
             pricing: dict[str, object] = raw_pricing if isinstance(raw_pricing, dict) else {}
             context = entry.get("context_length")
+            parameters = _strings(entry.get("supported_parameters"))
+            architecture = entry.get("architecture")
+            outputs = _strings(
+                architecture.get("output_modalities") if isinstance(architecture, dict) else None
+            )
             models.append(
                 ModelInfo(
                     id=entry["id"],
@@ -62,6 +76,9 @@ class OpenRouterLLM(OpenAIChatProvider):
                     context_length=context if isinstance(context, int) else None,
                     prompt_price_per_million=_price_per_million(pricing.get("prompt")),
                     completion_price_per_million=_price_per_million(pricing.get("completion")),
+                    supported_parameters=parameters,
+                    output_modalities=outputs,
+                    web_search=_searches_natively(entry["id"], parameters),
                 )
             )
         return models

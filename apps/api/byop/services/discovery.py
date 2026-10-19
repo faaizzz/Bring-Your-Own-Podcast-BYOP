@@ -3,9 +3,11 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from urllib.parse import urlsplit
 
 import structlog
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,7 @@ from byop.services.feeds import FeedInvalid, preview_feed
 from byop.services.provider_ref import ProviderRef
 from byop.services.safe_http import FetchError, fetch_bytes
 from byop.services.usage import capture_usage
+from byop.services.web_search import SearchCheck, WebSearch, check_web_search
 
 log = structlog.get_logger(__name__)
 
@@ -60,20 +63,78 @@ def search_model_id(provider: ProviderRef, model: str) -> str:
     return model
 
 
-def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[ProviderRef, str]:
-    """The discovery model, then the show's, then the instance default."""
-    choices = (
-        (settings.discovery_llm_provider, settings.discovery_llm_model),
-        (request.llm_provider, request.llm_model),
-        (settings.default_llm_provider, settings.default_llm_model),
+# Where the discovery model came from, in the order they are tried.
+ModelSource = Literal["discovery_setting", "show", "default"]
+
+
+def choose_model(
+    settings: Settings, request: DiscoveryRequest
+) -> tuple[ProviderRef, str, ModelSource]:
+    """The discovery model (DISCOVERY_LLM_*), then the show's, then the instance default."""
+    choices: tuple[tuple[str | None, str | None, ModelSource], ...] = (
+        (settings.discovery_llm_provider, settings.discovery_llm_model, "discovery_setting"),
+        (request.llm_provider, request.llm_model, "show"),
+        (settings.default_llm_provider, settings.default_llm_model, "default"),
     )
-    for provider, model in choices:
+    for provider, model, source in choices:
         if provider and model:
-            return ProviderRef.parse(provider), model
+            return ProviderRef.parse(provider), model, source
     raise DiscoveryUnavailable(
         "No language model is set up for discovery. Choose one for the show, or set "
         "DEFAULT_LLM_PROVIDER and DEFAULT_LLM_MODEL (or DISCOVERY_LLM_*) in .env."
     )
+
+
+def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[ProviderRef, str]:
+    """The discovery model, then the show's, then the instance default."""
+    provider, model, _ = choose_model(settings, request)
+    return provider, model
+
+
+class DiscoveryRefused(Exception):
+    """The chosen model cannot search the web; the message says what to change."""
+
+
+@dataclass(frozen=True)
+class DiscoveryPlan:
+    """Which model discovery will use, and whether it can search the web."""
+
+    provider: ProviderRef
+    model: str
+    source: ModelSource
+    check: SearchCheck
+
+
+async def plan_discovery(
+    resolver: CredentialResolver,
+    redis: Redis,
+    settings: Settings,
+    request: DiscoveryRequest,
+) -> DiscoveryPlan:
+    """Pick the model and check its web search; `DiscoveryUnavailable` when none is chosen."""
+    provider, model, source = choose_model(settings, request)
+    check = await check_web_search(resolver, redis, request.user_id, provider, model)
+    return DiscoveryPlan(provider, model, source, check)
+
+
+async def precheck_discovery(
+    resolver: CredentialResolver,
+    redis: Redis,
+    settings: Settings,
+    request: DiscoveryRequest,
+) -> list[str]:
+    """Run before queueing a job. Raises `DiscoveryRefused` when the model cannot search the web;
+    returns warnings (a capability that could not be confirmed) to show with the results. A missing
+    model or provider is left for the job to report."""
+    try:
+        plan = await plan_discovery(resolver, redis, settings, request)
+    except DiscoveryUnavailable:
+        return []
+    if plan.check.support is WebSearch.NO and plan.check.message:
+        raise DiscoveryRefused(plan.check.message)
+    if plan.check.support is WebSearch.UNKNOWN and plan.check.message:
+        return [plan.check.message]
+    return []
 
 
 def build_messages(request: DiscoveryRequest) -> list[Message]:
@@ -178,10 +239,18 @@ async def discover_sources(
     resolver: CredentialResolver,
     settings: Settings,
     request: DiscoveryRequest,
+    redis: Redis | None = None,
 ) -> list[DiscoveredSource]:
     """Ask a web-searching model for sources, keep the ones that check out, and add baseline
-    search queries. Sources the show already has are left out."""
+    search queries. Sources the show already has are left out.
+
+    With `redis` (the model list cache) a model known not to search the web is refused up front.
+    """
     provider, model = pick_model(settings, request)
+    if redis is not None:
+        support = await check_web_search(resolver, redis, request.user_id, provider, model)
+        if support.support is WebSearch.NO and support.message:
+            raise DiscoveryUnavailable(support.message)
     try:
         config = await resolver.get_ref(request.user_id, provider, "llm")
         llm = get_llm(config.provider, config)

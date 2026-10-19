@@ -127,6 +127,99 @@ async function openDiscovery(extra: Record<string, Handler> = {}) {
   return { ...opened, dialog };
 }
 
+const searching = {
+  provider: 'openrouter',
+  provider_label: 'OpenRouter',
+  model: 'perplexity/sonar',
+  source: 'show',
+  web_search: 'yes',
+  message: null,
+};
+
+describe('the discovery model', () => {
+  it('shows which model will search and that it can', async () => {
+    const { dialog } = await openDiscovery({
+      'GET /api/sources/discover/model': () => ({ body: searching }),
+    });
+
+    const notice = await within(dialog).findByTestId('discovery-model');
+    expect(notice).toHaveTextContent('OpenRouter');
+    expect(notice).toHaveTextContent('perplexity/sonar');
+    expect(notice).toHaveTextContent('the show’s model');
+    expect(within(notice).getByText('Web search')).toBeInTheDocument();
+  });
+
+  it('warns before running when the model cannot search, with a link to change it', async () => {
+    const { dialog, fetchMock } = await openDiscovery({
+      'GET /api/sources/discover/model': () => ({
+        body: {
+          ...searching,
+          provider_label: 'OpenAI',
+          model: 'gpt-4o',
+          web_search: 'no',
+          message: "The model 'gpt-4o' on OpenAI cannot search the web: only search models do.",
+        },
+      }),
+    });
+
+    const notice = await within(dialog).findByTestId('discovery-model');
+    expect(notice).toHaveTextContent('No web search');
+    expect(notice).toHaveTextContent("The model 'gpt-4o' on OpenAI cannot search the web");
+    expect(within(notice).getByRole('link', { name: 'Change the show’s model' })).toHaveAttribute(
+      'href',
+      '/shows/s1/settings',
+    );
+    expect(callsTo(fetchMock, 'GET /api/sources/discover/model')[0]?.[0]).toBeDefined();
+  });
+
+  it('shows the 422 message when the server refuses to start, and queues nothing', async () => {
+    const { dialog } = await openDiscovery({
+      'POST /api/shows/s1/sources/discover': () => ({
+        status: 422,
+        body: { detail: "The model 'llama3' on Home Ollama cannot search the web." },
+      }),
+    });
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      "The model 'llama3' on Home Ollama cannot search the web.",
+    );
+    expect(within(dialog).queryByTestId('candidate')).not.toBeInTheDocument();
+  });
+
+  it('shows warnings that came with the job', async () => {
+    const { dialog } = await openDiscovery({
+      'POST /api/shows/s1/sources/discover': () => ({
+        status: 202,
+        body: { job_id: 'job1', warnings: ['Could not confirm that web search works.'] },
+      }),
+      'GET /api/sources/discover/job1': () => ({
+        body: {
+          job_id: 'job1',
+          status: 'done',
+          candidates,
+          error: null,
+          warnings: ['Could not confirm that web search works.'],
+        },
+      }),
+    });
+
+    expect(await within(dialog).findByTestId('discovery-warning')).toHaveTextContent(
+      'Could not confirm that web search works.',
+    );
+  });
+
+  it('explains a failure with the provider’s reason', async () => {
+    const reason = 'OpenRouter refused the web-search request. The provider said: no plugin';
+    const { dialog } = await openDiscovery({
+      'GET /api/sources/discover/job1': () => ({
+        body: { job_id: 'job1', status: 'failed', candidates: [], error: reason },
+      }),
+    });
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(reason);
+  });
+});
+
 describe('discovering sources', () => {
   it('lists validated candidates with their reason and recent titles', async () => {
     const { dialog, fetchMock } = await openDiscovery();

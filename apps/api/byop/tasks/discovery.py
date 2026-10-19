@@ -9,8 +9,15 @@ from byop.config import Settings
 from byop.providers.llm import LLMError
 from byop.schemas.discovery import DiscoveryStatus
 from byop.services.credentials import CredentialResolver
-from byop.services.discovery import DiscoveryRequest, DiscoveryUnavailable, discover_sources
+from byop.services.discovery import (
+    DiscoveryRequest,
+    DiscoveryUnavailable,
+    choose_model,
+    discover_sources,
+)
+from byop.services.discovery_errors import explain_llm_error, explain_unexpected
 from byop.services.discovery_jobs import create_job, load_job, save_job
+from byop.services.web_search import PROVIDER_LABELS
 from byop.tasks.runtime import task_deps
 from byop.worker import celery_app
 
@@ -33,25 +40,43 @@ async def run_discovery_job(
     await save_job(redis, job_id, record)
     try:
         candidates = await discover_sources(
-            session, CredentialResolver(session, settings), settings, request
+            session, CredentialResolver(session, settings), settings, request, redis
         )
     except DiscoveryUnavailable as exc:
         record.status, record.error = DiscoveryStatus.FAILED, str(exc)
     except LLMError as exc:
         record.status = DiscoveryStatus.FAILED
-        if exc.status_code in (401, 403):
-            record.error = (
-                "The model provider rejected the API key. Check it under Settings › Integrations."
-            )
-        else:
-            record.error = f"The language model failed: {exc}"
-    except Exception:
+        record.error = explain_llm_error(
+            exc,
+            provider=await _provider_label(session, settings, request),
+            model=_model_of(settings, request),
+        )
+    except Exception as exc:
         # The job is the only channel back to the user, so it must always end in a final state.
         log.exception("discovery_failed", job_id=job_id)
-        record.status, record.error = DiscoveryStatus.FAILED, "Discovery failed unexpectedly."
+        record.status, record.error = DiscoveryStatus.FAILED, explain_unexpected(exc)
     else:
         record.status, record.candidates = DiscoveryStatus.DONE, candidates
     await save_job(redis, job_id, record)
+
+
+def _model_of(settings: Settings, request: DiscoveryRequest) -> str:
+    try:
+        return choose_model(settings, request)[1]
+    except DiscoveryUnavailable:
+        return "the model"
+
+
+async def _provider_label(
+    session: AsyncSession, settings: Settings, request: DiscoveryRequest
+) -> str:
+    """A name for the provider in messages: the connection's name, or the built-in's."""
+    try:
+        ref = choose_model(settings, request)[0]
+        config = await CredentialResolver(session, settings).get_ref(request.user_id, ref)
+    except Exception:  # the label is only for the message
+        return "The model provider"
+    return config.label or PROVIDER_LABELS.get(config.provider, config.provider.value)
 
 
 async def _run(job_id: str, request: DiscoveryRequest) -> None:
@@ -80,9 +105,11 @@ def discover_sources_task(
     asyncio.run(_run(job_id, request))
 
 
-async def enqueue_discovery(redis: Redis, request: DiscoveryRequest) -> str:
+async def enqueue_discovery(
+    redis: Redis, request: DiscoveryRequest, warnings: list[str] | None = None
+) -> str:
     """Create the job record and hand the work to the worker; returns the job id."""
-    job_id = await create_job(redis, request.user_id, request.show_id)
+    job_id = await create_job(redis, request.user_id, request.show_id, warnings)
     discover_sources_task.delay(
         job_id,
         str(request.user_id),

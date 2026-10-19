@@ -17,6 +17,8 @@ type SourcesStepProps = {
 export function SourcesStep({ chosen, onAdd, onRemove }: SourcesStepProps): React.JSX.Element {
   const { control, getValues } = useFormContext<ShowFormValues>();
   const topic = useWatch({ control, name: 'topic' });
+  const llmProvider = useWatch({ control, name: 'llm_provider' });
+  const llmModel = useWatch({ control, name: 'llm_model' });
 
   return (
     <>
@@ -26,6 +28,7 @@ export function SourcesStep({ chosen, onAdd, onRemove }: SourcesStepProps): Reac
       </p>
       <DiscoverSources
         disabled={topic.trim() === ''}
+        draftModel={{ provider: llmProvider, model: llmModel.trim() }}
         target={{
           kind: 'draft',
           getRequest: () => {
