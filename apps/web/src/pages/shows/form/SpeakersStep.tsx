@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom';
 
 import { useProviders } from '../../../lib/providers';
 import { Field } from './Field';
-import { ProviderOptions } from './ProviderOptions';
+import { SelectField } from './SelectField';
+import { useProviderOptions } from './useProviderOptions';
 import {
   MAX_SPEAKERS,
   paramsToApi,
@@ -16,15 +17,17 @@ import {
 } from './schema';
 import { VoicePicker, VoicePreview } from './VoicePicker';
 
+const BOOLEAN_OPTIONS = [
+  { value: '', label: 'Default' },
+  { value: 'true', label: 'On' },
+  { value: 'false', label: 'Off' },
+];
+
 function ParamInput({ index, field }: { index: number; field: ParamField }): React.JSX.Element {
   const name = `speakers.${index}.params.${field.name}` as const;
   if (field.kind === 'boolean') {
     return (
-      <Field name={name} label={field.label} as="select" className="mb-2">
-        <option value="">Default</option>
-        <option value="true">On</option>
-        <option value="false">Off</option>
-      </Field>
+      <SelectField name={name} label={field.label} options={BOOLEAN_OPTIONS} className="mb-2" />
     );
   }
   return (
@@ -60,6 +63,8 @@ function SpeakerEditor({
 
   const provider = speaker.tts_provider;
   const fallbackProvider = speaker.fallback_tts_provider;
+  const providerOptions = useProviderOptions('tts', provider);
+  const fallbackOptions = useProviderOptions('tts', fallbackProvider);
 
   const changeProvider = (next: string) => {
     // A voice id means nothing on another provider; keep only settings it also understands.
@@ -94,14 +99,12 @@ function SpeakerEditor({
           rows={2}
           hint="Role and speaking style, e.g. the curious lead host."
         />
-        <Field
+        <SelectField
           name={`${prefix}.tts_provider`}
           label="Voice provider"
-          as="select"
+          options={providerOptions}
           onValueChange={changeProvider}
-        >
-          <ProviderOptions capability="tts" current={provider} />
-        </Field>
+        />
         <VoicePicker
           id={`speaker-${String(index)}-voice`}
           label="Voice"
@@ -163,17 +166,16 @@ function SpeakerEditor({
             <p className="text-muted small">
               Used if the main provider fails while synthesizing this speaker.
             </p>
-            <Field
+            <SelectField
               name={`${prefix}.fallback_tts_provider`}
               label="Fallback provider"
-              as="select"
+              options={fallbackOptions}
+              placeholder="None"
+              isClearable
               onValueChange={() => {
                 setValue(`${prefix}.fallback_voice_id`, '');
               }}
-            >
-              <option value="">None</option>
-              <ProviderOptions capability="tts" current={fallbackProvider} />
-            </Field>
+            />
             {fallbackProvider !== '' && (
               <VoicePicker
                 id={`speaker-${String(index)}-fallback-voice`}

@@ -2,12 +2,18 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Form, Spinner, Table } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { formatCost, formatDateTime } from '../../lib/format';
 import { useHistory, type HistoryFilters } from '../../lib/history';
 import { formatSeconds, RUN_STATUS_LABELS, RUN_STATUSES, STATUS_VARIANT } from '../../lib/runs';
 import { useShows } from '../../lib/shows';
 
 const TRIGGERS = { manual: 'Manual', schedule: 'Scheduled', resynth: 'Re-synthesis' } as const;
+const TRIGGER_OPTIONS = Object.entries(TRIGGERS).map(([value, label]) => ({ value, label }));
+const STATUS_OPTIONS = RUN_STATUSES.map((status) => ({
+  value: status,
+  label: RUN_STATUS_LABELS[status],
+}));
 
 function FilterBar({
   filters,
@@ -34,55 +40,47 @@ function FilterBar({
       {withShow && (
         <Form.Group className="col-sm-6 col-lg-3" controlId="history-show">
           <Form.Label className="small text-muted mb-1">Show</Form.Label>
-          <Form.Select
+          <SearchableSelect
+            inputId="history-show"
             size="sm"
             value={filters.showId ?? ''}
-            onChange={(e) => {
-              set({ showId: e.target.value });
+            options={(shows.data ?? []).map((show) => ({ value: show.id, label: show.title }))}
+            placeholder="All shows"
+            isLoading={shows.isPending}
+            isClearable
+            onChange={(showId) => {
+              set({ showId });
             }}
-          >
-            <option value="">All shows</option>
-            {shows.data?.map((show) => (
-              <option key={show.id} value={show.id}>
-                {show.title}
-              </option>
-            ))}
-          </Form.Select>
+          />
         </Form.Group>
       )}
       <Form.Group className="col-6 col-lg-2" controlId="history-status">
         <Form.Label className="small text-muted mb-1">Status</Form.Label>
-        <Form.Select
+        <SearchableSelect
+          inputId="history-status"
           size="sm"
           value={filters.status ?? ''}
-          onChange={(e) => {
-            set({ status: e.target.value });
+          options={STATUS_OPTIONS}
+          placeholder="Any status"
+          isClearable
+          onChange={(status) => {
+            set({ status });
           }}
-        >
-          <option value="">Any status</option>
-          {RUN_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {RUN_STATUS_LABELS[status]}
-            </option>
-          ))}
-        </Form.Select>
+        />
       </Form.Group>
       <Form.Group className="col-6 col-lg-2" controlId="history-trigger">
         <Form.Label className="small text-muted mb-1">Trigger</Form.Label>
-        <Form.Select
+        <SearchableSelect
+          inputId="history-trigger"
           size="sm"
           value={filters.trigger ?? ''}
-          onChange={(e) => {
-            set({ trigger: e.target.value });
+          options={TRIGGER_OPTIONS}
+          placeholder="Any trigger"
+          isClearable
+          onChange={(trigger) => {
+            set({ trigger });
           }}
-        >
-          <option value="">Any trigger</option>
-          {Object.entries(TRIGGERS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Form.Select>
+        />
       </Form.Group>
       <Form.Group className="col-6 col-lg-2" controlId="history-from">
         <Form.Label className="small text-muted mb-1">From</Form.Label>

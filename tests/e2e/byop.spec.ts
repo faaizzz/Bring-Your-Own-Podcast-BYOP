@@ -12,6 +12,12 @@ async function shot(page: Page, name: string): Promise<void> {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
 
+// Dropdowns are searchable (react-select): open, then click the option.
+async function pick(page: Page, label: string, option: string | RegExp): Promise<void> {
+  await page.getByLabel(label, { exact: true }).click();
+  await page.getByRole('option', { name: option }).click();
+}
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
   await page.getByPlaceholder('Email address').fill(EMAIL);
@@ -61,10 +67,10 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByLabel('Target length (minutes)').fill('2');
   await page.getByLabel('Stories per episode').fill('3');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByLabel('Voice provider').first()).toHaveValue('kokoro');
+  await expect(page.locator('input[name="speakers.0.tts_provider"]')).toHaveValue('kokoro');
   await page.getByRole('button', { name: 'Next' }).click();
-  await page.getByLabel('Language model provider').selectOption({ label: 'Mock model' });
-  await page.getByLabel('Model', { exact: true }).selectOption('mock-model');
+  await pick(page, 'Language model provider', 'Mock model');
+  await pick(page, 'Model', /mock-model/);
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: 'Next' }).click(); // sources are added once the show exists
   await page.getByRole('button', { name: 'Next' }).click(); // manual schedule

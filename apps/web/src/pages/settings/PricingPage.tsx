@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Form, Spinner, Table } from 'react-bootstrap';
 
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { MainCard } from '../../layout/MainCard';
 import {
   usePrices,
@@ -42,6 +43,11 @@ function fromEntry(entry: PriceEntry): Draft {
     chars: entry.per_million_chars ?? '',
   };
 }
+
+const KIND_OPTIONS = [
+  { value: 'llm', label: 'Language model' },
+  { value: 'tts', label: 'Voice' },
+];
 
 export default function PricingPage(): React.JSX.Element {
   const prices = usePrices();
@@ -151,16 +157,15 @@ export default function PricingPage(): React.JSX.Element {
       <Form className="row g-2 align-items-end" onSubmit={submit} aria-label="Set a price">
         <Form.Group className="col-sm-3 col-lg-2" controlId="price-kind">
           <Form.Label className="small text-muted mb-1">Kind</Form.Label>
-          <Form.Select
+          <SearchableSelect
+            inputId="price-kind"
             size="sm"
             value={draft.kind}
-            onChange={(e) => {
-              setDraft({ ...draft, kind: e.target.value === 'tts' ? 'tts' : 'llm' });
+            options={KIND_OPTIONS}
+            onChange={(kind) => {
+              setDraft({ ...draft, kind: kind === 'tts' ? 'tts' : 'llm' });
             }}
-          >
-            <option value="llm">Language model</option>
-            <option value="tts">Voice</option>
-          </Form.Select>
+          />
         </Form.Group>
         <Form.Group className="col-sm-9 col-lg-4" controlId="price-name">
           <Form.Label className="small text-muted mb-1">

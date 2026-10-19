@@ -325,3 +325,154 @@ $speaker-colors: (
 .script-editor-line {
   border-left: 4px solid var(--speaker-color) !important;
 }
+
+
+// ---- Searchable select (components/SearchableSelect.tsx, react-select) ---------------------
+$select-focus: #86b7fe;
+
+.byop-select {
+  .byop-select__control {
+    min-height: calc(1.5em + 0.75rem + 2px);
+    background-color: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #ced4da);
+    border-radius: var(--bs-border-radius, 0.375rem);
+    box-shadow: none;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--bs-border-color, #ced4da);
+    }
+  }
+
+  .byop-select__control--is-focused {
+    border-color: $select-focus;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  }
+
+  .byop-select__control--is-disabled {
+    background-color: var(--bs-secondary-bg, #e9ecef);
+    cursor: not-allowed;
+  }
+
+  .byop-select__value-container {
+    padding: 0.25rem 0.75rem;
+  }
+
+  .byop-select__single-value,
+  .byop-select__input-container {
+    color: var(--bs-body-color, #212529);
+  }
+
+  .byop-select__placeholder {
+    color: var(--bs-secondary-color, #6c757d);
+  }
+
+  .byop-select__indicator {
+    color: var(--bs-secondary-color, #6c757d);
+    padding: 0.25rem 0.5rem;
+  }
+
+  .byop-select__indicator-separator {
+    display: none;
+  }
+
+  &.is-invalid .byop-select__control {
+    border-color: var(--bs-form-invalid-border-color, #dc3545);
+  }
+
+  &--sm .byop-select__control {
+    min-height: calc(1.5em + 0.5rem + 2px);
+    font-size: 0.875rem;
+  }
+
+  &--sm .byop-select__value-container {
+    padding: 0.125rem 0.5rem;
+  }
+}
+
+// The list is rendered on <body>, outside .byop-select, so it is styled by its own class.
+.byop-select__menu {
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #ced4da);
+  border-radius: var(--bs-border-radius, 0.375rem);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  color: var(--bs-body-color, #212529);
+
+  .byop-select__option {
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+
+    &--is-focused {
+      background-color: var(--bs-tertiary-bg, #e9ecef);
+    }
+
+    &--is-selected {
+      background-color: var(--bs-primary, #04a9f5);
+      color: #fff;
+
+      .byop-select__description {
+        color: rgba(255, 255, 255, 0.8) !important;
+      }
+    }
+
+    &--is-disabled {
+      color: var(--bs-secondary-color, #6c757d);
+      cursor: not-allowed;
+    }
+  }
+
+  .byop-select__group-heading {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .byop-select__menu-notice {
+    color: var(--bs-secondary-color, #6c757d);
+  }
+}
+
+[data-bs-theme='dark'] {
+  .byop-select .byop-select__control {
+    background-color: $dark-bg;
+    border-color: $dark-border;
+
+    &.byop-select__control--is-focused {
+      border-color: $select-focus;
+    }
+
+    &.byop-select__control--is-disabled {
+      background-color: $dark-surface;
+    }
+  }
+
+  .byop-select .byop-select__single-value,
+  .byop-select .byop-select__input-container {
+    color: $dark-text;
+  }
+
+  .byop-select .byop-select__placeholder,
+  .byop-select .byop-select__indicator {
+    color: $dark-muted;
+  }
+}
+
+// Outside .byop-select, so the dark list needs its own selector too.
+[data-bs-theme='dark'] .byop-select__menu {
+  background-color: $dark-surface;
+  border-color: $dark-border;
+  color: $dark-text;
+
+  .byop-select__option--is-focused {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .byop-select__option--is-selected {
+    background-color: var(--bs-primary, #04a9f5);
+  }
+}
+
+.script-editor-speaker {
+  min-width: 11rem;
+}

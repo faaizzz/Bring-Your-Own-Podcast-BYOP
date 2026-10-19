@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { FiPlay } from 'react-icons/fi';
 
+import { SearchableSelect, type SelectOption } from '../../../components/SearchableSelect';
 import { usePreviewVoice, useVoices, type TtsProvider, type Voice } from '../../../lib/voices';
 import type { ParamValue } from '../../../lib/shows';
 
@@ -14,11 +15,20 @@ type VoicePickerProps = {
   error?: string;
 };
 
-function voiceLabel(voice: Voice): string {
-  return [voice.name, voice.language, voice.gender].filter(Boolean).join(' · ');
+function voiceOption(voice: Voice): SelectOption {
+  const details = [voice.language, voice.gender].filter(Boolean).join(' · ');
+  return {
+    value: voice.id,
+    label: voice.name,
+    keywords: `${voice.id} ${details}`,
+    description: details || undefined,
+  };
 }
 
-/** A searchable voice list; falls back to a plain id field when the provider cannot list voices. */
+/**
+ * A searchable voice list. A provider that cannot list voices (or lists none) still works: the
+ * id can be typed in, which is also how a voice outside the list is used.
+ */
 export function VoicePicker({
   id,
   label,
@@ -28,86 +38,29 @@ export function VoicePicker({
   error,
 }: VoicePickerProps): React.JSX.Element {
   const voices = useVoices(provider);
-  const [filter, setFilter] = useState('');
-
-  if (voices.isPending) {
-    return (
-      <Form.Group className="mb-3">
-        <Form.Label>{label}</Form.Label>
-        <div className="text-muted small">
-          <Spinner size="sm" animation="border" className="me-2" />
-          Loading voices…
-        </div>
-      </Form.Group>
-    );
-  }
-
-  const list = voices.data ?? [];
-  if (voices.isError || list.length === 0) {
-    return (
-      <Form.Group className="mb-3" controlId={id}>
-        <Form.Label>{label}</Form.Label>
-        <Form.Control
-          type="text"
-          value={value}
-          placeholder="Voice id"
-          isInvalid={error !== undefined}
-          onChange={(event) => {
-            onChange(event.target.value);
-          }}
-        />
-        <Form.Control.Feedback type="invalid">{error}</Form.Control.Feedback>
-        <Form.Text muted>
-          {voices.isError
-            ? `Voices could not be loaded (${voices.error.message}). Enter a voice id.`
-            : 'This provider lists no voices. Enter a voice id.'}
-        </Form.Text>
-      </Form.Group>
-    );
-  }
-
-  const needle = filter.trim().toLowerCase();
-  const shown = list.filter(
-    (voice) =>
-      voice.id === value ||
-      needle === '' ||
-      voiceLabel(voice).toLowerCase().includes(needle) ||
-      voice.id.toLowerCase().includes(needle),
-  );
-  const known = list.some((voice) => voice.id === value);
+  const options = useMemo(() => (voices.data ?? []).map(voiceOption), [voices.data]);
+  const unavailable = voices.isError
+    ? `Voices could not be loaded (${voices.error.message}). Enter a voice id.`
+    : voices.data?.length === 0
+      ? 'This provider lists no voices. Enter a voice id.'
+      : undefined;
 
   return (
     <Form.Group className="mb-3">
       <Form.Label htmlFor={id}>{label}</Form.Label>
-      <Form.Control
-        id={`${id}-search`}
-        type="search"
-        size="sm"
-        className="mb-1"
-        placeholder="Search voices"
-        aria-label={`Search ${label.toLowerCase()}`}
-        value={filter}
-        onChange={(event) => {
-          setFilter(event.target.value);
-        }}
-      />
-      <Form.Select
-        id={id}
+      <SearchableSelect
+        inputId={id}
         value={value}
+        options={options}
+        placeholder={voices.isError || options.length === 0 ? 'Voice id' : 'Choose a voice…'}
+        isLoading={voices.isPending}
         isInvalid={error !== undefined}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        <option value="">Choose a voice…</option>
-        {value !== '' && !known && <option value={value}>{value} (custom)</option>}
-        {shown.map((voice) => (
-          <option key={voice.id} value={voice.id}>
-            {voiceLabel(voice)}
-          </option>
-        ))}
-      </Form.Select>
-      <Form.Control.Feedback type="invalid">{error}</Form.Control.Feedback>
+        allowCustom
+        errorMessage={unavailable}
+        onChange={onChange}
+      />
+      {error !== undefined && <div className="invalid-feedback d-block">{error}</div>}
+      {unavailable && <Form.Text muted>{unavailable}</Form.Text>}
     </Form.Group>
   );
 }

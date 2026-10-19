@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { PriceEntry } from '../../lib/pricing';
 import { callsTo, requestBody, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose } from '../../test/select';
 
 function llm(name: string, source: PriceEntry['source'] = 'default'): PriceEntry {
   return {
@@ -102,7 +103,7 @@ describe('pricing page', () => {
     const { fetchMock } = await renderApp('/settings/pricing', { handlers });
     await screen.findByRole('form', { name: 'Set a price' });
 
-    await user.selectOptions(screen.getByLabelText('Kind'), 'tts');
+    await choose(user, 'Kind', 'Voice');
     await user.type(screen.getByLabelText('Provider, or provider:model'), 'elevenlabs');
     await user.type(screen.getByLabelText('$ per 1M characters'), '99');
     await user.click(screen.getByRole('button', { name: 'Save price' }));

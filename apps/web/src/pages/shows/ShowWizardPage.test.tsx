@@ -9,11 +9,13 @@ import {
   kokoroVoices,
   llmProviders,
   makeShow,
+  openrouterModels,
   savedSpeakers,
   ttsProviders,
 } from '../../test/fixtures';
 import { callsTo, requestUrl, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose, chosen } from '../../test/select';
 
 function bodyOf(call: [unknown, RequestInit?] | undefined): unknown {
   const body = call?.[1]?.body;
@@ -82,15 +84,15 @@ describe('create-show wizard', () => {
 
     // Speakers: the server's default hosts, with the voice lists loaded.
     expect(await screen.findAllByTestId('speaker')).toHaveLength(2);
-    await waitFor(() => {
-      expect(screen.getAllByRole('option', { name: /Bella/ }).length).toBeGreaterThan(0);
-    });
     const [firstVoice] = screen.getAllByLabelText('Voice');
-    expect(firstVoice).toHaveValue('af_bella');
+    if (!firstVoice) throw new Error('no voice select');
+    await waitFor(() => {
+      expect(chosen(firstVoice)).toBe('Bella'); // the voice list has loaded
+    });
     await user.click(next());
 
     // Models: the instance default is fine.
-    expect(screen.getByLabelText('Language model provider')).toHaveValue('');
+    expect(chosen('Language model provider')).toBe('');
     await user.click(next());
 
     // Sources are optional.
@@ -98,8 +100,8 @@ describe('create-show wizard', () => {
     await user.click(next());
 
     // Schedule: weekly on Fridays.
-    await user.selectOptions(screen.getByLabelText('Schedule'), 'weekly');
-    await user.selectOptions(screen.getByLabelText('Weekday'), '4');
+    await choose(user, 'Schedule', 'Every week');
+    await choose(user, 'Weekday', 'Friday');
     await user.click(next());
 
     // Review, then create.
@@ -123,6 +125,55 @@ describe('create-show wizard', () => {
       auto_publish: false,
     });
     expect(bodyOf(callsTo(fetchMock, 'PUT /api/shows/s1/speakers')[0])).toEqual(kokoroHosts);
+  });
+
+  it('searches the languages and the time zones, and accepts a code that is not listed', async () => {
+    const { user, fetchMock } = await openWizard();
+    await fillTopic(user);
+
+    await choose(user, 'Language', /German \(de\)/, 'german');
+    await user.type(screen.getByLabelText('Language'), 'de-LU{Enter}'); // not in the list
+    expect(chosen('Language')).toBe('de-LU');
+    for (let i = 0; i < 4; i += 1) await user.click(next());
+    await choose(user, 'Schedule', 'Every day');
+    await choose(user, 'Time zone', /Berlin/, 'berlin');
+    await user.click(next());
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    await screen.findByText('Created "Daily AI"');
+    expect(bodyOf(callsTo(fetchMock, 'POST /api/shows')[0])).toMatchObject({
+      language: 'de-LU',
+      schedule_kind: 'daily',
+      timezone: 'Europe/Berlin',
+    });
+  });
+
+  it('marks models that can search the web and finds a model by its id', async () => {
+    const { user } = await openWizard({
+      'GET /api/models': () => ({
+        body: [
+          ...openrouterModels,
+          {
+            id: 'perplexity/sonar',
+            name: 'Sonar',
+            web_search: true,
+            prompt_price_per_million: '1',
+          },
+        ],
+      }),
+    });
+    await fillTopic(user);
+    await user.click(next());
+    await user.click(next());
+    await choose(user, 'Language model provider', 'OpenRouter');
+    await screen.findByLabelText('Model');
+
+    await user.click(screen.getByLabelText('Model'));
+    await user.type(screen.getByLabelText('Model'), 'perplexity');
+
+    const option = screen.getByRole('option', { name: /Sonar/ });
+    expect(within(option).getByText('Web search')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Claude/ })).not.toBeInTheDocument();
   });
 
   it('sends the story priorities with the new show', async () => {
@@ -319,14 +370,15 @@ describe('create-show wizard', () => {
     await user.click(next());
     await user.click(next());
 
-    await user.selectOptions(screen.getByLabelText('Language model provider'), 'openrouter');
-    await user.selectOptions(await screen.findByLabelText('Model'), 'anthropic/claude-sonnet');
+    await choose(user, 'Language model provider', 'OpenRouter');
+    await screen.findByLabelText('Model');
+    await choose(user, 'Model', /anthropic\/claude-sonnet/);
     expect(screen.getByTestId('model-price')).toHaveTextContent(
       'Price per 1M tokens: $3.00 in / $15.00 out · 200,000 token context',
     );
-    await user.selectOptions(screen.getByLabelText('Model'), 'meta/llama');
+    await choose(user, 'Model', /meta\/llama/);
     expect(screen.getByTestId('model-price')).toHaveTextContent('— in / — out');
-    await user.selectOptions(screen.getByLabelText('Model'), 'anthropic/claude-sonnet');
+    await choose(user, 'Model', /anthropic\/claude-sonnet/);
     for (let i = 0; i < 3; i += 1) await user.click(next());
     await user.click(screen.getByRole('button', { name: 'Create show' }));
 
@@ -343,7 +395,7 @@ describe('create-show wizard', () => {
     await user.click(next());
     await user.click(next());
 
-    await user.selectOptions(screen.getByLabelText('Language model provider'), 'openrouter');
+    await choose(user, 'Language model provider', 'OpenRouter');
     await screen.findByLabelText('Model');
     await user.click(next());
 
@@ -364,12 +416,12 @@ describe('create-show wizard', () => {
     await user.click(next());
     await user.click(next());
 
-    await user.selectOptions(screen.getByLabelText('Language model provider'), 'openai');
+    await choose(user, 'Language model provider', 'OpenAI');
 
     expect(await screen.findByText(/Provider is not configured/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings › Integrations' })).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Model'), 'gpt-x');
-    expect(screen.getByLabelText('Model')).toHaveValue('gpt-x');
+    await user.type(screen.getByLabelText('Model'), 'gpt-x{Enter}');
+    expect(chosen('Model')).toBe('gpt-x');
   });
 
   describe('speakers step', () => {
@@ -414,10 +466,13 @@ describe('create-show wizard', () => {
 
       const [first] = screen.getAllByLabelText('Voice provider');
       if (!first) throw new Error('no provider select');
-      await user.selectOptions(first, 'conn:k1');
+      await user.click(first);
+      expect(await screen.findByText('Connections')).toBeInTheDocument(); // the group heading
+      expect(screen.getByText('Built-in')).toBeInTheDocument();
+      await user.click(screen.getByRole('option', { name: 'Kokoro 2' }));
 
-      expect(within(first).getByRole('group', { name: 'Your connections' })).toBeInTheDocument();
-      expect(await screen.findByRole('option', { name: 'Sky' })).toBeInTheDocument();
+      await user.click(screen.getAllByLabelText('Voice')[0] as HTMLElement);
+      expect(await screen.findByRole('option', { name: /Sky/ })).toBeInTheDocument();
       const asked = callsTo(fetchMock, 'GET /api/voices').map(([input]) => requestUrl(input));
       expect(asked.some((url) => url.searchParams.get('provider') === 'conn:k1')).toBe(true);
     });
@@ -460,7 +515,7 @@ describe('create-show wizard', () => {
       expect(await screen.findByText('Choose a voice')).toBeInTheDocument();
     });
 
-    it('filters the voice list with the search box', async () => {
+    it('filters the voice list as you type, matching name, id and language', async () => {
       const { user } = await onSpeakers();
       await waitFor(() => {
         expect(screen.getAllByLabelText('Voice')).toHaveLength(2);
@@ -468,16 +523,16 @@ describe('create-show wizard', () => {
       const [picker] = screen.getAllByLabelText('Voice');
       if (!picker) throw new Error('picker');
 
-      await user.type(screen.getAllByLabelText('Search voice')[0] as HTMLElement, 'emma');
+      await user.click(picker);
+      expect(screen.getAllByRole('option').length).toBeGreaterThan(2);
+      await user.type(picker, 'emma');
 
-      const options = within(picker)
-        .getAllByRole('option')
-        .map((o) => o.textContent);
-      expect(options).toEqual([
-        'Choose a voice…',
-        'Bella · en-US · female',
-        'Emma · en-GB · female',
-      ]);
+      expect(screen.getByRole('option', { name: /Emma/ })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /Bella/ })).not.toBeInTheDocument();
+      await user.clear(picker);
+      await user.type(picker, 'en-GB');
+      expect(screen.getByRole('option', { name: /Emma/ })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /Bella/ })).not.toBeInTheDocument();
     });
 
     it('asks for the required OpenRouter model under voice settings', async () => {
@@ -485,9 +540,10 @@ describe('create-show wizard', () => {
       const [provider] = screen.getAllByLabelText('Voice provider');
       if (!provider) throw new Error('provider');
 
-      await user.selectOptions(provider, 'openrouter');
-      expect(screen.getAllByLabelText('Voice')[0]).toHaveValue(''); // the voice is reset
-      await user.type(screen.getAllByLabelText('Voice')[0] ?? provider, 'alloy');
+      await choose(user, provider, 'OpenRouter');
+      const voice = screen.getAllByLabelText('Voice')[0] ?? provider;
+      expect(chosen(voice)).toBe(''); // the voice is reset
+      await user.type(voice, 'alloy{Enter}'); // a voice that is not in the list
       await user.click(next());
 
       expect(await screen.findByText('Required')).toBeInTheDocument();

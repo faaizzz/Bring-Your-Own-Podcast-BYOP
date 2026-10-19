@@ -5,6 +5,7 @@ import { WEEKDAY_OPTIONS } from '../../../lib/format';
 import { SCHEDULE_KINDS } from '../../../lib/shows';
 import { Field } from './Field';
 import { timeZoneNames, type ShowFormValues } from './schema';
+import { SelectField } from './SelectField';
 
 const KIND_LABELS = {
   manual: 'Manual — generate when I press the button',
@@ -13,7 +14,13 @@ const KIND_LABELS = {
   monthly: 'Every month',
 } as const;
 
-const ZONES = timeZoneNames();
+const KIND_OPTIONS = SCHEDULE_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }));
+const WEEKDAYS = WEEKDAY_OPTIONS.map((day) => ({ value: String(day.value), label: day.label }));
+const ZONES = timeZoneNames().map((zone) => ({
+  value: zone,
+  label: zone.replaceAll('_', ' '),
+  keywords: zone,
+}));
 
 export function ScheduleStep({ editing }: { editing: boolean }): React.JSX.Element {
   const { register, control } = useFormContext<ShowFormValues>();
@@ -21,13 +28,7 @@ export function ScheduleStep({ editing }: { editing: boolean }): React.JSX.Eleme
 
   return (
     <>
-      <Field name="schedule_kind" label="Schedule" as="select">
-        {SCHEDULE_KINDS.map((k) => (
-          <option key={k} value={k}>
-            {KIND_LABELS[k]}
-          </option>
-        ))}
-      </Field>
+      <SelectField name="schedule_kind" label="Schedule" options={KIND_OPTIONS} />
       {kind !== 'manual' && (
         <div className="row">
           <div className="col-md-4">
@@ -35,13 +36,7 @@ export function ScheduleStep({ editing }: { editing: boolean }): React.JSX.Eleme
           </div>
           {kind === 'weekly' && (
             <div className="col-md-4">
-              <Field name="schedule_weekday" label="Weekday" as="select">
-                {WEEKDAY_OPTIONS.map((day) => (
-                  <option key={day.value} value={String(day.value)}>
-                    {day.label}
-                  </option>
-                ))}
-              </Field>
+              <SelectField name="schedule_weekday" label="Weekday" options={WEEKDAYS} />
             </div>
           )}
           {kind === 'monthly' && (
@@ -56,12 +51,7 @@ export function ScheduleStep({ editing }: { editing: boolean }): React.JSX.Eleme
             </div>
           )}
           <div className="col-md-4">
-            <Field name="timezone" label="Time zone" list="timezone-options" />
-            <datalist id="timezone-options">
-              {ZONES.map((zone) => (
-                <option key={zone} value={zone} />
-              ))}
-            </datalist>
+            <SelectField name="timezone" label="Time zone" options={ZONES} allowCustom />
           </div>
         </div>
       )}

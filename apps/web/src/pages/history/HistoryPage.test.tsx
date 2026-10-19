@@ -5,6 +5,7 @@ import type { HistoryRow } from '../../lib/history';
 import { makeShow } from '../../test/fixtures';
 import { callsTo, type Handler, type MockRequest } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose, chosen } from '../../test/select';
 
 function row(patch: Partial<HistoryRow> = {}): HistoryRow {
   return {
@@ -96,13 +97,13 @@ describe('history page', () => {
     await screen.findByText('Oceans and bikes');
     expect(lastQuery(fetchMock).get('status')).toBeNull();
 
-    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+    await choose(user, 'Status', 'Failed');
     await waitFor(() => {
       expect(lastQuery(fetchMock).get('status')).toBe('failed');
     });
 
-    await user.selectOptions(screen.getByLabelText('Show'), 's2');
-    await user.selectOptions(screen.getByLabelText('Trigger'), 'schedule');
+    await choose(user, 'Show', 'Weekly Rust');
+    await choose(user, 'Trigger', 'Scheduled');
     await user.type(screen.getByLabelText('From'), '2026-05-01');
     await user.type(screen.getByLabelText('To'), '2026-05-31');
 
@@ -127,10 +128,10 @@ describe('history page', () => {
     await screen.findByText('Oceans and bikes');
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeDisabled();
 
-    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+    await choose(user, 'Status', 'Failed');
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));
 
-    expect(screen.getByLabelText('Status')).toHaveValue('');
+    expect(chosen('Status')).toBe('');
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeDisabled();
     expect(await screen.findByText('Oceans and bikes')).toBeInTheDocument();
   });
@@ -145,7 +146,7 @@ describe('history page', () => {
     });
     await screen.findByText('Oceans and bikes');
 
-    await user.selectOptions(screen.getByLabelText('Status'), 'cancelled');
+    await choose(user, 'Status', 'Cancelled');
 
     expect(await screen.findByText('No runs match these filters')).toBeInTheDocument();
   });

@@ -5,6 +5,7 @@ import type { Show, SpeakerInput } from '../../lib/shows';
 import { formHandlers, makeShow, savedSpeakers } from '../../test/fixtures';
 import { callsTo, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose } from '../../test/select';
 
 function jsonBody(call: [unknown, RequestInit?] | undefined): unknown {
   const body = call?.[1]?.body;
@@ -151,7 +152,7 @@ describe('show detail page', () => {
       await user.click(screen.getByRole('button', { name: 'Schedule' }));
       expect(screen.getByLabelText('Time of day')).toHaveValue('07:30');
 
-      await user.selectOptions(screen.getByLabelText('Schedule', { selector: 'select' }), 'manual');
+      await choose(user, 'Schedule', /^Manual/);
       await user.click(screen.getByRole('switch', { name: 'Pause the schedule' }));
       await user.click(screen.getByRole('button', { name: 'Save changes' }));
 

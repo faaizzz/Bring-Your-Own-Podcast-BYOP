@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Card, Form, Modal, ProgressBar, Spinner } from 'r
 import { FiCheck, FiMic, FiSave, FiTrash2, FiX } from 'react-icons/fi';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { ApiError } from '../../lib/api';
 import {
   isRunActive,
@@ -234,22 +235,22 @@ function ReviewForm({ episode }: { episode: Episode }): React.JSX.Element {
                 key={index}
               >
                 <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                  <Form.Select
-                    size="sm"
-                    className="w-auto"
-                    aria-label={`Speaker of line ${String(index + 1)}`}
-                    value={segment.speaker}
-                    disabled={!editable}
-                    onChange={(e) => {
-                      setSegment(index, { speaker: e.target.value });
-                    }}
-                  >
-                    {[...new Set([...episode.speakers, segment.speaker])].map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </Form.Select>
+                  <div className="script-editor-speaker">
+                    <SearchableSelect
+                      inputId={`line-${String(index)}-speaker`}
+                      ariaLabel={`Speaker of line ${String(index + 1)}`}
+                      size="sm"
+                      value={segment.speaker}
+                      isDisabled={!editable}
+                      options={[...new Set([...episode.speakers, segment.speaker])].map((name) => ({
+                        value: name,
+                        label: name,
+                      }))}
+                      onChange={(speaker) => {
+                        setSegment(index, { speaker });
+                      }}
+                    />
+                  </div>
                   <Badge bg="light" text="dark" className="border">
                     {segment.kind}
                   </Badge>

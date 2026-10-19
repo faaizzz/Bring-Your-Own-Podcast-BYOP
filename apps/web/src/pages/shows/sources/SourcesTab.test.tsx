@@ -5,6 +5,7 @@ import type { Source, SourceValidation } from '../../../lib/sources';
 import { formHandlers, makeShow, savedSpeakers } from '../../../test/fixtures';
 import { callsTo, type Handler } from '../../../test/mockApi';
 import { renderApp } from '../../../test/render';
+import { choose } from '../../../test/select';
 
 function makeSource(patch: Partial<Source> = {}): Source {
   return {
@@ -392,7 +393,7 @@ describe('Sources tab', () => {
     it('adds a search query as free text', async () => {
       const { user, fetchMock } = await openSources([]);
       await user.click(await screen.findByRole('button', { name: /Add source/ }));
-      await user.selectOptions(screen.getByLabelText('Type'), 'web_search');
+      await choose(user, 'Type', /Web search/);
       expect(screen.queryByRole('button', { name: 'Validate feed' })).not.toBeInTheDocument();
       await user.type(screen.getByLabelText('Search query'), 'rust language news');
       await user.type(screen.getByLabelText('Name (optional)'), 'Rust');

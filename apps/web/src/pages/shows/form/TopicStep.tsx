@@ -1,5 +1,10 @@
+import { languageOptions } from '../../../lib/languages';
 import { STYLE_LABELS, STYLES } from '../../../lib/shows';
 import { Field } from './Field';
+import { SelectField } from './SelectField';
+
+const LANGUAGES = languageOptions();
+const STYLE_OPTIONS = STYLES.map((style) => ({ value: style, label: STYLE_LABELS[style] }));
 
 /** `children` is rendered after the fields (the cover picker, which differs between create and edit). */
 export function TopicStep({ children }: { children?: React.ReactNode }): React.JSX.Element {
@@ -23,16 +28,16 @@ export function TopicStep({ children }: { children?: React.ReactNode }): React.J
       />
       <div className="row">
         <div className="col-md-6">
-          <Field name="language" label="Language" hint="A BCP-47 tag, e.g. en, de or pt-BR" />
+          <SelectField
+            name="language"
+            label="Language"
+            options={LANGUAGES}
+            allowCustom
+            hint="Pick one or type a BCP-47 tag, e.g. en, de or pt-BR"
+          />
         </div>
         <div className="col-md-6">
-          <Field name="style" label="Style" as="select">
-            {STYLES.map((style) => (
-              <option key={style} value={style}>
-                {STYLE_LABELS[style]}
-              </option>
-            ))}
-          </Field>
+          <SelectField name="style" label="Style" options={STYLE_OPTIONS} />
         </div>
         <div className="col-md-6">
           <Field

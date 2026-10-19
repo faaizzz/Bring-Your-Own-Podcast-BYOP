@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
-import { useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
+import { SearchableSelect } from '../../../components/SearchableSelect';
 import { ApiError } from '../../../lib/api';
 import {
   KIND_LABELS,
@@ -58,6 +59,8 @@ type SourceModalProps = {
   /** Rejects with an `ApiError`; a `value` problem is shown on the field. */
   onSave: (values: SourceInput) => Promise<void>;
 };
+
+const KIND_OPTIONS = SOURCE_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }));
 
 export function SourceModal({
   showId,
@@ -126,13 +129,21 @@ export function SourceModal({
           {general && <Alert variant="danger">{general}</Alert>}
           <Form.Group className="mb-3" controlId="source-kind">
             <Form.Label>Type</Form.Label>
-            <Form.Select disabled={editing} {...register('kind')}>
-              {SOURCE_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABELS[k]}
-                </option>
-              ))}
-            </Form.Select>
+            <Controller
+              control={control}
+              name="kind"
+              render={({ field }) => (
+                <SearchableSelect
+                  inputId="source-kind"
+                  name={field.name}
+                  value={field.value}
+                  options={KIND_OPTIONS}
+                  isDisabled={editing}
+                  onBlur={field.onBlur}
+                  onChange={field.onChange}
+                />
+              )}
+            />
           </Form.Group>
           <Form.Group className="mb-3" controlId="source-value">
             <Form.Label>{VALUE_LABELS[kind]}</Form.Label>

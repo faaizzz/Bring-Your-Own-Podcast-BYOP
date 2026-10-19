@@ -5,6 +5,7 @@ import type { Episode, EpisodeRun, Segment } from '../../lib/episodes';
 import { makeShow } from '../../test/fixtures';
 import { callsTo, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose, chosen } from '../../test/select';
 
 const SEGMENTS: Segment[] = [
   { speaker: 'Alex', text: 'Welcome to the show.', kind: 'intro', item_ids: [] },
@@ -120,7 +121,7 @@ describe('episode review page', () => {
     expect(screen.getByLabelText('Title')).toHaveValue('Oceans and bikes');
     expect(screen.getByLabelText('Description')).toHaveValue('Sonar maps.');
     expect(screen.getByLabelText('Text of line 2')).toHaveValue('Sonar maps the ocean.');
-    expect(screen.getByLabelText('Speaker of line 2')).toHaveValue('Sam');
+    expect(chosen('Speaker of line 2')).toBe('Sam');
     expect(document.querySelector('audio')).toHaveAttribute('src', '/api/episodes/e1/audio?v=1');
     expect(screen.getByText('Draft')).toBeInTheDocument();
     expect(screen.getByText('1:35')).toBeInTheDocument();
@@ -131,7 +132,7 @@ describe('episode review page', () => {
     const user = userEvent.setup();
     const { fetchMock, state } = await openReview();
 
-    await user.selectOptions(screen.getByLabelText('Speaker of line 1'), 'Sam');
+    await choose(user, 'Speaker of line 1', 'Sam');
     await user.clear(screen.getByLabelText('Text of line 1'));
     await user.type(screen.getByLabelText('Text of line 1'), 'A new opening.');
     expect(approveButton()).toBeDisabled();

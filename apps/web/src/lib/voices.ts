@@ -26,6 +26,8 @@ export const modelSchema = z.object({
   context_length: z.number().nullish(),
   prompt_price_per_million: priceSchema,
   completion_price_per_million: priceSchema,
+  /** Whether the model can search the web (known for some providers). */
+  web_search: z.boolean().nullish(),
 });
 export type ModelInfo = z.infer<typeof modelSchema>;
 
