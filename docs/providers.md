@@ -2,14 +2,52 @@
 
 ## Configure from the UI
 
-**Settings › Integrations** has one card per provider (OpenRouter, OpenAI, ElevenLabs,
-Kokoro, OpenAI-compatible, Langfuse). The badge shows where the credentials come from:
+**Settings › Integrations** has one card per built-in provider (OpenRouter, OpenAI, ElevenLabs,
+Kokoro, Langfuse) and, below them, your [OpenAI-compatible connections](#connections-any-openai-compatible-server). The badge shows where the credentials come from:
 **Connected** (a key saved in the app), **From .env**, **Not configured**, or **Error**
 (a failed connection test, or a stored key that can no longer be decrypted). *Configure* /
 *Edit* opens a dialog that saves the override and tests it right away; *Test connection*
 re-checks any configured provider, including ones set only in `.env`; *Remove override*
 deletes the saved key so the `.env` value (if any) applies again. Saved keys are shown
 masked and never sent back to the browser: leaving a key field blank keeps the stored one.
+
+## Connections: any OpenAI-compatible server
+
+A *connection* is an endpoint of your own that speaks the OpenAI API (`/v1`): Ollama, LM Studio,
+vLLM, Groq, LiteLLM, a company gateway, a second Kokoro. Add as many as you like under
+**Settings › Integrations › OpenAI-compatible connections**. Each has:
+
+- a **name** (unique per account; it is what the pickers, the usage records and the costs show,
+  as `conn:<name>`),
+- a **base URL**, an optional **API key** and **custom headers** (name and value) sent on every
+  request: chat, model list, speech and voice list. A key sets `Authorization`; a header of that
+  name is used when there is no key. `Host`, `Content-Length`, `Transfer-Encoding` and
+  `Connection` cannot be set. Keys and header values are stored encrypted, shown masked
+  (`sk-…1234`) and never sent back; leave a value blank when editing to keep it,
+- the **uses** it is for: language models, voices, web search (marks an endpoint whose models can search the web; source discovery
+  will use it, see [sources](sources.md)), and an **enabled** switch.
+
+*Test connection* lists the models and/or voices the connection is set up for. A server without
+a list route (`GET /models`, `GET /audio/voices`) counts as reachable and the pickers then let
+you type the model or voice id by hand. A connection that a show or speaker still uses cannot be
+deleted, disabled, or switched off for that use (`409` naming what uses it).
+
+Shows and speakers store `conn:<id>` in `llm_provider`, `tts_provider` and `fallback_tts_provider`
+where a built-in name (`openai`, `kokoro`, ...) would go. Voice settings of a connection are
+`model`, `speed`, `instructions`, `lang_code` and `volume_multiplier`; the server decides which
+it understands. Costs: a model listed in the price table is priced as usual, anything else is
+`unknown` (see [costs](costs.md)); set your own price under Settings › Pricing.
+
+| Request | Purpose |
+| --- | --- |
+| `GET/POST /api/connections` | list / create (`name`, `base_url`, `api_key`, `headers: [{name, value}]`, `llm`, `tts`, `web_search`, `enabled`) |
+| `GET/PATCH/DELETE /api/connections/{id}` | read / change (omitted fields and header values keep their stored value; `api_key: ""` removes the key; `headers` replaces the list) / delete |
+| `POST /api/connections/{id}/test` | `{ok, detail, checks: [{capability, ok, detail}]}` |
+| `GET /api/providers?capability=llm\|tts` | what a picker offers: built-in providers and connections as `{id, label, kind, configured, capabilities}` |
+
+Upgrading from 0.1: an existing *OpenAI-compatible* integration becomes a connection named
+"OpenAI-compatible" and the shows that used it point at it. If its key could not be read (a
+changed `BYOP_SECRET_KEY`) it is created disabled with a placeholder URL for you to fix.
 
 ## LLMs
 
@@ -35,7 +73,7 @@ result.latency_ms
 | --- | --- | --- |
 | `openrouter` | `OpenRouterLLM` | requests `usage.include` so the response carries the real cost |
 | `openai` | `OpenAICompatibleLLM` | `https://api.openai.com/v1`, or your proxy via a base URL |
-| `openai_compatible` | `OpenAICompatibleLLM` | any OpenAI-style server: Ollama, LM Studio, vLLM, LiteLLM |
+| `conn:<id>` | `OpenAICompatibleLLM` | a [connection](#connections-any-openai-compatible-server): Ollama, LM Studio, vLLM, Groq, LiteLLM, a gateway |
 
 Behaviour worth knowing:
 
@@ -54,7 +92,7 @@ Behaviour worth knowing:
 
 ### Listing models
 
-`GET /api/models?provider=openrouter|openai|openai_compatible` returns
+`GET /api/models?provider=openrouter|openai|conn:<id>` returns
 `id`, `name`, `context_length` and prompt/completion prices (USD per million
 tokens, where the provider publishes them). Results are cached for an hour per
 provider and credential. It answers `409` when the provider is not configured and
@@ -63,14 +101,14 @@ provider and credential. It answers `409` when the provider is not configured an
 ### Using Ollama (or any local OpenAI-compatible server)
 
 1. Run Ollama on the host (`ollama serve`) and pull a model (`ollama pull llama3.1`).
-2. Add an `openai_compatible` integration with the base URL
-   `http://host.docker.internal:11434/v1` (leave the key empty). With the API:
+2. Add a connection with the base URL `http://host.docker.internal:11434/v1` (leave the key
+   empty). With the API:
 
    ```sh
-   curl -b cookies.txt -X PUT http://localhost:8080/api/integrations/openai_compatible \
+   curl -b cookies.txt -X POST http://localhost:8080/api/connections \
      -H 'content-type: application/json' \
-     -d '{"base_url": "http://host.docker.internal:11434/v1"}'
-   curl -b cookies.txt -X POST http://localhost:8080/api/integrations/openai_compatible/test
+     -d '{"name": "Ollama", "base_url": "http://host.docker.internal:11434/v1"}'
+   curl -b cookies.txt -X POST http://localhost:8080/api/connections/<id>/test
    ```
 
 3. Use the model name Ollama reports (for example `llama3.1`) when configuring a show.
@@ -158,9 +196,9 @@ Studio, vLLM, ...) for the language model.
    as the voice provider whenever no paid voice key exists.
 2. Run Ollama on your machine and pull a model that follows JSON instructions well (a 7-14B
    instruction model is a sensible minimum): `ollama pull qwen2.5:14b`.
-3. Settings › Integrations › **OpenAI-compatible**: base URL `http://host.docker.internal:11434/v1`
+3. Settings › Integrations › **Add connection**: base URL `http://host.docker.internal:11434/v1`
    (the compose file makes that name work on Linux and Docker Desktop), no key.
-4. Create a show, choose the *OpenAI-compatible* provider and your model.
+4. Create a show, choose your connection as the language model provider and pick its model.
 
 Expect it to be slower than hosted models (a few minutes for the script, several for voices on a
 CPU), and small models sometimes need a second try; the script writer re-asks once when its
@@ -169,11 +207,11 @@ can search the web, so add feeds by hand.
 
 ## Feature matrix
 
-| | OpenRouter | OpenAI | ElevenLabs | Kokoro | OpenAI-compatible |
+| | OpenRouter | OpenAI | ElevenLabs | Kokoro | Connection |
 | --- | :-: | :-: | :-: | :-: | :-: |
 | Language models (scripts, ranking) | yes | yes | | | yes |
 | Web search for source discovery | yes (`:online`) | with a search-capable model | | | model-dependent |
-| Voices | yes | yes | yes | yes (local, free) | |
+| Voices | yes | yes | yes | yes (local, free) | if the server has `/audio/speech` |
 | Cost reported by the provider | yes | | | | |
 | Cost from the price table ([costs](costs.md)) | | yes | yes | yes (free) | |
 | Needs an API key | yes | yes | yes | no | usually not |

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Badge, Button, Card } from 'react-bootstrap';
 import type { IconType } from 'react-icons';
-import { FiActivity, FiCpu, FiMic, FiServer, FiVolume2, FiZap } from 'react-icons/fi';
+import { FiActivity, FiCpu, FiMic, FiVolume2, FiZap } from 'react-icons/fi';
 
 import {
   integrationStatus,
@@ -16,7 +16,6 @@ const ICONS: Record<ProviderId, IconType> = {
   openai: FiCpu,
   elevenlabs: FiMic,
   kokoro: FiVolume2,
-  openai_compatible: FiServer,
   langfuse: FiActivity,
 };
 

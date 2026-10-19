@@ -13,11 +13,10 @@ from byop.providers.llm.openai_compatible import OPENAI_BASE_URL, OpenAICompatib
 from byop.providers.llm.openrouter import OpenRouterLLM
 from byop.services.credentials import ProviderConfig
 
-# Credential providers that can serve chat completions.
+# Built-in providers that can serve chat completions (connections come on top of these).
 LLM_PROVIDERS = (
     CredentialProvider.OPENROUTER,
     CredentialProvider.OPENAI,
-    CredentialProvider.OPENAI_COMPATIBLE,
 )
 
 
@@ -57,7 +56,12 @@ def get_llm(
             if not config.base_url:
                 raise UnsupportedLLMProvider("An OpenAI-compatible provider needs a base URL")
             return OpenAICompatibleLLM(
-                base_url=config.base_url, api_key=key, timeout_s=timeout_s, retry=retry
+                base_url=config.base_url,
+                api_key=key,
+                name=config.usage_name,
+                headers=dict(config.headers),
+                timeout_s=timeout_s,
+                retry=retry,
             )
         case _:
             raise UnsupportedLLMProvider(f"'{provider.value}' is not an LLM provider")

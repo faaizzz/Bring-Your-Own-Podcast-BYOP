@@ -86,7 +86,7 @@ async def _search_model(
     )
     try:
         provider, model = pick_model(settings, request)
-        config = await resolver.get(show.user_id, provider)
+        config = await resolver.get_ref(show.user_id, provider, "llm")
     except (DiscoveryUnavailable, ProviderNotConfigured, CredentialDecryptionError):
         return None
     return SearchModel(provider=provider, model=model, config=config)

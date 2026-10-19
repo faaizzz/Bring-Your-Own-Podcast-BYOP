@@ -22,7 +22,7 @@ _FORMATS = {
 class ElevenLabsTTS(TTSProvider):
     """ElevenLabs' native `POST /v1/text-to-speech/{voice_id}`."""
 
-    name: ClassVar[str] = "elevenlabs"
+    name = "elevenlabs"
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
         # eleven_multilingual_v2's limit; the Flash/Turbo models accept more.
         max_chars_per_request=5000,

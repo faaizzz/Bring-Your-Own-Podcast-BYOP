@@ -25,7 +25,7 @@ another user's show is a `404`.
   `target_minutes` 1–60; `items_per_episode` 1–20; `timezone` an IANA name; a
   `daily`/`weekly`/`monthly` schedule needs `schedule_time` (plus `schedule_weekday`
   0–6 for weekly, `schedule_monthday` 1–31 for monthly).
-- **Model**: `llm_provider` (`openrouter`, `openai`, `openai_compatible`) and `llm_model`
+- **Model**: `llm_provider` (`openrouter`, `openai`, or `conn:<id>` of an [OpenAI-compatible connection](providers.md#connections-any-openai-compatible-server)) and `llm_model`
   are set together. The model must appear in the provider's model list (the cached
   `/api/models` list). If the provider is not configured or its list cannot be fetched,
   the show is still saved and the response carries a note in `warnings`.

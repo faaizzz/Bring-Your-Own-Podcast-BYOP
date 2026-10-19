@@ -5,12 +5,13 @@ import anyio
 from sqlalchemy import select
 
 from byop.models import Episode, Speaker
-from byop.models.enums import CredentialProvider, EventLevel
+from byop.models.enums import EventLevel
 from byop.pipeline.context import RunContext
 from byop.pipeline.errors import StageFailed
 from byop.pipeline.workdir import reset_dir, work_dir
 from byop.providers.tts import TTSProvider, UnsupportedTTSProvider, get_tts
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
+from byop.services.provider_ref import ProviderRef
 from byop.services.script_revision import revision_of
 from byop.services.synthesis import (
     ChunkAudio,
@@ -53,10 +54,10 @@ async def _voices(ctx: RunContext) -> dict[str, SpeakerVoice]:
         fallback = row.fallback_tts_provider
         voices[row.name] = SpeakerVoice(
             name=row.name,
-            provider=CredentialProvider(row.tts_provider),
+            provider=ProviderRef.parse(row.tts_provider),
             voice_id=row.voice_id,
             params=dict(row.voice_params),
-            fallback_provider=CredentialProvider(fallback) if fallback else None,
+            fallback_provider=ProviderRef.parse(fallback) if fallback else None,
             fallback_voice_id=row.fallback_voice_id,
         )
     return voices
@@ -64,20 +65,21 @@ async def _voices(ctx: RunContext) -> dict[str, SpeakerVoice]:
 
 async def _providers(
     ctx: RunContext, voices: dict[str, SpeakerVoice], speaking: set[str]
-) -> dict[CredentialProvider, TTSProvider]:
+) -> dict[ProviderRef, TTSProvider]:
     """One client per provider the speakers use. A missing fallback provider only warns: it
     matters just if a chunk needs it."""
     primary = {voices[name].provider for name in speaking}
     fallbacks = {
         v.fallback_provider for n, v in voices.items() if n in speaking and v.fallback_provider
     }
-    pool: dict[CredentialProvider, TTSProvider] = {}
+    pool: dict[ProviderRef, TTSProvider] = {}
     for provider in primary | {f for f in fallbacks if f}:
         try:
-            pool[provider] = get_tts(provider, await ctx.resolver.get(ctx.user_id, provider))
+            config = await ctx.resolver.get_ref(ctx.user_id, provider, "tts")
+            pool[provider] = get_tts(config.provider, config)
         except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedTTSProvider) as exc:
             message = (
-                f"The {provider.value} voice provider is not set up: {exc}. Configure it under "
+                f"The {provider} voice provider is not set up: {exc}. Configure it under "
                 "Settings › Integrations, or choose another voice for the speaker."
             )
             if provider in primary:
@@ -87,7 +89,7 @@ async def _providers(
     return pool
 
 
-async def _close(pool: dict[CredentialProvider, TTSProvider]) -> None:
+async def _close(pool: dict[ProviderRef, TTSProvider]) -> None:
     for provider in pool.values():
         await provider.aclose()
 

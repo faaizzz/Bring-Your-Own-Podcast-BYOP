@@ -3,8 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import type { SpeakerInput } from '../../lib/shows';
-import { formHandlers, kokoroHosts, makeShow, savedSpeakers } from '../../test/fixtures';
-import { callsTo, type Handler } from '../../test/mockApi';
+import {
+  formHandlers,
+  kokoroHosts,
+  kokoroVoices,
+  llmProviders,
+  makeShow,
+  savedSpeakers,
+  ttsProviders,
+} from '../../test/fixtures';
+import { callsTo, requestUrl, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
 
 function bodyOf(call: [unknown, RequestInit?] | undefined): unknown {
@@ -343,7 +351,15 @@ describe('create-show wizard', () => {
   });
 
   it('lets the user type a model when the provider is not configured', async () => {
-    const { user } = await openWizard();
+    // OpenAI has a key, but its model list cannot be fetched.
+    const { user } = await openWizard({
+      'GET /api/providers': ({ query }) => ({
+        body: (query.get('capability') === 'llm' ? llmProviders : ttsProviders).map((p) => ({
+          ...p,
+          configured: true,
+        })),
+      }),
+    });
     await fillTopic(user);
     await user.click(next());
     await user.click(next());
@@ -367,7 +383,9 @@ describe('create-show wizard', () => {
 
     it('explains how to get voices when no voice provider is set up', async () => {
       await onSpeakers({
-        'GET /api/voices/default-provider': () => ({ body: { provider: null } }),
+        'GET /api/providers': () => ({
+          body: ttsProviders.map((p) => ({ ...p, configured: false })),
+        }),
       });
 
       const notice = await screen.findByTestId('no-voice-provider');
@@ -376,6 +394,32 @@ describe('create-show wizard', () => {
         'href',
         '/settings/integrations',
       );
+    });
+
+    it('offers the user connections next to the built-in voice providers', async () => {
+      const connection = {
+        id: 'conn:k1',
+        label: 'Kokoro 2',
+        kind: 'connection',
+        configured: true,
+        capabilities: ['tts'],
+      };
+      const { user, fetchMock } = await onSpeakers({
+        'GET /api/providers': () => ({ body: [...ttsProviders, connection] }),
+        'GET /api/voices': ({ query }) => ({
+          body:
+            query.get('provider') === 'conn:k1' ? [{ id: 'af_sky', name: 'Sky' }] : kokoroVoices,
+        }),
+      });
+
+      const [first] = screen.getAllByLabelText('Voice provider');
+      if (!first) throw new Error('no provider select');
+      await user.selectOptions(first, 'conn:k1');
+
+      expect(within(first).getByRole('group', { name: 'Your connections' })).toBeInTheDocument();
+      expect(await screen.findByRole('option', { name: 'Sky' })).toBeInTheDocument();
+      const asked = callsTo(fetchMock, 'GET /api/voices').map(([input]) => requestUrl(input));
+      expect(asked.some((url) => url.searchParams.get('provider') === 'conn:k1')).toBe(true);
     });
 
     it('shows no voice warning when a provider is available', async () => {

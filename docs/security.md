@@ -2,8 +2,8 @@
 
 ## Where provider keys come from
 
-For every provider (OpenRouter, OpenAI, ElevenLabs, Langfuse, Kokoro,
-OpenAI-compatible) BYOP uses, in order:
+For every built-in provider (OpenRouter, OpenAI, ElevenLabs, Langfuse, Kokoro) BYOP uses, in
+order:
 
 1. the override you saved under **Settings › Integrations** (stored encrypted),
 2. the matching variable in `.env` (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`,
@@ -24,8 +24,12 @@ fields and values.
 | `DELETE /api/integrations/{provider}` | remove the override, falling back to `.env` |
 | `POST /api/integrations/{provider}/test` | cheap live call; returns `{ "ok": bool, "detail": "..." }` |
 
-`provider` is one of `openrouter`, `openai`, `elevenlabs`, `langfuse`, `kokoro`,
-`openai_compatible`. Every call needs a signed-in session.
+`provider` is one of `openrouter`, `openai`, `elevenlabs`, `langfuse`, `kokoro`. Every call needs
+a signed-in session.
+
+OpenAI-compatible servers are *connections* (`/api/connections`, see [providers](providers.md)).
+Their key and custom header values are encrypted the same way, are masked in every response, are
+never logged, and are re-encrypted by `rotate-key` too.
 
 ## Rotating `BYOP_SECRET_KEY`
 

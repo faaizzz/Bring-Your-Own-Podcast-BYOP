@@ -15,10 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import ProviderCredential
+from byop.models import ProviderConnection, ProviderCredential
 from byop.models.columns import JsonObject
 from byop.models.enums import CredentialProvider
 from byop.security.crypto import CryptoError, decrypt_json, encrypt_json
+from byop.services.provider_ref import ProviderRef
 
 log = structlog.get_logger(__name__)
 
@@ -31,19 +32,21 @@ REQUIRES_API_KEY = {
     CredentialProvider.ELEVENLABS,
     CredentialProvider.LANGFUSE,
 }
-REQUIRES_BASE_URL = {CredentialProvider.KOKORO, CredentialProvider.OPENAI_COMPATIBLE}
+REQUIRES_BASE_URL = {CredentialProvider.KOKORO}
 
 
 class ProviderNotConfigured(Exception):
-    def __init__(self, provider: CredentialProvider) -> None:
-        super().__init__(f"Provider '{provider.value}' is not configured")
+    def __init__(
+        self, provider: CredentialProvider | ProviderRef, reason: str | None = None
+    ) -> None:
+        super().__init__(reason or f"Provider '{provider}' is not configured")
         self.provider = provider
 
 
 class CredentialDecryptionError(Exception):
-    def __init__(self, provider: CredentialProvider) -> None:
+    def __init__(self, provider: CredentialProvider | str) -> None:
         super().__init__(
-            f"The stored '{provider.value}' credential cannot be decrypted. Was BYOP_SECRET_KEY "
+            f"The stored '{provider}' credential cannot be decrypted. Was BYOP_SECRET_KEY "
             "changed? Re-enter the key, or run `python -m byop.cli rotate-key`."
         )
         self.provider = provider
@@ -51,13 +54,25 @@ class CredentialDecryptionError(Exception):
 
 @dataclass(frozen=True)
 class ProviderConfig:
-    """A resolved, ready-to-use provider configuration. Secrets stay wrapped in SecretStr."""
+    """A resolved, ready-to-use provider configuration. Secrets stay wrapped in SecretStr.
+
+    For a connection `provider` is `OPENAI_COMPATIBLE` and `connection_id`/`label` say which one.
+    """
 
     provider: CredentialProvider
     source: Source
     api_key: SecretStr | None = None
     base_url: str | None = None
     extra: Mapping[str, str] = field(default_factory=dict)
+    # Extra HTTP headers sent on every request (connections only); values are secrets.
+    headers: Mapping[str, str] = field(default_factory=dict, repr=False)
+    connection_id: uuid.UUID | None = None
+    label: str | None = None
+
+    @property
+    def usage_name(self) -> str:
+        """The provider name recorded on usage events."""
+        return f"conn:{self.label}" if self.connection_id else self.provider.value
 
 
 def mask_secret(value: str) -> str:
@@ -166,6 +181,74 @@ class CredentialResolver:
             raise ProviderNotConfigured(provider)
         return env
 
+    # -- connections ------------------------------------------------------------------------
+
+    def connection_config(self, record: ProviderConnection) -> ProviderConfig:
+        """The ready-to-use configuration of a stored connection (enabled or not)."""
+        api_key, headers = self.open_connection(record)
+        return ProviderConfig(
+            CredentialProvider.OPENAI_COMPATIBLE,
+            "user",
+            api_key=SecretStr(api_key) if api_key else None,
+            base_url=record.base_url.rstrip("/"),
+            headers=headers,
+            connection_id=record.id,
+            label=record.name,
+        )
+
+    def open_connection(self, record: ProviderConnection) -> tuple[str | None, dict[str, str]]:
+        """A connection's API key and headers; `CredentialDecryptionError` if unreadable."""
+        try:
+            payload = decrypt_json(record.secret_encrypted, self._settings.byop_secret_key)
+        except CryptoError as exc:
+            raise CredentialDecryptionError(f"conn:{record.name}") from exc
+        key = payload.get("api_key")
+        raw = payload.get("headers")
+        headers: dict[str, str] = {}
+        for entry in raw if isinstance(raw, list) else []:
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                headers[entry["name"]] = str(entry.get("value", ""))
+        return (key if isinstance(key, str) and key else None), headers
+
+    def seal_connection(self, api_key: str | None, headers: Mapping[str, str]) -> str:
+        """The encrypted document stored in `provider_connections.secret_encrypted`."""
+        document: JsonObject = {
+            "api_key": api_key or None,
+            "headers": [{"name": n, "value": v} for n, v in headers.items()],
+        }
+        return encrypt_json(document, self._settings.byop_secret_key)
+
+    async def get_ref(
+        self,
+        user_id: uuid.UUID,
+        ref: ProviderRef,
+        capability: Literal["llm", "tts"] | None = None,
+    ) -> ProviderConfig:
+        """Like `get`, for a built-in provider or one of the user's connections.
+
+        A connection must exist, be enabled and (when `capability` is given) allow that use.
+        """
+        if ref.builtin is not None:
+            return await self.get(user_id, ref.builtin)
+        record = await self._session.scalar(
+            select(ProviderConnection).where(
+                ProviderConnection.user_id == user_id, ProviderConnection.id == ref.connection_id
+            )
+        )
+        if record is None:
+            raise ProviderNotConfigured(ref, "The connection does not exist (was it deleted?)")
+        if not record.enabled:
+            raise ProviderNotConfigured(ref, f"The connection '{record.name}' is disabled")
+        if capability == "llm" and not record.llm:
+            raise ProviderNotConfigured(
+                ref, f"The connection '{record.name}' is not enabled for language models"
+            )
+        if capability == "tts" and not record.tts:
+            raise ProviderNotConfigured(
+                ref, f"The connection '{record.name}' is not enabled for voices"
+            )
+        return self.connection_config(record)
+
     async def view(self, user_id: uuid.UUID, provider: CredentialProvider) -> CredentialView:
         """The effective configuration, masked for display."""
         record = await self._record(user_id, provider)
@@ -241,13 +324,17 @@ async def rotate_credentials(
 
     All-or-nothing: if any row cannot be decrypted with the old key nothing is changed.
     """
-    records = list((await session.scalars(select(ProviderCredential))).all())
+    records: list[ProviderCredential | ProviderConnection] = [
+        *(await session.scalars(select(ProviderCredential))).all(),
+        *(await session.scalars(select(ProviderConnection))).all(),
+    ]
     reencrypted: dict[uuid.UUID, str] = {}
     for record in records:
         try:
             payload = decrypt_json(record.secret_encrypted, old_secret)
         except CryptoError as exc:
-            raise CredentialDecryptionError(record.provider) from exc
+            name = record.provider.value if isinstance(record, ProviderCredential) else record.name
+            raise CredentialDecryptionError(name) from exc
         reencrypted[record.id] = encrypt_json(payload, new_secret)
     for record in records:
         record.secret_encrypted = reencrypted[record.id]

@@ -59,7 +59,7 @@ export type Show = z.infer<typeof showSchema>;
 export const speakerInputSchema = z.object({
   name: z.string(),
   persona: z.string(),
-  tts_provider: z.enum(['openai', 'elevenlabs', 'openrouter', 'kokoro']),
+  tts_provider: z.string(),
   voice_id: z.string(),
   voice_params: z.record(z.string(), paramValue),
   fallback_tts_provider: z.string().nullish(),

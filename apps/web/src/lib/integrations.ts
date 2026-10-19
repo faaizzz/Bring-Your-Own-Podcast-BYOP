@@ -3,14 +3,7 @@ import { z } from 'zod';
 
 import { api } from './api';
 
-export const PROVIDER_IDS = [
-  'openrouter',
-  'openai',
-  'elevenlabs',
-  'kokoro',
-  'openai_compatible',
-  'langfuse',
-] as const;
+export const PROVIDER_IDS = ['openrouter', 'openai', 'elevenlabs', 'kokoro', 'langfuse'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 type FieldMode = 'required' | 'optional' | 'none';
@@ -63,15 +56,6 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
     apiKey: 'none',
     baseUrl: 'required',
     baseUrlHint: 'For the bundled service use http://kokoro:8880/v1.',
-  },
-  openai_compatible: {
-    ...base,
-    id: 'openai_compatible',
-    label: 'OpenAI-compatible',
-    description: 'Any OpenAI-style endpoint, such as Ollama or LM Studio.',
-    apiKey: 'optional',
-    baseUrl: 'required',
-    baseUrlHint: 'For Ollama on the host use http://host.docker.internal:11434/v1.',
   },
   langfuse: {
     ...base,

@@ -96,12 +96,12 @@ async def test_the_cache_expires_after_an_hour(app: FastAPI, authed: AsyncClient
 
 
 @respx.mock
-async def test_openai_compatible_provider_uses_the_saved_base_url(authed: AsyncClient) -> None:
-    saved = await authed.put(
-        "/api/integrations/openai_compatible",
-        json={"base_url": "http://host.docker.internal:11434/v1"},
+async def test_a_connection_uses_its_saved_base_url(authed: AsyncClient) -> None:
+    saved = await authed.post(
+        "/api/connections",
+        json={"name": "Ollama", "base_url": "http://host.docker.internal:11434/v1"},
     )
-    assert saved.status_code == 200
+    assert saved.status_code == 201
     respx.get("http://host.docker.internal:11434/v1/models").respond(
         200,
         json={
@@ -110,7 +110,7 @@ async def test_openai_compatible_provider_uses_the_saved_base_url(authed: AsyncC
         },
     )
 
-    response = await authed.get("/api/models", params={"provider": "openai_compatible"})
+    response = await authed.get("/api/models", params={"provider": f"conn:{saved.json()['id']}"})
 
     assert response.status_code == 200
     assert response.json()[0]["id"] == "llama3.1"

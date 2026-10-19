@@ -16,8 +16,8 @@ from typing import Protocol
 import anyio
 import structlog
 
-from byop.models.enums import CredentialProvider
 from byop.providers.tts import CallMetadata, TTSError, TTSParamError, TTSProvider
+from byop.services.provider_ref import ProviderRef
 from byop.services.tts_chunks import split_text
 
 log = structlog.get_logger(__name__)
@@ -32,10 +32,10 @@ class ChunkFailed(Exception):
 @dataclass(frozen=True)
 class SpeakerVoice:
     name: str
-    provider: CredentialProvider
+    provider: ProviderRef
     voice_id: str
     params: Mapping[str, object] = field(default_factory=dict)
-    fallback_provider: CredentialProvider | None = None
+    fallback_provider: ProviderRef | None = None
     fallback_voice_id: str | None = None
 
 
@@ -80,7 +80,7 @@ class Reporter(Protocol):
 def plan_chunks(
     segments: Sequence[Segment],
     voices: Mapping[str, SpeakerVoice],
-    limits: Mapping[CredentialProvider, int],
+    limits: Mapping[ProviderRef, int],
 ) -> list[Chunk]:
     """Split every segment at sentence boundaries into chunks its speaker's provider accepts.
 
@@ -97,7 +97,7 @@ def plan_chunks(
 class _Gates:
     """Limits on how many requests run at once: overall, and per provider that asks for it."""
 
-    def __init__(self, concurrency: int, pool: Mapping[CredentialProvider, TTSProvider]) -> None:
+    def __init__(self, concurrency: int, pool: Mapping[ProviderRef, TTSProvider]) -> None:
         self._overall = asyncio.Semaphore(concurrency)
         self._providers = {
             id(p): asyncio.Semaphore(p.quirks.max_concurrency)
@@ -145,7 +145,7 @@ async def _speak(
 async def _synthesize_chunk(
     chunk: Chunk,
     voice: SpeakerVoice,
-    pool: Mapping[CredentialProvider, TTSProvider],
+    pool: Mapping[ProviderRef, TTSProvider],
     work: Path,
     gates: _Gates,
     *,
@@ -181,17 +181,17 @@ async def _synthesize_chunk(
             else:
                 return ChunkAudio(
                     chunk.index, chunk.segment, chunk.kind, chunk.speaker, files,
-                    voice.provider.value, voice.voice_id, chars, cost, ms,
+                    str(voice.provider), voice.voice_id, chars, cost, ms,
                 )  # fmt: skip
 
-    where = f"Chunk {chunk.index + 1} ({chunk.speaker}, {voice.provider.value})"
+    where = f"Chunk {chunk.index + 1} ({chunk.speaker}, {str(voice.provider)})"
     if voice.fallback_provider is None or voice.fallback_voice_id is None:
         raise ChunkFailed(f"{where}: {primary_error}. The speaker has no fallback voice.")
     fallback = pool.get(voice.fallback_provider)
     if fallback is None:
         raise ChunkFailed(
             f"{where}: {primary_error}. The fallback provider "
-            f"({voice.fallback_provider.value}) is not set up."
+            f"({str(voice.fallback_provider)}) is not set up."
         )
     try:
         files, chars, cost, ms = await _speak(
@@ -200,11 +200,11 @@ async def _synthesize_chunk(
     except TTSError as exc:
         raise ChunkFailed(
             f"{where}: {primary_error}. The fallback voice "
-            f"({voice.fallback_provider.value}) failed too: {exc}"
+            f"({str(voice.fallback_provider)}) failed too: {exc}"
         ) from exc
     return ChunkAudio(
         chunk.index, chunk.segment, chunk.kind, chunk.speaker, files,
-        voice.fallback_provider.value, voice.fallback_voice_id, chars, cost, ms,
+        str(voice.fallback_provider), voice.fallback_voice_id, chars, cost, ms,
         used_fallback=True, fallback_reason=primary_error,
     )  # fmt: skip
 
@@ -212,7 +212,7 @@ async def _synthesize_chunk(
 async def synthesize_chunks(
     chunks: Sequence[Chunk],
     voices: Mapping[str, SpeakerVoice],
-    pool: Mapping[CredentialProvider, TTSProvider],
+    pool: Mapping[ProviderRef, TTSProvider],
     work: Path,
     *,
     concurrency: int,

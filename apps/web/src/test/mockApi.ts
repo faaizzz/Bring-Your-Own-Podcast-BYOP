@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
 /** `fetch` accepts strings, URLs and Request objects. */
-function requestUrl(input: RequestInfo | URL): URL {
+export function requestUrl(input: RequestInfo | URL): URL {
   const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   return new URL(raw, 'http://localhost');
 }

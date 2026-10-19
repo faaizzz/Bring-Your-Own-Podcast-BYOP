@@ -41,10 +41,20 @@ def _response(view: CredentialView) -> IntegrationResponse:
     )
 
 
+def _built_in(provider: CredentialProvider) -> None:
+    """OpenAI-compatible servers are connections (`/api/connections`), not integrations."""
+    if provider is CredentialProvider.OPENAI_COMPATIBLE:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "OpenAI-compatible servers are managed under /api/connections",
+        )
+
+
 @router.get("/{provider}", response_model=IntegrationResponse)
 async def get_integration(
     provider: CredentialProvider, user: CurrentUser, resolver: ResolverDep
 ) -> IntegrationResponse:
+    _built_in(provider)
     return _response(await resolver.view(user.id, provider))
 
 
@@ -55,6 +65,7 @@ async def put_integration(
     user: CurrentUser,
     resolver: ResolverDep,
 ) -> IntegrationResponse:
+    _built_in(provider)
     api_key = body.api_key.get_secret_value() if body.api_key else None
     base_url = str(body.base_url).rstrip("/") if body.base_url else None
 
@@ -83,6 +94,7 @@ async def delete_integration(
     provider: CredentialProvider, user: CurrentUser, resolver: ResolverDep
 ) -> None:
     """Remove the user's override; the environment value (if any) applies again."""
+    _built_in(provider)
     await resolver.delete(user.id, provider)
 
 
@@ -90,6 +102,7 @@ async def delete_integration(
 async def test_integration(
     provider: CredentialProvider, user: CurrentUser, resolver: ResolverDep
 ) -> IntegrationTestResponse:
+    _built_in(provider)
     try:
         config = await resolver.get(user.id, provider)
     except ProviderNotConfigured:

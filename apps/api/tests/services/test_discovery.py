@@ -11,8 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
 from byop.models import Source, User
-from byop.models.enums import CredentialProvider as P
-from byop.models.enums import SourceKind
+from byop.models.enums import CredentialProvider, SourceKind
 from byop.providers.llm import LLMError
 from byop.schemas.discovery import DiscoveredSource
 from byop.services.credentials import CredentialResolver
@@ -23,11 +22,20 @@ from byop.services.discovery import (
     pick_model,
     search_model_id,
 )
+from byop.services.provider_ref import ProviderRef
 from tests.helpers import make_settings
 from tests.models.factories import make_show
 from tests.providers.llm.helpers import OPENROUTER_URL, body_of, completion
 
 pytestmark = pytest.mark.usefixtures("fake_dns")
+
+
+class P:
+    """Providers as the references shows store them."""
+
+    OPENAI = ProviderRef.of(CredentialProvider.OPENAI)
+    OPENROUTER = ProviderRef.of(CredentialProvider.OPENROUTER)
+    CONNECTION = ProviderRef(connection_id=uuid.uuid4())
 
 
 def rss(title: str, items: list[tuple[str, datetime | None]]) -> bytes:
@@ -253,10 +261,12 @@ async def test_the_call_is_attributed_to_the_show_and_asks_the_model_to_search(
         (P.OPENROUTER, "anthropic/claude-sonnet:online", "anthropic/claude-sonnet:online"),
         (P.OPENROUTER, "perplexity/sonar", "perplexity/sonar"),
         (P.OPENAI, "gpt-4o-search-preview", "gpt-4o-search-preview"),
-        (P.OPENAI_COMPATIBLE, "local-model", "local-model"),
+        (P.CONNECTION, "local-model", "local-model"),
     ],
 )
-def test_online_variant_only_where_it_applies(provider: P, model: str, expected: str) -> None:
+def test_online_variant_only_where_it_applies(
+    provider: ProviderRef, model: str, expected: str
+) -> None:
     assert search_model_id(provider, model) == expected
 
 

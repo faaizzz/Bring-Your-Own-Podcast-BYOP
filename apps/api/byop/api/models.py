@@ -1,20 +1,19 @@
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from redis.asyncio import Redis
 
 from byop.api.deps import CurrentUser
 from byop.api.integrations import ResolverDep
-from byop.models.enums import CredentialProvider
 from byop.providers.llm import LLMError, UnsupportedLLMProvider, get_llm
 from byop.redis_client import get_redis
 from byop.schemas.models import ModelResponse
+from byop.schemas.show import LLMProviderName
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.models import list_models_cached
+from byop.services.provider_ref import ProviderRef
 
 router = APIRouter(prefix="/models", tags=["models"])
-
-LLMProviderName = Literal["openrouter", "openai", "openai_compatible"]
 
 
 @router.get("", response_model=list[ModelResponse])
@@ -25,10 +24,10 @@ async def list_models(
     provider: Annotated[LLMProviderName, Query()] = "openrouter",
 ) -> list[ModelResponse]:
     """Models offered by an LLM provider (cached for an hour)."""
-    name = CredentialProvider(provider)
+    ref = ProviderRef.parse(provider)
     try:
-        config = await resolver.get(user.id, name)
-        llm = get_llm(name, config)
+        config = await resolver.get_ref(user.id, ref, "llm")
+        llm = get_llm(config.provider, config)
     except ProviderNotConfigured as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     except (CredentialDecryptionError, UnsupportedLLMProvider) as exc:
@@ -43,7 +42,7 @@ async def list_models(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not list models: {exc}") from exc
     except Exception as exc:  # the SDK can raise its own errors when listing
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, f"Could not list models from {provider}"
+            status.HTTP_502_BAD_GATEWAY, f"Could not list models from {config.label or provider}"
         ) from exc
     return [
         ModelResponse(

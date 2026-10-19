@@ -15,6 +15,7 @@ class OpenAICompatibleLLM(OpenAIChatProvider):
         base_url: str = OPENAI_BASE_URL,
         api_key: str | None = None,
         name: str = "openai_compatible",
+        headers: dict[str, str] | None = None,
         timeout_s: float = 120.0,
         retry: RetryPolicy | None = None,
     ) -> None:
@@ -24,4 +25,5 @@ class OpenAICompatibleLLM(OpenAIChatProvider):
             base_url=base_url,
             timeout_s=timeout_s,
             retry=retry,
+            default_headers=headers or None,
         )

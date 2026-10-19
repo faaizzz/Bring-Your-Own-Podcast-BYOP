@@ -71,14 +71,14 @@ All optional. See [providers](providers.md).
 | `ELEVENLABS_API_KEY` | ElevenLabs voices |
 | `KOKORO_BASE_URL` | A Kokoro-FastAPI (OpenAI-style speech) server. Empty: `make up-full`/`make up-kokoro` use the bundled one (`http://kokoro:8880/v1`), a minimal `make up` has none |
 
-An OpenAI-compatible server (Ollama, LM Studio, vLLM) has no variable: add it under Settings ›
-Integrations with its base URL.
+An OpenAI-compatible server (Ollama, LM Studio, vLLM, a gateway) has no variable: add it as a
+connection under Settings › Integrations ([providers](providers.md#connections-any-openai-compatible-server)).
 
 ## Defaults for new shows
 
 | Variable | Default | |
 | --- | --- | --- |
-| `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL` | empty | Model given to a new show that does not choose its own (used only as a pair; `openrouter`, `openai` or `openai_compatible`) |
+| `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL` | empty | Model given to a new show that does not choose its own (used only as a pair; `openrouter`, `openai` or `conn:<id>` of a connection) |
 | `DEFAULT_SHOW_STYLE` | `news_briefing` | `news_briefing`, `conversational`, `deep_dive` or `interview` |
 | `DISCOVERY_LLM_PROVIDER`, `DISCOVERY_LLM_MODEL` | empty | The model that searches the web for sources; empty uses the show's model, then the default above. On OpenRouter `:online` is added to the model id |
 

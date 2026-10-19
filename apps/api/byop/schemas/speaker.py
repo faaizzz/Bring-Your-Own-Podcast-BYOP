@@ -1,9 +1,12 @@
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
-TTSProviderName = Literal["openai", "elevenlabs", "openrouter", "kokoro"]
+from byop.services.provider_ref import check_tts_ref
+
+# A built-in provider (`openai`, `elevenlabs`, ...) or a connection (`conn:<id>`).
+TTSProviderName = Annotated[str, AfterValidator(check_tts_ref)]
 
 # Voice parameters are small scalars (speed, stability, a model name, ...).
 type ParamValue = str | int | float | bool

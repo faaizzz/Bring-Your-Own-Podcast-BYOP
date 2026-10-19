@@ -20,6 +20,7 @@ from byop.services.credentials import (
     ProviderNotConfigured,
 )
 from byop.services.feeds import FeedInvalid, preview_feed
+from byop.services.provider_ref import ProviderRef
 from byop.services.safe_http import FetchError, fetch_bytes
 from byop.services.usage import capture_usage
 
@@ -47,19 +48,19 @@ class DiscoveryRequest:
     llm_model: str | None = None
 
 
-def search_model_id(provider: CredentialProvider, model: str) -> str:
+def search_model_id(provider: ProviderRef, model: str) -> str:
     """On OpenRouter a model can search the web when its id ends in `:online`.
 
     Models that search natively (Perplexity's) and ids already suffixed are left alone.
     """
-    if provider is CredentialProvider.OPENROUTER and not (
+    if provider.builtin is CredentialProvider.OPENROUTER and not (
         model.endswith(ONLINE_SUFFIX) or model.startswith("perplexity/")
     ):
         return f"{model}{ONLINE_SUFFIX}"
     return model
 
 
-def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[CredentialProvider, str]:
+def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[ProviderRef, str]:
     """The discovery model, then the show's, then the instance default."""
     choices = (
         (settings.discovery_llm_provider, settings.discovery_llm_model),
@@ -68,7 +69,7 @@ def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[Credentia
     )
     for provider, model in choices:
         if provider and model:
-            return CredentialProvider(provider), model
+            return ProviderRef.parse(provider), model
     raise DiscoveryUnavailable(
         "No language model is set up for discovery. Choose one for the show, or set "
         "DEFAULT_LLM_PROVIDER and DEFAULT_LLM_MODEL (or DISCOVERY_LLM_*) in .env."
@@ -182,11 +183,11 @@ async def discover_sources(
     search queries. Sources the show already has are left out."""
     provider, model = pick_model(settings, request)
     try:
-        config = await resolver.get(request.user_id, provider)
-        llm = get_llm(provider, config)
+        config = await resolver.get_ref(request.user_id, provider, "llm")
+        llm = get_llm(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedLLMProvider) as exc:
         raise DiscoveryUnavailable(
-            f"The {provider.value} provider is not set up: {exc}. Configure it under "
+            f"The {provider} provider is not set up: {exc}. Configure it under "
             "Settings › Integrations."
         ) from exc
 

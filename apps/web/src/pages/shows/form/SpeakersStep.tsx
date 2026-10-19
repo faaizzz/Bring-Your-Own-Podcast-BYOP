@@ -4,12 +4,13 @@ import { get, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
-import { PROVIDER_LABELS, TTS_PROVIDERS, useDefaultTtsProvider } from '../../../lib/voices';
+import { useProviders } from '../../../lib/providers';
 import { Field } from './Field';
+import { ProviderOptions } from './ProviderOptions';
 import {
   MAX_SPEAKERS,
   paramsToApi,
-  VOICE_PARAMS,
+  voiceParamsFor,
   type ParamField,
   type ShowFormValues,
 } from './schema';
@@ -58,14 +59,12 @@ function SpeakerEditor({
     (get(formState.errors, `${prefix}.${path}`) as { message?: string } | undefined)?.message;
 
   const provider = speaker.tts_provider;
-  const fallbackProvider = TTS_PROVIDERS.find((p) => p === speaker.fallback_tts_provider);
+  const fallbackProvider = speaker.fallback_tts_provider;
 
-  const changeProvider = (value: string) => {
-    const next = TTS_PROVIDERS.find((p) => p === value);
-    if (!next) return;
+  const changeProvider = (next: string) => {
     // A voice id means nothing on another provider; keep only settings it also understands.
     setValue(`${prefix}.voice_id`, '');
-    const allowed = new Set(VOICE_PARAMS[next].map((f) => f.name));
+    const allowed = new Set(voiceParamsFor(next).map((f) => f.name));
     const kept = Object.fromEntries(
       Object.entries(speaker.params).filter(([key]) => allowed.has(key)),
     );
@@ -101,11 +100,7 @@ function SpeakerEditor({
           as="select"
           onValueChange={changeProvider}
         >
-          {TTS_PROVIDERS.map((p) => (
-            <option key={p} value={p}>
-              {PROVIDER_LABELS[p]}
-            </option>
-          ))}
+          <ProviderOptions capability="tts" current={provider} />
         </Field>
         <VoicePicker
           id={`speaker-${String(index)}-voice`}
@@ -155,7 +150,7 @@ function SpeakerEditor({
         >
           <div className="mt-2">
             <div className="row">
-              {VOICE_PARAMS[provider].map((field) => (
+              {voiceParamsFor(provider).map((field) => (
                 <div className="col-md-6" key={`${provider}-${field.name}`}>
                   <ParamInput index={index} field={field} />
                 </div>
@@ -177,13 +172,9 @@ function SpeakerEditor({
               }}
             >
               <option value="">None</option>
-              {TTS_PROVIDERS.map((p) => (
-                <option key={p} value={p}>
-                  {PROVIDER_LABELS[p]}
-                </option>
-              ))}
+              <ProviderOptions capability="tts" current={fallbackProvider} />
             </Field>
-            {fallbackProvider && (
+            {fallbackProvider !== '' && (
               <VoicePicker
                 id={`speaker-${String(index)}-fallback-voice`}
                 label="Fallback voice"
@@ -218,7 +209,9 @@ export function SpeakersStep(): React.JSX.Element {
   const { fields, append, remove } = useFieldArray({ control, name: 'speakers' });
   const listError = errors.speakers?.root?.message ?? errors.speakers?.message;
   const speakers = useWatch({ control, name: 'speakers' });
-  const defaultProvider = useDefaultTtsProvider();
+  const providers = useProviders('tts');
+  const noVoiceProvider =
+    providers.data !== undefined && !providers.data.some((option) => option.configured);
 
   const add = () => {
     const last = speakers[speakers.length - 1];
@@ -239,7 +232,7 @@ export function SpeakersStep(): React.JSX.Element {
         Give the show one to {MAX_SPEAKERS} voices. They speak in this order, and each has a persona
         the script writer follows.
       </p>
-      {defaultProvider.data?.provider === null && (
+      {noVoiceProvider && (
         <Alert variant="warning" data-testid="no-voice-provider">
           <strong>No voice provider is set up yet.</strong> Add an ElevenLabs, OpenAI or OpenRouter
           key under <Link to="/settings/integrations">Settings → Integrations</Link>, or run{' '}

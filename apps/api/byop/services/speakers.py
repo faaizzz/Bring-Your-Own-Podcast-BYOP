@@ -5,9 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.models import Speaker
-from byop.models.enums import CredentialProvider
 from byop.providers.tts import quirks_for, voice_param_problems
 from byop.schemas.speaker import SpeakerIn
+from byop.services.connections import connection_problems
+from byop.services.provider_ref import ProviderRef
 from byop.services.shows import get_show
 from byop.services.validation import FieldError, FieldValidationError, param_errors
 
@@ -27,9 +28,10 @@ def validate_speakers(speakers: Sequence[SpeakerIn]) -> list[FieldError]:
             )
         seen.setdefault(key, index)
 
-        provider = CredentialProvider(speaker.tts_provider)
+        provider = ProviderRef.parse(speaker.tts_provider)
         errors += param_errors(
-            ("body", index, "voice_params"), voice_param_problems(provider, speaker.voice_params)
+            ("body", index, "voice_params"),
+            voice_param_problems(provider.kind, speaker.voice_params),
         )
 
         if (speaker.fallback_tts_provider is None) != (speaker.fallback_voice_id is None):
@@ -40,13 +42,14 @@ def validate_speakers(speakers: Sequence[SpeakerIn]) -> list[FieldError]:
                 FieldError(("body", index, field), "A fallback needs both a provider and a voice")
             )
         elif speaker.fallback_tts_provider is not None:
-            fallback = CredentialProvider(speaker.fallback_tts_provider)
+            fallback = ProviderRef.parse(speaker.fallback_tts_provider)
             # A fallback carries no voice parameters, so it must work without any.
-            if quirks_for(fallback).required_params:
+            if quirks_for(fallback.kind).required_params:
                 errors.append(
                     FieldError(
                         ("body", index, "fallback_tts_provider"),
-                        f"{fallback.value} needs voice parameters, which a fallback cannot carry",
+                        f"{fallback.kind.value} needs voice parameters, which a fallback "
+                        "cannot carry",
                     )
                 )
     return errors
@@ -79,7 +82,9 @@ async def replace_speakers(
     Rows are reused by position so the first speakers keep their ids.
     """
     await get_show(session, user_id, show_id)
-    if errors := validate_speakers(speakers):
+    errors = validate_speakers(speakers)
+    errors += await connection_problems(session, user_id, speakers)
+    if errors:
         raise FieldValidationError(errors)
 
     existing = await _ordered(session, user_id, show_id)

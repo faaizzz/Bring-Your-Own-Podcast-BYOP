@@ -1,14 +1,16 @@
 import re
 import uuid
 from datetime import datetime, time
-from typing import Annotated, Literal
+from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 from byop.models.enums import RunStatus, ScheduleKind, ShowStyle
+from byop.services.provider_ref import check_llm_ref
 
-LLMProviderName = Literal["openrouter", "openai", "openai_compatible"]
+# A built-in provider (`openrouter`, `openai`) or a connection (`conn:<id>`).
+LLMProviderName = Annotated[str, AfterValidator(check_llm_ref)]
 
 # Primary language subtag plus up to three further subtags: en, en-US, zh-Hans-CN, es-419.
 _LANGUAGE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$")

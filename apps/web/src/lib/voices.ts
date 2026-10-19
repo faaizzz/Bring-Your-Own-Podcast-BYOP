@@ -4,19 +4,9 @@ import { z } from 'zod';
 import { api } from './api';
 import { speakerInputSchema, type SpeakerInput } from './shows';
 
-export const TTS_PROVIDERS = ['openai', 'elevenlabs', 'openrouter', 'kokoro'] as const;
-export type TtsProvider = (typeof TTS_PROVIDERS)[number];
-
-export const LLM_PROVIDERS = ['openrouter', 'openai', 'openai_compatible'] as const;
-export type LlmProvider = (typeof LLM_PROVIDERS)[number];
-
-export const PROVIDER_LABELS: Record<TtsProvider | LlmProvider, string> = {
-  openai: 'OpenAI',
-  elevenlabs: 'ElevenLabs',
-  openrouter: 'OpenRouter',
-  kokoro: 'Kokoro (local)',
-  openai_compatible: 'OpenAI-compatible',
-};
+// Providers are named by reference (`openai`, ..., or `conn:<id>`); see lib/providers.ts.
+export type TtsProvider = string;
+export type LlmProvider = string;
 
 export const voiceSchema = z.object({
   id: z.string(),
@@ -73,19 +63,6 @@ export function useDefaultSpeakers() {
       api.get<SpeakerInput[]>('/voices/default-speakers', {
         schema: z.array(speakerInputSchema),
       }),
-    staleTime: FIVE_MINUTES,
-  });
-}
-
-/** The voice provider a new show would use; `null` provider means none is set up. */
-export function useDefaultTtsProvider() {
-  return useQuery({
-    queryKey: ['voices', 'default-provider'],
-    queryFn: () =>
-      api.get<{ provider: string | null }>('/voices/default-provider', {
-        schema: z.object({ provider: z.string().nullable() }),
-      }),
-    retry: false,
     staleTime: FIVE_MINUTES,
   });
 }

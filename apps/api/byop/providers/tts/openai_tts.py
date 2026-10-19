@@ -30,7 +30,7 @@ _FORMATS = {
 class OpenAITTS(TTSProvider):
     """`POST /audio/speech` (OpenAI, or any server that implements the same endpoint)."""
 
-    name: ClassVar[str] = "openai"
+    name = "openai"
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
         max_chars_per_request=4096,
         formats=_FORMATS,

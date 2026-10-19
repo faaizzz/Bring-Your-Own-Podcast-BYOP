@@ -11,7 +11,8 @@ import {
   type Speaker,
   type SpeakerInput,
 } from '../../../lib/shows';
-import { LLM_PROVIDERS, TTS_PROVIDERS, type TtsProvider } from '../../../lib/voices';
+import { isConnection } from '../../../lib/providers';
+import type { TtsProvider } from '../../../lib/voices';
 
 // The rules below mirror what the API enforces (schemas/show.py, schemas/speaker.py and the
 // providers' ParamSpecs). The server stays the authority: its 422s are mapped onto the fields.
@@ -50,7 +51,7 @@ const unit = (name: string, label: string): ParamField => ({
   hint: '0–1',
 });
 
-export const VOICE_PARAMS: Record<TtsProvider, ParamField[]> = {
+export const VOICE_PARAMS: Record<string, ParamField[]> = {
   openai: [
     { name: 'model', label: 'Model', kind: 'text', hint: 'Defaults to gpt-4o-mini-tts' },
     speed(0.25, 4),
@@ -87,7 +88,31 @@ export const VOICE_PARAMS: Record<TtsProvider, ParamField[]> = {
     },
     { name: 'volume_multiplier', label: 'Volume', kind: 'number', min: 0, max: 4, step: 0.1 },
   ],
+  // Any OpenAI-compatible server of the user's own (a connection): the OpenAI settings plus
+  // the extras Kokoro-style servers take.
+  connection: [
+    {
+      name: 'model',
+      label: 'Model',
+      kind: 'text',
+      hint: 'Whatever the server expects, if anything',
+    },
+    speed(0.25, 4),
+    { name: 'instructions', label: 'Delivery instructions', kind: 'text' },
+    {
+      name: 'lang_code',
+      label: 'Language code',
+      kind: 'text',
+      hint: 'For Kokoro-style servers, e.g. a for American English',
+    },
+    { name: 'volume_multiplier', label: 'Volume', kind: 'number', min: 0, max: 4, step: 0.1 },
+  ],
 };
+
+/** The voice settings a provider (built-in or connection) accepts; keep in step with the API. */
+export function voiceParamsFor(provider: TtsProvider): ParamField[] {
+  return VOICE_PARAMS[isConnection(provider) ? 'connection' : provider] ?? [];
+}
 
 function checkParam(field: ParamField, raw: string): string | null {
   if (field.kind === 'boolean' || field.kind === 'text') return null;
@@ -103,14 +128,14 @@ const speakerFormSchema = z
   .object({
     name: z.string().trim().min(1, 'Enter a name').max(100, 'At most 100 characters'),
     persona: z.string().trim().max(2000, 'At most 2000 characters'),
-    tts_provider: z.enum(TTS_PROVIDERS),
+    tts_provider: z.string().min(1, 'Choose a voice provider'),
     voice_id: z.string().trim().min(1, 'Choose a voice').max(200, 'At most 200 characters'),
     params: z.record(z.string(), z.string()),
     fallback_tts_provider: z.string(),
     fallback_voice_id: z.string().trim(),
   })
   .superRefine((speaker, ctx) => {
-    for (const field of VOICE_PARAMS[speaker.tts_provider]) {
+    for (const field of voiceParamsFor(speaker.tts_provider)) {
       const raw = (speaker.params[field.name] ?? '').trim();
       if (raw === '') {
         if (field.required) {
@@ -136,10 +161,9 @@ const speakerFormSchema = z
         message: 'Choose a fallback provider',
       });
     }
-    const needsParams =
-      hasProvider && TTS_PROVIDERS.includes(speaker.fallback_tts_provider as TtsProvider)
-        ? VOICE_PARAMS[speaker.fallback_tts_provider as TtsProvider].some((f) => f.required)
-        : false;
+    const needsParams = hasProvider
+      ? voiceParamsFor(speaker.fallback_tts_provider).some((f) => f.required)
+      : false;
     if (needsParams) {
       ctx.addIssue({
         code: 'custom',
@@ -186,7 +210,7 @@ export const showFormSchema = z
       .array(speakerFormSchema)
       .min(1, 'Add at least one speaker')
       .max(MAX_SPEAKERS, `At most ${String(MAX_SPEAKERS)} speakers`),
-    llm_provider: z.enum(['', ...LLM_PROVIDERS]),
+    llm_provider: z.string(),
     llm_model: z.string().trim().max(200),
     schedule_kind: z.enum(SCHEDULE_KINDS),
     schedule_time: z.string(),
@@ -327,7 +351,7 @@ export function paramsToApi(
   params: Record<string, string>,
 ): Record<string, ParamValue> {
   const result: Record<string, ParamValue> = {};
-  for (const field of VOICE_PARAMS[provider]) {
+  for (const field of voiceParamsFor(provider)) {
     const raw = (params[field.name] ?? '').trim();
     if (raw === '') continue;
     if (field.kind === 'number' || field.kind === 'integer') result[field.name] = Number(raw);
@@ -374,7 +398,7 @@ export function emptyValues(speakers: SpeakerInput[]): ShowFormValues {
 }
 
 export function showToValues(show: Show, speakers: Speaker[]): ShowFormValues {
-  const provider = LLM_PROVIDERS.find((p) => p === show.llm_provider) ?? '';
+  const provider = show.llm_provider ?? '';
   return {
     title: show.title,
     topic: show.topic,

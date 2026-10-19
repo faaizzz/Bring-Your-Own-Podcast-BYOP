@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from pydantic import SecretStr
 
@@ -5,6 +7,7 @@ from byop.models.enums import CredentialProvider as P
 from byop.providers.tts import (
     ElevenLabsTTS,
     KokoroTTS,
+    OpenAICompatibleTTS,
     OpenAITTS,
     OpenRouterTTS,
     UnsupportedTTSProvider,
@@ -29,7 +32,7 @@ def test_a_configured_base_url_is_used() -> None:
     assert tts._base_url == "https://proxy.example/v1"
 
 
-@pytest.mark.parametrize("provider", [P.LANGFUSE, P.OPENAI_COMPATIBLE])
+@pytest.mark.parametrize("provider", [P.LANGFUSE])
 def test_providers_without_a_tts_adapter_are_rejected(provider: P) -> None:
     with pytest.raises(UnsupportedTTSProvider, match="not a TTS provider"):
         get_tts(provider, config(provider))
@@ -46,3 +49,23 @@ def test_kokoro_needs_a_base_url_but_no_key() -> None:
     assert isinstance(tts, KokoroTTS)
     with pytest.raises(UnsupportedTTSProvider, match="base URL"):
         get_tts(P.KOKORO, config(P.KOKORO, key=None))
+
+
+def test_a_connection_needs_a_base_url_but_not_a_key() -> None:
+    cfg = ProviderConfig(
+        P.OPENAI_COMPATIBLE,
+        "user",
+        None,
+        "http://tts.local/v1",
+        headers={"X-Gateway": "abc"},
+        connection_id=uuid.uuid4(),
+        label="Local TTS",
+    )
+
+    tts = get_tts(P.OPENAI_COMPATIBLE, cfg)
+
+    assert isinstance(tts, OpenAICompatibleTTS)
+    assert tts.name == "conn:Local TTS"
+    assert tts.auth_headers() == {}
+    with pytest.raises(UnsupportedTTSProvider, match="base URL"):
+        get_tts(P.OPENAI_COMPATIBLE, config(P.OPENAI_COMPATIBLE, key=None))

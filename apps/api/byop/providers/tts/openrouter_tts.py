@@ -10,7 +10,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 class OpenRouterTTS(OpenAITTS):
     """TTS models exposed through OpenRouter's OpenAI-compatible `/audio/speech`."""
 
-    name: ClassVar[str] = "openrouter"
+    name = "openrouter"
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
         max_chars_per_request=4096,
         formats=OpenAITTS.quirks.formats,

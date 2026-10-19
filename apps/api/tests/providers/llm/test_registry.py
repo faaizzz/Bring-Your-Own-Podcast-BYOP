@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from pydantic import SecretStr
 
@@ -55,3 +57,21 @@ def test_keyed_providers_need_a_key(provider: P) -> None:
 def test_non_llm_providers_are_rejected(provider: P) -> None:
     with pytest.raises(UnsupportedLLMProvider, match="not an LLM provider"):
         get_llm(provider, config(provider))
+
+
+def test_a_connection_sends_its_headers_and_reports_usage_under_its_name() -> None:
+    cfg = ProviderConfig(
+        P.OPENAI_COMPATIBLE,
+        "user",
+        None,
+        "http://gateway.local/v1",
+        headers={"X-Gateway": "abc"},
+        connection_id=uuid.uuid4(),
+        label="Gateway",
+    )
+
+    llm = get_llm(P.OPENAI_COMPATIBLE, cfg)
+
+    assert isinstance(llm, OpenAICompatibleLLM) and llm.name == "conn:Gateway"
+    assert llm.client.default_headers["X-Gateway"] == "abc"
+    assert "abc" not in repr(cfg)  # header values are secrets

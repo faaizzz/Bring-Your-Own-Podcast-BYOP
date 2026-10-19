@@ -113,10 +113,11 @@ async def run(ctx: RunContext) -> None:
         )
     provider, model = chosen
     try:
-        llm = get_llm(provider, await ctx.resolver.get(ctx.user_id, provider))
+        config = await ctx.resolver.get_ref(ctx.user_id, provider, "llm")
+        llm = get_llm(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedLLMProvider) as exc:
         raise StageFailed(
-            f"The {provider.value} provider is not set up: {exc}. Configure it under "
+            f"The {provider} provider is not set up: {exc}. Configure it under "
             "Settings › Integrations."
         ) from exc
     await ctx.progress(0.1)

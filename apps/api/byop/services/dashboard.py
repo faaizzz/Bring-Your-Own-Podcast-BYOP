@@ -18,6 +18,7 @@ from byop.schemas.dashboard import (
     RecentFailure,
     UpcomingRun,
 )
+from byop.services.connections import has_connection
 from byop.services.credentials import CredentialResolver, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
 
@@ -37,8 +38,13 @@ async def _count(session: AsyncSession, *conditions: object) -> int:
     return int(await session.scalar(select(func.count()).where(*conditions)) or 0)  # type: ignore[arg-type]
 
 
-async def provider_configured(resolver: CredentialResolver, user_id: uuid.UUID) -> bool:
-    """Whether at least one language-model provider has credentials (from the user or `.env`)."""
+async def provider_configured(
+    session: AsyncSession, resolver: CredentialResolver, user_id: uuid.UUID
+) -> bool:
+    """Whether at least one language-model provider has credentials (from the user or `.env`),
+    or the user has an enabled connection for language models."""
+    if await has_connection(session, user_id, "llm"):
+        return True
     for provider in LLM_PROVIDERS:
         try:
             await resolver.get(user_id, provider)
@@ -191,8 +197,11 @@ async def build_dashboard(
         recent_failures=await _recent_failures(session, user_id, now, {a.show_id for a in active}),
         latest_episodes=latest,
         onboarding=Onboarding(
-            provider_configured=await provider_configured(resolver, user_id),
-            voice_configured=await default_tts_provider(resolver, user_id) is not None,
+            provider_configured=await provider_configured(session, resolver, user_id),
+            voice_configured=(
+                await default_tts_provider(resolver, user_id) is not None
+                or await has_connection(session, user_id, "tts")
+            ),
             show_created=shows > 0,
             episode_generated=episodes > 0,
         ),

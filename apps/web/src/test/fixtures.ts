@@ -90,10 +90,32 @@ export const openrouterModels: ModelInfo[] = [
   },
 ];
 
+const provider = (id: string, label: string, configured: boolean, capabilities: string[]) => ({
+  id,
+  label,
+  kind: 'builtin',
+  configured,
+  capabilities,
+});
+
+/** What the pickers offer when only OpenRouter (models) and Kokoro (voices) are set up. */
+export const llmProviders = [
+  provider('openrouter', 'OpenRouter', true, ['llm', 'tts']),
+  provider('openai', 'OpenAI', false, ['llm', 'tts']),
+];
+export const ttsProviders = [
+  provider('openai', 'OpenAI', false, ['llm', 'tts']),
+  provider('elevenlabs', 'ElevenLabs', false, ['tts']),
+  provider('openrouter', 'OpenRouter', true, ['llm', 'tts']),
+  provider('kokoro', 'Kokoro (local)', true, ['tts']),
+];
+
 /** The read-only endpoints every show form needs, with Kokoro as the only voice provider. */
 export function formHandlers(): Record<string, Handler> {
   return {
-    'GET /api/voices/default-provider': () => ({ body: { provider: 'kokoro' } }),
+    'GET /api/providers': ({ query }) => ({
+      body: query.get('capability') === 'llm' ? llmProviders : ttsProviders,
+    }),
     'GET /api/voices/default-speakers': () => ({ body: kokoroHosts }),
     'GET /api/voices': ({ query }) =>
       query.get('provider') === 'kokoro'

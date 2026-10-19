@@ -35,7 +35,7 @@ def describe_voice(voice_id: str) -> Voice:
 class KokoroTTS(OpenAITTS):
     """Local, free text-to-speech: a Kokoro-FastAPI server speaking the OpenAI speech API."""
 
-    name: ClassVar[str] = "kokoro"
+    name = "kokoro"
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
         # On a CPU a request takes roughly as long as the text is long (about 0.15 s per
         # character), so chunks stay small enough to finish well within the timeout.

@@ -130,7 +130,6 @@ async def test_delete_removes_the_override_and_is_idempotent(
         ("elevenlabs", {"enabled": True}, "API key"),
         ("langfuse", {"extra": {"public_key": "pk"}}, "API key"),
         ("kokoro", {"api_key": "irrelevant"}, "base URL"),
-        ("openai_compatible", {"api_key": KEY}, "base URL"),
     ],
 )
 async def test_a_new_override_must_be_usable(
@@ -209,15 +208,24 @@ async def test_langfuse_check_uses_basic_auth_with_both_keys(authed: AsyncClient
 
 
 @respx.mock
-async def test_kokoro_and_compatible_checks(authed: AsyncClient) -> None:
+async def test_kokoro_check(authed: AsyncClient) -> None:
     voices = respx.get("http://kokoro:8880/v1/audio/voices").respond(200, json={})
-    models = respx.get("https://llm.example/v1/models").respond(200, json={})
     await authed.put("/api/integrations/kokoro", json={"base_url": "http://kokoro:8880/v1"})
-    await put(authed, "openai_compatible", base_url="https://llm.example/v1")
 
     assert (await authed.post("/api/integrations/kokoro/test")).json()["ok"] is True
-    assert (await authed.post("/api/integrations/openai_compatible/test")).json()["ok"] is True
-    assert voices.called and models.called
+    assert voices.called
+
+
+async def test_openai_compatible_servers_are_connections_not_integrations(
+    authed: AsyncClient,
+) -> None:
+    for call in (
+        authed.get("/api/integrations/openai_compatible"),
+        authed.put("/api/integrations/openai_compatible", json={"base_url": "http://x.example"}),
+        authed.delete("/api/integrations/openai_compatible"),
+        authed.post("/api/integrations/openai_compatible/test"),
+    ):
+        assert (await call).status_code == 404
 
 
 @respx.mock

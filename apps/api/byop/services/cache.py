@@ -13,8 +13,11 @@ def cache_key(prefix: str, config: ProviderConfig) -> str:
     """`prefix:provider:fingerprint`; a changed key or base URL must not see another's data."""
     base = config.base_url or ""
     key = config.api_key.get_secret_value() if config.api_key else ""
-    fingerprint = hashlib.sha256(f"{base}\n{key}".encode()).hexdigest()[:16]
-    return f"{prefix}:{config.provider.value}:{fingerprint}"
+    # Custom headers can change what a server answers (a gateway routes on them).
+    headers = "\n".join(f"{n}={v}" for n, v in sorted(config.headers.items()))
+    fingerprint = hashlib.sha256(f"{base}\n{key}\n{headers}".encode()).hexdigest()[:16]
+    kind = f"conn-{config.connection_id}" if config.connection_id else config.provider.value
+    return f"{prefix}:{kind}:{fingerprint}"
 
 
 async def read(redis: Redis, key: str) -> str | None:

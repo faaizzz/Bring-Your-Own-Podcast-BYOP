@@ -29,7 +29,8 @@ class UsageEvent(Base):
         ForeignKey("shows.id", ondelete="SET NULL"), index=True
     )
     kind: Mapped[UsageKind] = mapped_column(enum_type(UsageKind, "usage_kind"))
-    provider: Mapped[str] = mapped_column(String(50))
+    # A built-in provider's name, or `conn:<connection name>`.
+    provider: Mapped[str] = mapped_column(String(100))
     model: Mapped[str | None] = mapped_column(String(200))
     stage: Mapped[str | None] = mapped_column(String(50))
     input_tokens: Mapped[int | None] = mapped_column(Integer)

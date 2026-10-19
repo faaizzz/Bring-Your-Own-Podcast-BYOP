@@ -8,9 +8,10 @@ from pathlib import Path
 import anyio
 import pytest
 
-from byop.models.enums import CredentialProvider as P
+from byop.models.enums import CredentialProvider
 from byop.providers.tts import CallMetadata, TTSError, TTSParamError, TTSProvider
 from byop.providers.tts.base import AudioRequest, ProviderQuirks, TTSResult, Voice
+from byop.services.provider_ref import ProviderRef
 from byop.services.synthesis import (
     Chunk,
     ChunkAudio,
@@ -20,6 +21,15 @@ from byop.services.synthesis import (
     plan_chunks,
     synthesize_chunks,
 )
+
+
+class P:
+    """Built-in providers as the references shows and speakers store."""
+
+    OPENAI = ProviderRef.of(CredentialProvider.OPENAI)
+    OPENROUTER = ProviderRef.of(CredentialProvider.OPENROUTER)
+    ELEVENLABS = ProviderRef.of(CredentialProvider.ELEVENLABS)
+    KOKORO = ProviderRef.of(CredentialProvider.KOKORO)
 
 
 class FakeTTS(TTSProvider):
@@ -116,7 +126,7 @@ VOICES = {"Alex": ALEX, "Sam": SAM}
 
 async def run(
     chunks: list[Chunk],
-    pool: Mapping[P, TTSProvider],
+    pool: Mapping[ProviderRef, TTSProvider],
     work: Path,
     voices: Mapping[str, SpeakerVoice] = VOICES,
     *,

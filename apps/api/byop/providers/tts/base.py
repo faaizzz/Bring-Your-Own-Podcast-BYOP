@@ -135,7 +135,7 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 class TTSProvider(ABC):
-    name: ClassVar[str]
+    name: str
     quirks: ClassVar[ProviderQuirks]
 
     def __init__(

@@ -11,13 +11,14 @@ import structlog
 from pydantic import BaseModel, Field
 
 from byop.models import Source
-from byop.models.enums import CredentialProvider, SourceKind
+from byop.models.enums import SourceKind
 from byop.providers.llm import CallMetadata, LLMError, Message, get_llm
 from byop.services.credentials import ProviderConfig
 from byop.services.discovery import search_model_id
 from byop.services.feeds import FEED_ACCEPT, FeedInvalid, parse_entries
 from byop.services.ingest.dates import parse_date
 from byop.services.ingest.extract import MAX_SUMMARY_CHARS, decode, extract_page, strip_html
+from byop.services.provider_ref import ProviderRef
 from byop.services.safe_http import FetchError, fetch_bytes
 
 log = structlog.get_logger(__name__)
@@ -110,7 +111,7 @@ class _SearchItems(BaseModel):
 class SearchModel:
     """The web-searching model for `web_search` sources, resolved once per ingest."""
 
-    provider: CredentialProvider
+    provider: ProviderRef
     model: str
     config: ProviderConfig
 
@@ -133,7 +134,7 @@ async def collect_search(
         'has "title", "url" (a direct link to the article), "summary" (two sentences) and '
         '"published_at" (ISO 8601 date or datetime, if known). Never invent a URL.'
     )
-    llm = get_llm(search.provider, search.config)
+    llm = get_llm(search.config.provider, search.config)
     try:
         result = await llm.complete(
             [

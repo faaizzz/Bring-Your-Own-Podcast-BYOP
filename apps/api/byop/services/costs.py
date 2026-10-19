@@ -355,8 +355,8 @@ async def provider_llm_price(
         return None
     provider, model = chosen
     try:
-        config = await resolver.get(user_id, provider)
-        llm = get_llm(provider, config)
+        config = await resolver.get_ref(user_id, provider, "llm")
+        llm = get_llm(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedLLMProvider):
         return None
     try:

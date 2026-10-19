@@ -13,6 +13,7 @@ from byop.services.credentials import (
     mask_secret,
     rotate_credentials,
 )
+from byop.services.provider_ref import ProviderRef
 from tests.helpers import TEST_SECRET, make_settings
 from tests.models.factories import make_user
 
@@ -235,3 +236,47 @@ async def test_rotation_with_the_wrong_old_key_changes_nothing(
 
     after = (await db_session.scalars(select(ProviderCredential))).one().secret_encrypted
     assert after == before
+
+
+async def test_rotation_covers_connections_too(db_session: AsyncSession, admin_user: User) -> None:
+    from tests.models.factories import make_connection
+
+    old, new = SecretStr(TEST_SECRET), SecretStr("n" * 32)
+    conn = await make_connection(
+        db_session, admin_user, api_key="sk-conn-key-123456", headers={"X-A": "secret-value"}
+    )
+
+    assert await rotate_credentials(db_session, old, new) == 1
+
+    after = CredentialResolver(db_session, make_settings(byop_secret_key=new))
+    config = await after.get_ref(admin_user.id, ProviderRef(connection_id=conn.id), "llm")
+    assert config.api_key == SecretStr("sk-conn-key-123456")
+    assert config.headers == {"X-A": "secret-value"}
+
+
+async def test_a_connection_must_exist_be_enabled_and_allow_the_use(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    from tests.models.factories import make_connection, make_user
+
+    resolver = CredentialResolver(db_session, make_settings())
+    voices = await make_connection(db_session, admin_user, "V", llm=False, tts=True)
+    off = await make_connection(db_session, admin_user, "Off", enabled=False)
+    other = await make_connection(db_session, await make_user(db_session, "o@example.com"), "O")
+
+    assert (
+        await resolver.get_ref(admin_user.id, ProviderRef(connection_id=voices.id), "tts")
+    ).label == "V"
+    for record, use, message in (
+        (voices, "llm", "not enabled for language models"),
+        (off, "llm", "disabled"),
+        (other, "llm", "does not exist"),
+    ):
+        with pytest.raises(ProviderNotConfigured, match=message):
+            await resolver.get_ref(admin_user.id, ProviderRef(connection_id=record.id), use)  # type: ignore[arg-type]
+    with pytest.raises(ProviderNotConfigured, match="not enabled for voices"):
+        await resolver.get_ref(
+            admin_user.id,
+            ProviderRef(connection_id=(await make_connection(db_session, admin_user, "L")).id),
+            "tts",
+        )

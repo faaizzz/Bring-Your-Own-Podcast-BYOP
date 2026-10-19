@@ -36,7 +36,7 @@ def default_speakers(provider: CredentialProvider) -> list[SpeakerIn]:
         SpeakerIn(
             name=name,
             persona=persona,
-            tts_provider=provider.value,  # type: ignore[arg-type]  # narrowed by _VOICES keys
+            tts_provider=provider.value,
             voice_id=voice_id,
             voice_params=dict(params),
         )

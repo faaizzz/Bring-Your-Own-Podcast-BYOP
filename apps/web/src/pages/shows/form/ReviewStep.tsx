@@ -2,7 +2,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import { describeSchedule } from '../../../lib/format';
 import { STYLE_LABELS } from '../../../lib/shows';
-import { PROVIDER_LABELS } from '../../../lib/voices';
+import { useProviderLabel } from '../../../lib/providers';
 import type { ShowFormValues } from './schema';
 
 export function ReviewStep({
@@ -14,6 +14,7 @@ export function ReviewStep({
 }): React.JSX.Element {
   const { control } = useFormContext<ShowFormValues>();
   const values = useWatch({ control }) as ShowFormValues;
+  const labelOf = useProviderLabel();
   const schedule = describeSchedule({
     schedule_kind: values.schedule_kind,
     schedule_time: values.schedule_time,
@@ -34,7 +35,7 @@ export function ReviewStep({
       <ul key="speakers" className="list-unstyled mb-0">
         {values.speakers.map((speaker, index) => (
           <li key={index}>
-            {speaker.name} — {PROVIDER_LABELS[speaker.tts_provider]}, {speaker.voice_id}
+            {speaker.name} — {labelOf(speaker.tts_provider)}, {speaker.voice_id}
           </li>
         ))}
       </ul>,
@@ -43,7 +44,7 @@ export function ReviewStep({
       'Model',
       values.llm_provider === ''
         ? 'Instance default'
-        : `${PROVIDER_LABELS[values.llm_provider]}: ${values.llm_model}`,
+        : `${labelOf(values.llm_provider)}: ${values.llm_model}`,
     ],
     ['Schedule', values.schedule_kind === 'manual' ? schedule : `${schedule} (${values.timezone})`],
     ['Sources', sourceCount === 0 ? 'None yet' : `${String(sourceCount)} chosen`],

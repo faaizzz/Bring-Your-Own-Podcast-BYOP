@@ -3,14 +3,10 @@ import { Alert, Form, Spinner } from 'react-bootstrap';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 
-import {
-  formatPrice,
-  LLM_PROVIDERS,
-  PROVIDER_LABELS,
-  useModels,
-  type LlmProvider,
-} from '../../../lib/voices';
+import { useProviderLabel } from '../../../lib/providers';
+import { formatPrice, useModels, type LlmProvider } from '../../../lib/voices';
 import { Field } from './Field';
+import { ProviderOptions } from './ProviderOptions';
 import type { ShowFormValues } from './schema';
 
 function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element {
@@ -21,6 +17,7 @@ function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element
   } = useFormContext<ShowFormValues>();
   const value = useWatch({ control, name: 'llm_model' });
   const models = useModels(provider);
+  const labelOf = useProviderLabel();
   const [filter, setFilter] = useState('');
   const error = errors.llm_model?.message;
   const choose = (id: string) => {
@@ -41,8 +38,8 @@ function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element
     return (
       <>
         <Alert variant="warning">
-          {models.isError ? models.error.message : `${PROVIDER_LABELS[provider]} lists no models.`}{' '}
-          You can enter a model id by hand, or set up the provider under{' '}
+          {models.isError ? models.error.message : `${labelOf(provider)} lists no models.`} You can
+          enter a model id by hand, or set up the provider under{' '}
           <Link to="/settings/integrations">Settings › Integrations</Link>.
         </Alert>
         <Form.Group className="mb-3" controlId="model-manual">
@@ -132,11 +129,7 @@ export function ModelStep(): React.JSX.Element {
         }}
       >
         <option value="">Instance default</option>
-        {LLM_PROVIDERS.map((p) => (
-          <option key={p} value={p}>
-            {PROVIDER_LABELS[p]}
-          </option>
-        ))}
+        <ProviderOptions capability="llm" current={provider} />
       </Field>
       {provider !== '' && <ModelPicker provider={provider} />}
     </>

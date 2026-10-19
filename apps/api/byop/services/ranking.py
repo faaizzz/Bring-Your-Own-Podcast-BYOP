@@ -187,10 +187,10 @@ async def rank_items(
         return fallback("No language model is set up for this show")
     provider, model = chosen
     try:
-        config = await resolver.get(show.user_id, provider)
-        llm = get_llm(provider, config)
+        config = await resolver.get_ref(show.user_id, provider, "llm")
+        llm = get_llm(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedLLMProvider) as exc:
-        return fallback(f"The {provider.value} provider is not set up: {exc}")
+        return fallback(f"The {provider} provider is not set up: {exc}")
 
     try:
         result = await llm.complete(

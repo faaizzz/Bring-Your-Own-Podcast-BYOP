@@ -15,6 +15,7 @@ import {
 } from '../../lib/integrations';
 import { useToast } from '../../lib/toast';
 import { MainCard } from '../../layout/MainCard';
+import { ConnectionsSection } from './ConnectionsSection';
 import { IntegrationCard } from './IntegrationCard';
 import { IntegrationModal } from './IntegrationModal';
 
@@ -120,6 +121,7 @@ export default function IntegrationsPage(): React.JSX.Element {
           })}
         </Row>
       )}
+      <ConnectionsSection />
       {editing && editingIntegration && (
         <IntegrationModal
           provider={editing}

@@ -35,13 +35,18 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await expect(checklist).toBeVisible();
   await expect(checklist.getByRole('listitem')).toHaveCount(4);
 
-  // 1. Connect a language model: the mock server speaks the OpenAI API.
+  // 1. Connect a language model: the mock server speaks the OpenAI API. It is added as a
+  // connection, with a custom header (sent on every request).
   await page.getByRole('link', { name: 'Open integrations' }).click();
-  const card = page.getByRole('article', { name: 'OpenAI-compatible' });
-  await card.getByRole('button', { name: /Configure|Set up|Edit/ }).click();
+  await page.getByRole('button', { name: 'Add connection' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Mock model');
   await page.getByLabel('Base URL').fill(`${MOCK}/v1`);
-  await page.getByRole('button', { name: /^Save/ }).click();
-  await expect(card.getByText(/Connection works|Configured|Your key/i).first()).toBeVisible();
+  await page.getByRole('button', { name: /Add header/ }).click();
+  await page.getByLabel('Header 1 name').fill('X-E2E');
+  await page.getByLabel('Header 1 value').fill('1');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  const connection = page.getByRole('article', { name: 'Mock model' });
+  await expect(connection.getByText(/Works: \d+ models listed/)).toBeVisible();
 
   // The mock model is not in the price table, so give it a price: its calls then have a cost.
   const price = await page.request.put('/api/pricing/overrides', {
@@ -58,7 +63,7 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByRole('button', { name: 'Next' }).click();
   await expect(page.getByLabel('Voice provider').first()).toHaveValue('kokoro');
   await page.getByRole('button', { name: 'Next' }).click();
-  await page.getByLabel('Language model provider').selectOption('openai_compatible');
+  await page.getByLabel('Language model provider').selectOption({ label: 'Mock model' });
   await page.getByLabel('Model', { exact: true }).selectOption('mock-model');
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: 'Next' }).click(); // sources are added once the show exists

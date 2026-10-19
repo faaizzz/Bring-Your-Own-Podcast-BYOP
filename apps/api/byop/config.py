@@ -1,10 +1,21 @@
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from byop.models.enums import ShowStyle
+from byop.services.provider_ref import check_llm_ref
+
+# `openrouter`, `openai`, or `conn:<id>` of a connection.
+LLMProviderRef = Annotated[str, AfterValidator(check_llm_ref)]
 
 
 class ConfigError(RuntimeError):
@@ -91,11 +102,11 @@ class Settings(BaseSettings):
 
     # Discovery asks a model with web search for sources. Unset: the show's model, then the
     # instance default. On OpenRouter ":online" is appended so the model can search the web.
-    discovery_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
+    discovery_llm_provider: LLMProviderRef | None = None
     discovery_llm_model: str | None = None
 
     # Defaults for new shows (a show can override each of them).
-    default_llm_provider: Literal["openrouter", "openai", "openai_compatible"] | None = None
+    default_llm_provider: LLMProviderRef | None = None
     default_llm_model: str | None = None
     default_show_style: ShowStyle = ShowStyle.NEWS_BRIEFING
 

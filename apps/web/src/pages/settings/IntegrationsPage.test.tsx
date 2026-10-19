@@ -18,16 +18,9 @@ function integrationHandlers(
     detail: 'ok',
   }),
 ) {
-  const ids: ProviderId[] = [
-    'openrouter',
-    'openai',
-    'elevenlabs',
-    'kokoro',
-    'openai_compatible',
-    'langfuse',
-  ];
+  const ids: ProviderId[] = ['openrouter', 'openai', 'elevenlabs', 'kokoro', 'langfuse'];
   for (const id of ids) state[id] = initial[id] ?? fresh(id);
-  const handlers: Record<string, Handler> = {};
+  const handlers: Record<string, Handler> = { 'GET /api/connections': () => ({ body: [] }) };
   for (const id of ids) {
     handlers[`GET /api/integrations/${id}`] = () => ({ body: state[id] });
     handlers[`PUT /api/integrations/${id}`] = ({ body }) => {
@@ -68,14 +61,7 @@ describe('IntegrationsPage', () => {
       }),
     });
 
-    for (const name of [
-      'OpenRouter',
-      'OpenAI',
-      'ElevenLabs',
-      'Kokoro',
-      'OpenAI-compatible',
-      'Langfuse',
-    ]) {
+    for (const name of ['OpenRouter', 'OpenAI', 'ElevenLabs', 'Kokoro', 'Langfuse']) {
       expect(await screen.findByRole('article', { name })).toBeInTheDocument();
     }
     expect(within(card('OpenAI')).getByTestId('status')).toHaveTextContent('From .env');

@@ -79,12 +79,12 @@ and the language model with [Ollama](docs/providers.md#zero-cost-mode-kokoro-voi
 
 ```sh
 make up-kokoro                 # minimal stack plus a free local text-to-speech server
-ollama pull qwen2.5:14b        # on your machine; then add it under Integrations › OpenAI-compatible
+ollama pull qwen2.5:14b        # on your machine; then add it under Integrations › Add connection
 ```
 
 ### Providers
 
-| | OpenRouter | OpenAI | ElevenLabs | Kokoro (local) | OpenAI-compatible (Ollama…) |
+| | OpenRouter | OpenAI | ElevenLabs | Kokoro (local) | Connections (Ollama, vLLM, gateways…) |
 | --- | :-: | :-: | :-: | :-: | :-: |
 | Language models | ✓ | ✓ | | | ✓ |
 | Voices | ✓ | ✓ | ✓ | ✓ | |

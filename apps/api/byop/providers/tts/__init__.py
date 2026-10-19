@@ -14,6 +14,7 @@ from byop.providers.tts.base import (
 from byop.providers.tts.elevenlabs_tts import ElevenLabsTTS
 from byop.providers.tts.errors import AudioConversionError, TTSError, TTSParamError
 from byop.providers.tts.kokoro_tts import KokoroTTS
+from byop.providers.tts.openai_compatible_tts import OpenAICompatibleTTS
 from byop.providers.tts.openai_tts import OPENAI_BASE_URL, OpenAITTS
 from byop.providers.tts.openrouter_tts import OpenRouterTTS
 from byop.services.credentials import ProviderConfig
@@ -24,6 +25,7 @@ TTS_PROVIDERS = (
     CredentialProvider.ELEVENLABS,
     CredentialProvider.OPENROUTER,
     CredentialProvider.KOKORO,
+    CredentialProvider.OPENAI_COMPATIBLE,
 )
 
 
@@ -36,6 +38,7 @@ _CLASSES: dict[CredentialProvider, type[TTSProvider]] = {
     CredentialProvider.ELEVENLABS: ElevenLabsTTS,
     CredentialProvider.OPENROUTER: OpenRouterTTS,
     CredentialProvider.KOKORO: KokoroTTS,
+    CredentialProvider.OPENAI_COMPATIBLE: OpenAICompatibleTTS,
 }
 
 
@@ -79,6 +82,17 @@ def get_tts(
         if not config.base_url:
             raise UnsupportedTTSProvider("Kokoro needs a base URL")
         return KokoroTTS(base_url=config.base_url, timeout_s=timeout_s, retry=retry)
+    if provider is CredentialProvider.OPENAI_COMPATIBLE:
+        if not config.base_url:
+            raise UnsupportedTTSProvider("An OpenAI-compatible connection needs a base URL")
+        return OpenAICompatibleTTS(
+            base_url=config.base_url,
+            api_key=config.api_key.get_secret_value() if config.api_key else None,
+            name=config.usage_name,
+            headers=dict(config.headers),
+            timeout_s=timeout_s,
+            retry=retry,
+        )
     if config.api_key is None:
         raise UnsupportedTTSProvider(f"{provider.value} needs an API key")
     key = config.api_key.get_secret_value()
@@ -104,6 +118,7 @@ __all__ = [
     "CallMetadata",
     "ElevenLabsTTS",
     "KokoroTTS",
+    "OpenAICompatibleTTS",
     "OpenAITTS",
     "OpenRouterTTS",
     "ParamSpec",

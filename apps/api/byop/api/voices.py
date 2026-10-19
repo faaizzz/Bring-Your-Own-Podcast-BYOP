@@ -18,6 +18,7 @@ from byop.schemas.speaker import SpeakerIn, TTSProviderName
 from byop.schemas.voices import DefaultProviderResponse, VoicePreviewRequest, VoiceResponse
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
+from byop.services.provider_ref import ProviderRef
 from byop.services.speaker_defaults import default_speakers
 from byop.services.usage import capture_usage
 from byop.services.validation import error_detail, param_errors
@@ -58,12 +59,12 @@ async def list_voices(
             raise HTTPException(
                 status.HTTP_409_CONFLICT, "No text-to-speech provider is configured"
             )
-        name = default
+        ref = ProviderRef.of(default)
     else:
-        name = CredentialProvider(provider)
+        ref = ProviderRef.parse(provider)
     try:
-        config = await resolver.get(user.id, name)
-        tts = get_tts(name, config)
+        config = await resolver.get_ref(user.id, ref, "tts")
+        tts = get_tts(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedTTSProvider) as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
@@ -95,15 +96,15 @@ async def preview_voice(
     storage: StorageDep,
 ) -> Response:
     """A short MP3 of a voice with the given parameters. Identical requests are cached."""
-    name = CredentialProvider(body.provider)
-    if problems := voice_param_problems(name, body.params):
+    ref = ProviderRef.parse(body.provider)
+    if problems := voice_param_problems(ref.kind, body.params):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=error_detail(param_errors(("body", "params"), problems)),
         )
     try:
-        config = await resolver.get(user.id, name)
-        tts = get_tts(name, config)
+        config = await resolver.get_ref(user.id, ref, "tts")
+        tts = get_tts(config.provider, config)
     except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedTTSProvider) as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 

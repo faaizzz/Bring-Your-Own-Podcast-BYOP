@@ -1,9 +1,23 @@
 """Small helpers that build valid rows so tests only spell out what they care about."""
 
+from collections.abc import Mapping
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from byop.models import Episode, Item, Run, Show, Source, Speaker, UsageEvent, User
+from byop.models import (
+    Episode,
+    Item,
+    ProviderConnection,
+    Run,
+    Show,
+    Source,
+    Speaker,
+    UsageEvent,
+    User,
+)
 from byop.models.enums import RunTrigger, SourceKind, UsageKind
+from byop.services.credentials import CredentialResolver
+from tests.helpers import make_settings
 
 
 async def make_user(session: AsyncSession, email: str = "admin@example.com") -> User:
@@ -65,3 +79,33 @@ async def make_full_show(session: AsyncSession, user: User) -> Show:
     )
     await session.flush()
     return show
+
+
+async def make_connection(
+    session: AsyncSession,
+    user: User,
+    name: str = "Local",
+    *,
+    base_url: str = "http://llm.local/v1",
+    api_key: str | None = None,
+    headers: Mapping[str, str] | None = None,
+    llm: bool = True,
+    tts: bool = False,
+    web_search: bool = False,
+    enabled: bool = True,
+) -> ProviderConnection:
+    """An OpenAI-compatible connection, sealed with the test secret key."""
+    sealed = CredentialResolver(session, make_settings()).seal_connection(api_key, headers or {})
+    record = ProviderConnection(
+        user_id=user.id,
+        name=name,
+        base_url=base_url,
+        secret_encrypted=sealed,
+        llm=llm,
+        tts=tts,
+        web_search=web_search,
+        enabled=enabled,
+    )
+    session.add(record)
+    await session.flush()
+    return record

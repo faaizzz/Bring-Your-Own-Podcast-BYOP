@@ -5,7 +5,7 @@ import { Link, NavLink, useParams } from 'react-router-dom';
 import { ApiError } from '../../lib/api';
 import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
 import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
-import { PROVIDER_LABELS } from '../../lib/voices';
+import { useProviderLabel } from '../../lib/providers';
 import { EpisodesTab } from '../episodes/EpisodesTab';
 import { RunHistory } from '../history/RunHistory';
 import { FeedCard } from './FeedCard';
@@ -25,6 +25,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 function Overview({ show }: { show: Show }): React.JSX.Element {
   const speakers = useSpeakers(show.id);
+  const labelOf = useProviderLabel();
   const facts: [string, string][] = [
     ['Topic', show.topic],
     ['Language', show.language],
@@ -71,8 +72,7 @@ function Overview({ show }: { show: Show }): React.JSX.Element {
         <ul className="mb-0">
           {speakers.data.map((speaker) => (
             <li key={speaker.id}>
-              <strong>{speaker.name}</strong> — {PROVIDER_LABELS[speaker.tts_provider]},{' '}
-              {speaker.voice_id}
+              <strong>{speaker.name}</strong> — {labelOf(speaker.tts_provider)}, {speaker.voice_id}
               {speaker.persona && <span className="text-muted"> · {speaker.persona}</span>}
             </li>
           ))}

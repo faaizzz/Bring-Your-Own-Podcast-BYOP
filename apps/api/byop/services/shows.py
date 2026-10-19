@@ -23,6 +23,7 @@ from byop.services.credentials import (
 )
 from byop.services.defaults import default_tts_provider
 from byop.services.models import list_models_cached
+from byop.services.provider_ref import ProviderRef
 from byop.services.schedule import next_run_for
 from byop.services.speaker_defaults import default_speakers
 from byop.storage import Storage, StorageError, show_prefix
@@ -145,13 +146,18 @@ async def verify_model(
     model: str,
 ) -> list[str]:
     """Reject a model the provider does not offer; warn when that cannot be checked."""
-    name = CredentialProvider(provider)
+    ref = ProviderRef.parse(provider)
     unverified = f"Could not verify model '{model}' with {provider}"
     try:
-        config = await resolver.get(user_id, name)
-        llm = get_llm(name, config)
-    except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedLLMProvider):
+        config = await resolver.get_ref(user_id, ref, "llm")
+        llm = get_llm(config.provider, config)
+    except ProviderNotConfigured as exc:
+        if ref.is_connection:  # a connection must exist, be enabled and allow language models
+            raise ShowInvalid(str(exc)) from exc
         return [f"{unverified}: the provider is not configured."]
+    except (CredentialDecryptionError, UnsupportedLLMProvider):
+        return [f"{unverified}: the provider is not configured."]
+    provider = config.label or provider
     try:
         try:
             models = await list_models_cached(redis, llm, config)
