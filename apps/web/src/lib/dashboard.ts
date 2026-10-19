@@ -52,6 +52,7 @@ const dashboardSchema = z.object({
   ),
   onboarding: z.object({
     provider_configured: z.boolean(),
+    voice_configured: z.boolean(),
     show_created: z.boolean(),
     episode_generated: z.boolean(),
   }),

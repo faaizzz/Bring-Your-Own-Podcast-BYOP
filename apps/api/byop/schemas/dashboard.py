@@ -50,6 +50,8 @@ class Onboarding(BaseModel):
     """The first-run checklist; each step is done when its condition holds."""
 
     provider_configured: bool
+    # A text-to-speech provider is usable (a paid key, or a running Kokoro).
+    voice_configured: bool
     show_created: bool
     episode_generated: bool
 

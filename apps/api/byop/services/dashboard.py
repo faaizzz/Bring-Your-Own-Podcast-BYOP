@@ -19,6 +19,7 @@ from byop.schemas.dashboard import (
     UpcomingRun,
 )
 from byop.services.credentials import CredentialResolver, ProviderNotConfigured
+from byop.services.defaults import default_tts_provider
 
 UPCOMING_DAYS = 7
 SUCCESS_WINDOW_DAYS = 30
@@ -191,6 +192,7 @@ async def build_dashboard(
         latest_episodes=latest,
         onboarding=Onboarding(
             provider_configured=await provider_configured(resolver, user_id),
+            voice_configured=await default_tts_provider(resolver, user_id) is not None,
             show_created=shows > 0,
             episode_generated=episodes > 0,
         ),

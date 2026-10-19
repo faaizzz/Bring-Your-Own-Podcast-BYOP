@@ -13,8 +13,10 @@ x-api: &api
     DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://byop:byop@postgres:5432/byop}
     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     MEDIA_ROOT: /data/media
-    # Where the optional `kokoro` profile listens; empty/unset in .env falls back to the bundled one.
-    KOKORO_BASE_URL: ${KOKORO_BASE_URL:-http://kokoro:8880/v1}
+    # Empty in a minimal stack, so Kokoro does not look configured. `make up-full` (and
+    # `make up-kokoro`) set BYOP_BUNDLED_KOKORO_URL; with plain `docker compose --profile kokoro`
+    # set KOKORO_BASE_URL=http://kokoro:8880/v1 in .env.
+    KOKORO_BASE_URL: ${KOKORO_BASE_URL:-${BYOP_BUNDLED_KOKORO_URL:-}}
   # Lets the containers reach a model server on the host (e.g. Ollama) on Linux as well as
   # Docker Desktop: http://host.docker.internal:11434/v1
   extra_hosts:
@@ -114,7 +116,7 @@ services:
     restart: unless-stopped
 
   # Local, free text-to-speech. Opt in with: docker compose --profile kokoro up -d
-  # (or `make up-kokoro`). CPU image; for NVIDIA GPUs see docs/providers.md.
+  # (or `make up-full`). CPU image; for NVIDIA GPUs see docs/providers.md.
   kokoro:
     profiles: ["kokoro"]
     # Pinned by tag and digest (multi-arch: amd64 + arm64).
@@ -132,7 +134,7 @@ services:
     restart: unless-stopped
 
   # Local S3-compatible object storage. Opt in with: docker compose --profile minio up -d
-  # (or `make up-minio`), then set STORAGE_BACKEND=s3 and the S3_* values in .env (see
+  # (or `make up-full`), then set STORAGE_BACKEND=s3 and the S3_* values in .env (see
   # docs/storage.md). The profile keeps its historical name; the image is RustFS because
   # MinIO no longer publishes container images.
   s3:
@@ -153,7 +155,7 @@ services:
     restart: unless-stopped
 
   # --- Langfuse: self-hosted LLM tracing -------------------------------------------------------
-  # Opt in with: docker compose --profile langfuse up -d   (or `make up-langfuse`), then follow
+  # Opt in with: docker compose --profile langfuse up -d   (or `make up-full`), then follow
   # docs/langfuse.md. Langfuse 3 needs its own Postgres, ClickHouse, Redis and S3-compatible store
   # (RustFS, as for the `minio` profile), none of which touch BYOP's own data. The project keys
   # below are created on first start so BYOP can use it without any clicking; they are for a
@@ -206,7 +208,8 @@ services:
       LANGFUSE_INIT_USER_NAME: admin
       LANGFUSE_INIT_USER_PASSWORD: ${BYOP_ADMIN_PASSWORD:-change-me-now}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/public/health || exit 1"]
+      # Next.js listens on the container's own address, not on 127.0.0.1.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://$$(hostname):3000/api/public/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

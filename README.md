@@ -41,19 +41,36 @@ You need Docker with the compose plugin. Three commands:
 ```sh
 git clone https://github.com/faaizzz/Bring-Your-Own-Podcast-BYOP.git
 cd Bring-Your-Own-Podcast-BYOP
-make up        # creates .env, generates BYOP_SECRET_KEY, builds and starts everything
+make up        # creates .env, generates BYOP_SECRET_KEY, builds and starts the minimal stack
 ```
 
 Open <http://localhost:8080> and sign in with `admin@example.com` / `change-me-now` (set your own
 `BYOP_ADMIN_EMAIL` and `BYOP_ADMIN_PASSWORD` in `.env` before exposing the app). The dashboard walks
 you through the first episode:
 
-1. **Settings › Integrations:** add an OpenRouter or OpenAI key (or a local model, below).
+1. **Settings › Integrations:** add an OpenRouter or OpenAI key (or a local model, below), and a
+   voice provider (ElevenLabs, OpenAI or OpenRouter key, or `make up-full` for free local voices).
 2. **Shows › New show:** a title and a topic, pick the voices, a model and, optionally, a schedule.
 3. **Sources tab:** *Discover sources* from the topic, or add feeds by hand.
 4. Press **Generate now**, watch the run, review the episode and approve it.
 5. Copy the show's feed address into your podcast app. [Publishing](docs/publishing.md) explains how
    to put it on the internet and into Apple Podcasts and Spotify.
+
+### Minimal or full stack
+
+`make up` starts the **minimal** stack: the app and its database, nothing optional. `make up-full`
+adds free local voices, tracing and S3 storage:
+
+| | `make up` (minimal) | `make up-full` |
+| --- | --- | --- |
+| Services | `api`, `worker`, `beat`, `web`, `postgres`, `redis` (6) | the six, plus `kokoro`, `langfuse-*` (web, worker, Postgres, ClickHouse, Redis) and `s3` |
+| Memory (approx.) | 1 GB | 6 GB |
+| Disk (images + data, approx.) | 2 GB | 10 GB |
+| Voices | a paid key (ElevenLabs, OpenAI, OpenRouter) | the same, or free local voices (Kokoro) |
+| Pick it when | you have API keys, or you only try the app | you want to run without paid keys, trace LLM calls or try S3 |
+
+Pick optional parts with `BYOP_PROFILES`, for example `BYOP_PROFILES="kokoro" make up-full`.
+Details: [configuration](docs/configuration.md#minimal-and-full-stack).
 
 ### Zero-cost mode
 
@@ -61,7 +78,7 @@ No paid keys? Run the voices locally with [Kokoro](docs/providers.md#local-voice
 and the language model with [Ollama](docs/providers.md#zero-cost-mode-kokoro-voices-and-a-local-model):
 
 ```sh
-make up-kokoro                 # BYOP plus a free local text-to-speech server
+make up-kokoro                 # minimal stack plus a free local text-to-speech server
 ollama pull qwen2.5:14b        # on your machine; then add it under Integrations › OpenAI-compatible
 ```
 
@@ -78,8 +95,9 @@ Details, and how to add another provider: [providers](docs/providers.md).
 
 ## Everyday commands
 
-`make up` · `make down` · `make logs` · `make up-kokoro` · `make up-minio` (S3 storage) ·
-`make up-langfuse` (tracing) · `make check` (lint, types, tests) · `make e2e` (browser test) ·
+`make up` (minimal) · `make up-full` (+ local voices, tracing, S3) · `make down` (stops everything) ·
+`make down-v` (also deletes the data) · `make logs` · `make build` · `make up-kokoro` · `make up-minio` ·
+`make up-langfuse` (single-profile aliases of `up-full`) · `make check` (lint, types, tests) · `make e2e` (browser test) ·
 `make help` lists them all. In development `docker-compose.override.yml` mounts the API source for
 hot reload; for a production-like run use `docker compose -f docker-compose.yml up -d --build`, or run a
 published release without building: [releasing](docs/releasing.md).

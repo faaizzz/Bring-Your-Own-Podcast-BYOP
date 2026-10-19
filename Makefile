@@ -1,28 +1,46 @@
 .DEFAULT_GOAL := help
-.PHONY: help up up-kokoro up-minio up-langfuse e2e e2e-down down logs migrate deps test lint typecheck check fmt
+.PHONY: help up up-full up-kokoro up-minio up-langfuse build build-full e2e e2e-down down down-v logs logs-full migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
 WEB_DIR := apps/web
 
+# Optional services of the full stack, as compose profiles. Override to pick some:
+#   BYOP_PROFILES="kokoro" make up-full
+BYOP_PROFILES ?= kokoro langfuse minio
+
+# `--profile a --profile b` for a list of profiles.
+profile_flags = $(foreach p,$(1),--profile $(p))
+# Kokoro is only "configured" when its server is part of the stack; compose reads this default
+# when KOKORO_BASE_URL is not set in .env (see docker-compose.yml).
+kokoro_url = $(if $(filter kokoro,$(1)),BYOP_BUNDLED_KOKORO_URL=http://kokoro:8880/v1)
+
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
 
-up: ## Build and start the whole stack, wait until healthy
+up: ## Build and start the minimal stack (api, worker, beat, web, postgres, redis), wait until healthy
 	./scripts/ensure-env.sh
 	$(COMPOSE) up -d --build --wait
 
-up-kokoro: ## Like `up`, plus the local Kokoro text-to-speech service
+up-full: ## Minimal stack plus local voices (kokoro), tracing (langfuse) and S3 (minio); see BYOP_PROFILES
 	./scripts/ensure-env.sh
-	$(COMPOSE) --profile kokoro up -d --build --wait
+	$(call kokoro_url,$(BYOP_PROFILES)) $(COMPOSE) $(call profile_flags,$(BYOP_PROFILES)) up -d --build --wait
 
-up-minio: ## Like `up`, plus a local S3-compatible object store (see docs/storage.md)
-	./scripts/ensure-env.sh
-	$(COMPOSE) --profile minio up -d --build --wait
+up-kokoro: ## Alias: minimal stack plus the local Kokoro text-to-speech service
+	$(MAKE) up-full BYOP_PROFILES=kokoro
 
-up-langfuse: ## Like `up`, plus self-hosted Langfuse tracing (see docs/langfuse.md)
-	./scripts/ensure-env.sh
-	$(COMPOSE) --profile langfuse up -d --build --wait
+up-minio: ## Alias: minimal stack plus a local S3-compatible object store (see docs/storage.md)
+	$(MAKE) up-full BYOP_PROFILES=minio
+
+up-langfuse: ## Alias: minimal stack plus self-hosted Langfuse tracing (see docs/langfuse.md)
+	$(MAKE) up-full BYOP_PROFILES=langfuse
+
+build: ## Build the images of the minimal stack
+	$(COMPOSE) build
+
+build-full: ## Build/pull the images of the full stack (see BYOP_PROFILES)
+	$(COMPOSE) $(call profile_flags,$(BYOP_PROFILES)) build
+	$(COMPOSE) $(call profile_flags,$(BYOP_PROFILES)) pull --ignore-buildable
 
 # The end-to-end stack is its own compose project on its own port, so it never touches your data.
 E2E_PORT ?= 18080
@@ -37,11 +55,19 @@ e2e: ## Run the browser end-to-end test against a throwaway stack with mock mode
 e2e-down: ## Remove the end-to-end stack and its data
 	$(E2E_COMPOSE) down -v
 
-down: ## Stop the stack (keeps volumes)
-	$(COMPOSE) --profile kokoro --profile minio down
+down: ## Stop and remove every BYOP container, whichever profile started it (keeps volumes)
+	$(COMPOSE) --profile '*' down
 
-logs: ## Follow logs of all services
+down-v: ## Like `down`, but also deletes the volumes: database, media, Langfuse data
+	@echo "WARNING: this deletes ALL BYOP data (database, media, Langfuse). Press Ctrl-C within 5 s to abort."
+	@sleep 5
+	$(COMPOSE) --profile '*' down -v
+
+logs: ## Follow logs of the minimal stack
 	$(COMPOSE) logs -f --tail=100
+
+logs-full: ## Follow logs of every service of the full stack (see BYOP_PROFILES)
+	$(COMPOSE) $(call profile_flags,$(BYOP_PROFILES)) logs -f --tail=100
 
 migrate: ## Apply database migrations
 	@if [ -f $(API_DIR)/alembic.ini ]; then \

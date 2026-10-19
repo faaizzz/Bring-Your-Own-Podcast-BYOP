@@ -19,7 +19,7 @@ You need Docker (with compose), [uv](https://docs.astral.sh/uv/) for Python 3.12
 
 ```sh
 git clone <your fork> && cd Bring-Your-Own-Podcast-BYOP
-make up                 # the full stack on http://localhost:8080 (API hot-reloads)
+make up                 # the minimal stack on http://localhost:8080 (API hot-reloads)
 make check              # lint + types + tests for api and web
 ```
 

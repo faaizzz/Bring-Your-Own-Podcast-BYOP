@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Alert, Button, Card, Collapse, Form } from 'react-bootstrap';
 import { get, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
 
-import { PROVIDER_LABELS, TTS_PROVIDERS } from '../../../lib/voices';
+import { PROVIDER_LABELS, TTS_PROVIDERS, useDefaultTtsProvider } from '../../../lib/voices';
 import { Field } from './Field';
 import {
   MAX_SPEAKERS,
@@ -217,6 +218,7 @@ export function SpeakersStep(): React.JSX.Element {
   const { fields, append, remove } = useFieldArray({ control, name: 'speakers' });
   const listError = errors.speakers?.root?.message ?? errors.speakers?.message;
   const speakers = useWatch({ control, name: 'speakers' });
+  const defaultProvider = useDefaultTtsProvider();
 
   const add = () => {
     const last = speakers[speakers.length - 1];
@@ -237,6 +239,14 @@ export function SpeakersStep(): React.JSX.Element {
         Give the show one to {MAX_SPEAKERS} voices. They speak in this order, and each has a persona
         the script writer follows.
       </p>
+      {defaultProvider.data?.provider === null && (
+        <Alert variant="warning" data-testid="no-voice-provider">
+          <strong>No voice provider is set up yet.</strong> Add an ElevenLabs, OpenAI or OpenRouter
+          key under <Link to="/settings/integrations">Settings → Integrations</Link>, or run{' '}
+          <code>make up-full</code> for free local voices (Kokoro). Without one the show cannot make
+          audio.
+        </Alert>
+      )}
       {listError && <Alert variant="danger">{listError}</Alert>}
       {fields.map((field, index) => (
         <SpeakerEditor

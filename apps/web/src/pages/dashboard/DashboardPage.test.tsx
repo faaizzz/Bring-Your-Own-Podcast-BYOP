@@ -18,7 +18,12 @@ function dashboard(patch: Partial<Dashboard> = {}): Dashboard {
     active_runs: [],
     recent_failures: [],
     latest_episodes: [],
-    onboarding: { provider_configured: true, show_created: true, episode_generated: true },
+    onboarding: {
+      provider_configured: true,
+      voice_configured: true,
+      show_created: true,
+      episode_generated: true,
+    },
     ...patch,
   };
 }
@@ -30,7 +35,12 @@ const fresh: Partial<Dashboard> = {
   success_rate: null,
   finished_runs_30d: 0,
   drafts_to_review: 0,
-  onboarding: { provider_configured: false, show_created: false, episode_generated: false },
+  onboarding: {
+    provider_configured: false,
+    voice_configured: false,
+    show_created: false,
+    episode_generated: false,
+  },
 };
 
 describe('dashboard', () => {
@@ -41,11 +51,12 @@ describe('dashboard', () => {
 
     const list = await screen.findByTestId('onboarding');
     const steps = within(list).getAllByRole('listitem');
-    expect(steps.map((s) => s.dataset.done)).toEqual(['false', 'false', 'false']);
+    expect(steps.map((s) => s.dataset.done)).toEqual(['false', 'false', 'false', 'false']);
     expect(within(list).getByRole('link', { name: 'Open integrations' })).toHaveAttribute(
       'href',
       '/settings/integrations',
     );
+    expect(within(list).getByText(/make up-full/)).toBeInTheDocument();
     expect(within(list).getByRole('link', { name: 'Create a show' })).toHaveAttribute(
       'href',
       '/shows/new',
@@ -60,14 +71,19 @@ describe('dashboard', () => {
           body: dashboard({
             ...fresh,
             shows: 1,
-            onboarding: { provider_configured: true, show_created: true, episode_generated: false },
+            onboarding: {
+              provider_configured: true,
+              voice_configured: true,
+              show_created: true,
+              episode_generated: false,
+            },
           }),
         }),
       },
     });
 
     const steps = within(await screen.findByTestId('onboarding')).getAllByRole('listitem');
-    expect(steps.map((s) => s.dataset.done)).toEqual(['true', 'true', 'false']);
+    expect(steps.map((s) => s.dataset.done)).toEqual(['true', 'true', 'true', 'false']);
     expect(within(steps[0] as HTMLElement).getByText('(done)')).toBeInTheDocument();
     expect(within(steps[0] as HTMLElement).queryByRole('link')).not.toBeInTheDocument();
   });
@@ -78,7 +94,12 @@ describe('dashboard', () => {
         'GET /api/dashboard': () => ({
           body: dashboard({
             ...fresh,
-            onboarding: { provider_configured: true, show_created: true, episode_generated: false },
+            onboarding: {
+              provider_configured: true,
+              voice_configured: true,
+              show_created: true,
+              episode_generated: false,
+            },
             active_runs: [
               {
                 id: 'r1',

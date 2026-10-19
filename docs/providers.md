@@ -133,11 +133,13 @@ open-source [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) server (C
 pinned by tag and digest in `docker-compose.yml`) that speaks the OpenAI speech API:
 
 ```sh
-docker compose --profile kokoro up -d      # or: make up-kokoro
+make up-kokoro                             # or: make up-full, or: docker compose --profile kokoro up -d
 curl -b cookies.txt "http://localhost:8080/api/voices?provider=kokoro"
 ```
 
-The api, worker and beat containers reach it at `http://kokoro:8880/v1`; set
+The api, worker and beat containers reach it at `http://kokoro:8880/v1` (`make up-kokoro` and
+`make up-full` set that; with plain `docker compose --profile kokoro` put it in `KOKORO_BASE_URL`).
+A minimal `make up` has no Kokoro, so it is not offered as a voice provider. Set
 `KOKORO_BASE_URL` (or `PUT /api/integrations/kokoro`) to use another server instead. The
 first start downloads the model, so allow a minute before the health check passes, and CPU
 synthesis is slower than a hosted API (the adapter's timeout is five minutes). `make down`
@@ -152,8 +154,8 @@ entry in a `docker-compose.override.yml`; no BYOP code changes are needed.
 You can run BYOP without paying anyone: Kokoro for voices and [Ollama](https://ollama.com) (or LM
 Studio, vLLM, ...) for the language model.
 
-1. `make up-kokoro` starts BYOP with the local Kokoro server; it is preselected as the voice
-   provider whenever no paid voice key exists.
+1. `make up-kokoro` (or `make up-full`) starts BYOP with the local Kokoro server; it is preselected
+   as the voice provider whenever no paid voice key exists.
 2. Run Ollama on your machine and pull a model that follows JSON instructions well (a 7-14B
    instruction model is a sensible minimum): `ollama pull qwen2.5:14b`.
 3. Settings › Integrations › **OpenAI-compatible**: base URL `http://host.docker.internal:11434/v1`

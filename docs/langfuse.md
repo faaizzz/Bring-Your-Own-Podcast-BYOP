@@ -42,7 +42,7 @@ differently (for example `http://localhost:3000`).
 ## Self-hosting it with BYOP
 
 ```sh
-make up-langfuse        # = docker compose --profile langfuse up -d --build --wait
+make up-langfuse        # or make up-full; = docker compose --profile langfuse up -d --build --wait
 ```
 
 This adds Langfuse 3 and what it needs (its own Postgres, ClickHouse, Redis and an S3-compatible

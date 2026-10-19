@@ -4,6 +4,9 @@ from byop.models.enums import CredentialProvider
 from byop.services.credentials import CredentialResolver, ProviderNotConfigured
 from byop.services.integration_check import check_provider
 
+# The default is looked up on every dashboard load, so a dead Kokoro URL must not stall it.
+KOKORO_PROBE_SECONDS = 2.0
+
 # Paid providers in order of preference; Kokoro (free, local) is the fallback.
 PAID_TTS_PROVIDERS = (
     CredentialProvider.ELEVENLABS,
@@ -26,5 +29,7 @@ async def default_tts_provider(
         kokoro = await resolver.get(user_id, CredentialProvider.KOKORO)
     except ProviderNotConfigured:
         return None
-    # Kokoro's URL may be preconfigured by compose even when its profile is not running.
-    return CredentialProvider.KOKORO if (await check_provider(kokoro)).ok else None
+    # A configured URL says nothing about whether the server runs (`make up-full` sets it, a
+    # hand-written one may be stale), so ask it.
+    probe = await check_provider(kokoro, timeout_seconds=KOKORO_PROBE_SECONDS)
+    return CredentialProvider.KOKORO if probe.ok else None

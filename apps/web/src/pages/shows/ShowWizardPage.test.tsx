@@ -365,6 +365,26 @@ describe('create-show wizard', () => {
       return opened;
     }
 
+    it('explains how to get voices when no voice provider is set up', async () => {
+      await onSpeakers({
+        'GET /api/voices/default-provider': () => ({ body: { provider: null } }),
+      });
+
+      const notice = await screen.findByTestId('no-voice-provider');
+      expect(notice).toHaveTextContent('make up-full');
+      expect(within(notice).getByRole('link', { name: /Integrations/ })).toHaveAttribute(
+        'href',
+        '/settings/integrations',
+      );
+    });
+
+    it('shows no voice warning when a provider is available', async () => {
+      await onSpeakers();
+
+      await screen.findAllByTestId('speaker');
+      expect(screen.queryByTestId('no-voice-provider')).not.toBeInTheDocument();
+    });
+
     it('adds up to four speakers and removes down to one', async () => {
       const { user } = await onSpeakers();
 

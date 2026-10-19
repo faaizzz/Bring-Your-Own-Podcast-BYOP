@@ -37,11 +37,13 @@ def _request(config: ProviderConfig) -> tuple[str, dict[str, str], tuple[str, st
             return f"{base}/models", bearer, None
 
 
-async def check_provider(config: ProviderConfig) -> CheckResult:
+async def check_provider(
+    config: ProviderConfig, *, timeout_seconds: float = TIMEOUT_SECONDS
+) -> CheckResult:
     """Probe the provider. Details are safe to show: no URLs, bodies or secrets."""
     url, headers, basic = _request(config)
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
             response = await client.get(
                 url, headers=headers, auth=httpx.BasicAuth(*basic) if basic else None
             )

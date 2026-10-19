@@ -22,7 +22,7 @@ is for presigned links handed to browsers when the server is reachable under ano
 ### Trying S3 locally: the `minio` profile
 
 ```sh
-make up-minio          # or: docker compose --profile minio up -d
+make up-minio          # or: make up-full, or: docker compose --profile minio up -d
 ```
 
 starts an S3-compatible server (service `s3`, `http://s3:9000` inside the compose network,

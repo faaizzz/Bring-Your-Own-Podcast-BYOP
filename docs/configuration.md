@@ -7,6 +7,35 @@ the app (Settings › Integrations); a key saved there wins over `.env` for your
 
 The API fails fast at start with a readable message if a required value is missing or invalid.
 
+## Minimal and full stack
+
+| | `make up` (minimal) | `make up-full` (full) |
+| --- | --- | --- |
+| Services | `api`, `worker`, `beat`, `web`, `postgres`, `redis` | the six, plus `kokoro` (profile `kokoro`), Langfuse: `langfuse-web`, `langfuse-worker` and its Postgres, ClickHouse and Redis (profile `langfuse`), and `s3` (profile `minio`) |
+| Memory (approx.) | 1 GB | 6 GB (ClickHouse and Kokoro are the big ones) |
+| Disk (approx., images + empty data) | 2 GB | 10 GB (Kokoro downloads its model on first start) |
+| Voices | needs an ElevenLabs, OpenAI or OpenRouter key | also free local voices (Kokoro) |
+| Tracing | off | Langfuse on <http://localhost:3000>, see [langfuse](langfuse.md) |
+| Media | local volume | local volume, or the bundled S3-compatible store, see [storage](storage.md) |
+
+Pick the **minimal** stack when you bring API keys (or a local model server) and want the lightest
+install. Pick the **full** stack to run without paid keys, to look at traces, or to try S3.
+Starting the full stack does not turn S3 or tracing on by itself: set the `STORAGE_BACKEND`/`S3_*`
+and `LANGFUSE_*` values in `.env` as the linked pages describe.
+
+Which optional services `make up-full` starts is the make variable `BYOP_PROFILES` (compose profile
+names, default `kokoro langfuse minio`): `BYOP_PROFILES="kokoro" make up-full`. It also applies to
+`make build-full` and `make logs-full`. `make up-kokoro`, `make up-minio` and `make up-langfuse`
+are shortcuts for one profile. `make down` stops every BYOP container whichever profile started it
+and keeps the data; `make down-v` also deletes the volumes (database, media, Langfuse) after a
+five-second warning.
+
+Kokoro only counts as a configured voice provider when its server is part of the stack:
+`make up-full`/`make up-kokoro` set `KOKORO_BASE_URL` to the bundled service for the containers, a
+minimal stack leaves it empty, and the app also checks that the server answers (a configured but
+dead URL is ignored). With no voice provider the dashboard checklist and the speakers step of the
+show wizard say how to get one.
+
 ## Core
 
 | Variable | Default | |
@@ -40,7 +69,7 @@ All optional. See [providers](providers.md).
 | `OPENROUTER_API_KEY` | Language models (and speech) through OpenRouter |
 | `OPENAI_API_KEY` | OpenAI language models and voices |
 | `ELEVENLABS_API_KEY` | ElevenLabs voices |
-| `KOKORO_BASE_URL` | A Kokoro-FastAPI (OpenAI-style speech) server. Empty uses the bundled one of `make up-kokoro` (`http://kokoro:8880/v1`) |
+| `KOKORO_BASE_URL` | A Kokoro-FastAPI (OpenAI-style speech) server. Empty: `make up-full`/`make up-kokoro` use the bundled one (`http://kokoro:8880/v1`), a minimal `make up` has none |
 
 An OpenAI-compatible server (Ollama, LM Studio, vLLM) has no variable: add it under Settings ›
 Integrations with its base URL.
@@ -104,7 +133,7 @@ See [voicing](tts.md) and [audio](audio.md).
 | Variable | Default | |
 | --- | --- | --- |
 | `STORAGE_BACKEND` | `local` | `local` (a volume) or `s3` (any S3-compatible service) |
-| `S3_ENDPOINT_URL` | empty | e.g. `http://s3:9000` for the bundled service of `make up-minio`; empty for AWS |
+| `S3_ENDPOINT_URL` | empty | e.g. `http://s3:9000` for the bundled service of `make up-full`; empty for AWS |
 | `S3_PUBLIC_ENDPOINT_URL` | empty | Only if browsers must use another address than `S3_ENDPOINT_URL` |
 | `S3_BUCKET` | empty | Bucket name (must exist for external services) |
 | `S3_REGION` | `us-east-1` | |

@@ -44,6 +44,13 @@ function Onboarding({ steps }: { steps: Dashboard['onboarding'] }): React.JSX.El
       action: 'Open integrations',
     },
     {
+      done: steps.voice_configured,
+      title: 'Choose a voice provider',
+      text: 'Add an ElevenLabs, OpenAI or OpenRouter key for the voices, or run “make up-full” for free local voices.',
+      to: '/settings/integrations',
+      action: 'Add a voice provider',
+    },
+    {
       done: steps.show_created,
       title: 'Create a show',
       text: 'Pick a topic, a style and the voices of your hosts.',

@@ -64,6 +64,7 @@ async def test_an_empty_instance_asks_for_onboarding(authed: AsyncClient, app: F
 
     assert body["onboarding"] == {
         "provider_configured": False,
+        "voice_configured": False,
         "show_created": False,
         "episode_generated": False,
     }
@@ -84,6 +85,7 @@ async def test_onboarding_follows_the_providers_the_show_and_the_first_episode(
     show = await make_show(db_session, admin_user)
     assert (await get(authed))["onboarding"] == {
         "provider_configured": True,
+        "voice_configured": True,  # OpenRouter speaks too
         "show_created": True,
         "episode_generated": False,
     }
@@ -91,6 +93,15 @@ async def test_onboarding_follows_the_providers_the_show_and_the_first_episode(
     db_session.add(Episode(user_id=admin_user.id, show_id=show.id, title="First"))
     await db_session.flush()
     assert (await get(authed))["onboarding"]["episode_generated"] is True
+
+
+async def test_a_voice_provider_key_completes_the_voice_step(
+    authed: AsyncClient, app: FastAPI
+) -> None:
+    app.dependency_overrides[get_settings] = lambda: make_settings(
+        elevenlabs_api_key=SecretStr("xi-test-0123456789")
+    )
+    assert (await get(authed))["onboarding"]["voice_configured"] is True
 
 
 async def test_tiles_count_this_month_and_the_success_rate_of_the_last_30_days(

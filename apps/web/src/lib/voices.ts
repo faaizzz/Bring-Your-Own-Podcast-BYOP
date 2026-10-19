@@ -77,6 +77,19 @@ export function useDefaultSpeakers() {
   });
 }
 
+/** The voice provider a new show would use; `null` provider means none is set up. */
+export function useDefaultTtsProvider() {
+  return useQuery({
+    queryKey: ['voices', 'default-provider'],
+    queryFn: () =>
+      api.get<{ provider: string | null }>('/voices/default-provider', {
+        schema: z.object({ provider: z.string().nullable() }),
+      }),
+    retry: false,
+    staleTime: FIVE_MINUTES,
+  });
+}
+
 export type PreviewRequest = {
   provider: TtsProvider;
   voice_id: string;

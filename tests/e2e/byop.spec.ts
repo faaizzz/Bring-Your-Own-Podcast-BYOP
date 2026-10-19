@@ -33,7 +33,7 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   // A fresh instance starts with the getting-started checklist.
   const checklist = page.getByTestId('onboarding');
   await expect(checklist).toBeVisible();
-  await expect(checklist.getByRole('listitem')).toHaveCount(3);
+  await expect(checklist.getByRole('listitem')).toHaveCount(4);
 
   // 1. Connect a language model: the mock server speaks the OpenAI API.
   await page.getByRole('link', { name: 'Open integrations' }).click();

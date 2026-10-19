@@ -93,6 +93,7 @@ export const openrouterModels: ModelInfo[] = [
 /** The read-only endpoints every show form needs, with Kokoro as the only voice provider. */
 export function formHandlers(): Record<string, Handler> {
   return {
+    'GET /api/voices/default-provider': () => ({ body: { provider: 'kokoro' } }),
     'GET /api/voices/default-speakers': () => ({ body: kokoroHosts }),
     'GET /api/voices': ({ query }) =>
       query.get('provider') === 'kokoro'
