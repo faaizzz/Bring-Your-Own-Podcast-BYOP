@@ -5,7 +5,7 @@ All notable changes to BYOP are listed here. The format follows
 [Semantic Versioning](https://semver.org/). When a release is tagged, replace "unreleased" in its
 heading with the date (see [docs/releasing.md](docs/releasing.md)).
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-10-19
 
 The first release: a self-hosted app that turns your sources into a scheduled, multi-speaker AI
 podcast with its own RSS feed.
