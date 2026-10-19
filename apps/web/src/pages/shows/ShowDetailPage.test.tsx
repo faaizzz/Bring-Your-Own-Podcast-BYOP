@@ -54,9 +54,34 @@ describe('show detail page', () => {
 
     expect(await screen.findByRole('heading', { name: 'Daily AI' })).toBeInTheDocument();
     expect(screen.getByText('Daily 07:30 (Europe/Berlin)')).toBeInTheDocument();
-    expect(screen.getByText('openrouter: anthropic/claude-sonnet')).toBeInTheDocument();
+    expect(screen.getByText('OpenRouter: anthropic/claude-sonnet')).toBeInTheDocument();
     expect(await screen.findByText(/Alex/)).toBeInTheDocument();
     expect(screen.getByText(/Sam/)).toBeInTheDocument();
+  });
+
+  it('names a connection by its name, not its id, as the model provider and voice provider', async () => {
+    const { handlers } = showApi({ llm_provider: 'conn:c1', llm_model: 'llama3' });
+    const connection = (id: string, label: string, capability: string) => ({
+      id,
+      label,
+      kind: 'connection',
+      configured: true,
+      capabilities: [capability],
+    });
+    await renderApp('/shows/s1', {
+      handlers: {
+        ...handlers,
+        'GET /api/providers': ({ query }) => ({
+          body:
+            query.get('capability') === 'llm'
+              ? [connection('conn:c1', 'Local Ollama', 'llm')]
+              : [connection('conn:c2', 'Studio voices', 'tts')],
+        }),
+      },
+    });
+
+    expect(await screen.findByText('Local Ollama: llama3')).toBeInTheDocument();
+    expect(screen.queryByText(/conn:c1/)).not.toBeInTheDocument();
   });
 
   it('has the five tabs, with a placeholder for what comes later', async () => {

@@ -34,7 +34,7 @@ function Overview({ show }: { show: Show }): React.JSX.Element {
     [
       'Model',
       show.llm_provider && show.llm_model
-        ? `${show.llm_provider}: ${show.llm_model}`
+        ? `${labelOf(show.llm_provider)}: ${show.llm_model}`
         : 'Instance default',
     ],
     [

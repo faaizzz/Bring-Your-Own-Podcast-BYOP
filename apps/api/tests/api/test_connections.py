@@ -282,3 +282,13 @@ async def test_unreachable_servers_are_reported(authed: AsyncClient) -> None:
             {"capability": "llm", "ok": False, "detail": "Could not connect (ConnectError)"}
         ],
     }
+
+
+@respx.mock
+async def test_a_single_model_is_not_pluralised(authed: AsyncClient) -> None:
+    created = await create(authed)
+    respx.get("http://ollama:11434/v1/models").respond(200, json={"data": [{"id": "llama3"}]})
+
+    result = (await authed.post(f"/api/connections/{created['id']}/test")).json()
+
+    assert result["checks"][0]["detail"] == "Works: 1 model listed"

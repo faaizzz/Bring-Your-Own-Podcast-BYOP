@@ -26,6 +26,8 @@ make check              # lint + types + tests for api and web
 - API: `cd apps/api && uv run pytest -q` (needs Postgres and Redis; `make test` starts them for you).
 - Web: `cd apps/web && npm ci && npm run dev` (proxies `/api` to a running API), `npm run check` for
   lint, types, tests and build.
+- Pictures for the README: `make screenshots` regenerates `docs/images/` from the e2e stack with a
+  demo show (see [e2e](docs/e2e.md#documentation-pictures)); check every image before committing.
 - Browser test: `make e2e` runs the whole product against mock model and voice servers
   ([docs/e2e.md](docs/e2e.md)).
 

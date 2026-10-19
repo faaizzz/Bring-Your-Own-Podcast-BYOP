@@ -7,7 +7,7 @@ pages and searches you care about into a recurring, multi-speaker AI podcast wit
 Bring your own language-model and voice keys, or run everything locally for free, and keep full
 control of your data.
 
-![The dashboard: tiles, latest episodes with a player, what is coming up](docs/images/dashboard.png)
+![The dashboard: spend, episodes waiting for review, the latest episodes with a player and what is coming up](docs/images/dashboard.png)
 
 ## What you get
 
@@ -26,13 +26,30 @@ control of your data.
 
 | Run, live | Episode review |
 | --- | --- |
-| ![A run: stage timeline, live log and cost](docs/images/run.png) | ![Reviewing an episode: player, coloured script, sources](docs/images/episode-review.png) |
+| ![A run: stage timeline, live log and the cost of every call](docs/images/run.png) | ![Reviewing a draft episode: player, editable script with a speaker per line](docs/images/episode-review.png) |
 
 | Costs | A show and its feed |
 | --- | --- |
-| ![Costs: tiles, monthly chart, providers](docs/images/costs.png) | ![A show with its feed address](docs/images/show.png) |
+| ![Costs: tiles, spend per month and per provider](docs/images/costs.png) | ![A show: topic, model, schedule, speakers and its podcast feed](docs/images/show.png) |
 
-*(The pictures show the end-to-end test's mock model and voices.)*
+### Your own servers, and searchable dropdowns
+
+Add any number of OpenAI-compatible endpoints (Ollama, vLLM, a gateway, a second Kokoro) as
+[connections](docs/providers.md#connections-any-openai-compatible-server), each for models, voices
+or both, with the headers it needs. Every dropdown can be searched by typing, in light and dark
+mode, and source discovery tells you up front when a model cannot search the web.
+
+| Connections | Editing one: key and custom headers stay masked |
+| --- | --- |
+| ![Settings, Integrations: two OpenAI-compatible connections, one for models and one for voices, with their test results](docs/images/connections.png) | ![The edit dialog of a connection: name, base URL, API key, custom headers and what it is used for](docs/images/connection-edit.png) |
+
+| A searchable dropdown | Discovery checks the model first |
+| --- | --- |
+| ![The voice dropdown of the create-show wizard, open, with language and gender per voice](docs/images/dropdown.png) | ![The Discover sources dialog warning that the show's model cannot search the web](docs/images/discovery.png) |
+
+![The dashboard in dark mode](docs/images/dashboard-dark.png)
+
+*(The pictures come from `make screenshots` and show the end-to-end test's mock model and voices.)*
 
 ## Quickstart
 
@@ -95,7 +112,7 @@ Details, and how to add another provider: [providers](docs/providers.md).
 
 ## Everyday commands
 
-`make up` (minimal) · `make up-full` (+ local voices, tracing, S3) · `make down` (stops everything) ·
+`make screenshots` (regenerate the pictures above) · `make up` (minimal) · `make up-full` (+ local voices, tracing, S3) · `make down` (stops everything) ·
 `make down-v` (also deletes the data) · `make logs` · `make build` · `make up-kokoro` · `make up-minio` ·
 `make up-langfuse` (single-profile aliases of `up-full`) · `make check` (lint, types, tests) · `make e2e` (browser test) ·
 `make help` lists them all. In development `docker-compose.override.yml` mounts the API source for

@@ -378,7 +378,8 @@ async def check_connection(
             if not listed:
                 detail = f"Reachable, but it has no list of {what}: type the name by hand"
             else:
-                detail = f"Works: {len(items)} {what} listed"
+                noun = what[:-1] if len(items) == 1 else what
+                detail = f"Works: {len(items)} {noun} listed"
             checks.append(ConnectionCheck(capability=capability, ok=True, detail=detail))
     ok = all(c.ok for c in checks)
     return ConnectionTestResponse(

@@ -5,7 +5,8 @@ product can run in CI without paid keys or a GPU:
   script prompts with canned but valid JSON built from what the prompt says;
 * a Kokoro-style speech API (`/v1/audio/speech`, `/v1/audio/voices`) that returns a short tone
   whose length follows the text;
-* a small news feed (`/feed.xml`) with a few articles.
+* a small news feed (`/feed.xml`) with a few articles, and a fuller one (`/demo-feed.xml`) that the
+  documentation screenshots use.
 
 Run it with `uvicorn --app-dir tests/e2e/mock_llm app:app`.
 """
@@ -76,9 +77,47 @@ def _ranking(prompt: str) -> dict[str, object]:
     }
 
 
+REACTIONS = [
+    "That matters because it lowers the cost of trying things out, and it keeps the control "
+    "with the people who actually run the software.",
+    "What stands out is how quickly this went from an idea to something people can use today.",
+    "It is a good reminder that the boring parts, like licences and packaging, decide what gets "
+    "adopted.",
+    "If you build with open tools, this is worth an afternoon of your time.",
+    "The details are worth reading, but the direction is clear and it is a welcome one.",
+]
+
+
+def _stories(prompt: str) -> list[tuple[int, str, str]]:
+    """(number, title, summary) of every story in the script prompt."""
+    found = re.findall(
+        r"^### Story (\d+): (.+?)\n\nSource: .*?\n\n(.*?)(?=\n\n|\Z)", prompt, re.M | re.S
+    )
+    return [(int(n), title.strip(), summary.strip()) for n, title, summary in found]
+
+
+def _speech(lead: str, words: int, offset: int) -> str:
+    """Natural-sounding text of about `words` words: `lead`, then reactions until it is long
+    enough, ending on a full sentence where that costs little length."""
+    sentences = [s.strip() for s in re.findall(r"[^.!?]+[.!?]", lead)] or [lead]
+    i = offset
+    text = ""
+    while len(text.split()) < words:
+        text = " ".join([*sentences, REACTIONS[i % len(REACTIONS)]]) if i == offset else (
+            text + " " + REACTIONS[i % len(REACTIONS)]
+        )
+        i += 1
+    if len(text.split()) <= words + 8:
+        return text
+    cut = " ".join(text.split()[:words])
+    stop = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    # A full sentence if that keeps at least 70% of the length; otherwise cut at the word.
+    return cut[: stop + 1] if stop > 0 and stop >= len(cut) * 0.7 else cut + "."
+
+
 def _script(prompt: str) -> dict[str, object]:
     speakers = re.findall(r"^- \*\*(.+?)\*\*", prompt, re.M) or ["Host"]
-    stories = [int(n) for n in re.findall(r"^### Story (\d+):", prompt, re.M)]
+    stories = _stories(prompt)
     low, high = (
         (int(m.group(1)), int(m.group(2)))
         if (m := re.search(r"between (\d+) and (\d+)\)", prompt))
@@ -90,16 +129,16 @@ def _script(prompt: str) -> dict[str, object]:
     segments: list[dict[str, object]] = [
         {
             "speaker": lead,
-            "text": "Welcome to the show. Here is what happened today.",
+            "text": "Welcome back. Here is what we are following today.",
             "kind": "intro",
             "item_ids": [],
         }
     ]
-    for i, number in enumerate(stories):
+    for i, (number, title, summary) in enumerate(stories):
         segments.append(
             {
                 "speaker": speakers[i % len(speakers)],
-                "text": f"Story {number} first. {_words(per_story // 2)}.",
+                "text": _speech(f"{title}. {summary}", per_story // 2, i),
                 "kind": "story",
                 "item_ids": [number],
             }
@@ -107,7 +146,7 @@ def _script(prompt: str) -> dict[str, object]:
         segments.append(
             {
                 "speaker": other,
-                "text": f"{_words(per_story // 2)}.",
+                "text": _speech(REACTIONS[(i + 1) % len(REACTIONS)], per_story // 2, i + 2),
                 "kind": "story",
                 "item_ids": [number],
             }
@@ -120,9 +159,11 @@ def _script(prompt: str) -> dict[str, object]:
             "item_ids": [],
         }
     )
+    headline = stories[0][1].rstrip(".") if stories else "This week in open tools"
+    more = f", plus {len(stories) - 1} more" if len(stories) > 1 else ""
     return {
-        "title": "Open tools, one step at a time",
-        "description": "A short briefing on this week's open-source AI news, written by a mock model.",
+        "title": f"{headline}{more}",
+        "description": "In this episode: " + "; ".join(t for _, t, _ in stories) + ".",
         "segments": segments,
     }
 
@@ -199,6 +240,46 @@ async def feed(request: Request) -> Response:
 <rss version="2.0"><channel><title>Open Source AI Weekly</title><link>{base}</link>
 <description>Mock news for the end-to-end test</description>{items}</channel></rss>"""
     return Response(xml, media_type="application/rss+xml")
+
+
+DEMO_ARTICLES = [
+    ("Open-weights model family adds a 3B variant that runs on laptops", "The new variant keeps most of the larger model's quality on everyday tasks and fits in eight gigabytes of memory, so it runs on an ordinary laptop without a GPU."),
+    ("Inference server ships speculative decoding by default", "The latest release turns on speculative decoding out of the box, which the maintainers say cuts latency for chat workloads by roughly a third."),
+    ("Local speech models close the gap with hosted voices in a listening test", "In a blind listening test, a small open text-to-speech model was rated almost as natural as a leading hosted service for narration."),
+    ("Evaluation toolkit for agents reaches its first stable release", "Tracing, replayable runs and a simple scoring API are part of the first stable version, aimed at teams that want to test agents before shipping them."),
+    ("A permissive licence for a widely used language model", "The authors moved the model to a permissive licence, so companies can build it into commercial products without negotiating a separate agreement."),
+    ("Vector database adds hybrid search with one flag", "Keyword and semantic search can now be combined in a single query, which the project says improves results for short, specific questions."),
+    ("Open dataset of podcast transcripts released for research", "Thousands of hours of openly licensed podcast transcripts were published with speaker labels, to help researchers build better speech tools."),
+    ("Browser runtime brings small models to the web without a server", "A new runtime executes small language models directly in the browser using the graphics card, which makes private, offline demos practical."),
+    ("Guide: running a home model server on a single mini PC", "A step-by-step guide shows how to serve a handful of open models from one inexpensive machine, with notes on power use and noise."),
+    ("Fine-tuning library halves memory use for long documents", "A new release lets people fine-tune on long documents with about half the memory, at a small cost in speed."),
+    ("Community maintains a free index of open models and their licences", "Volunteers keep a searchable index of open models, their sizes and their licences, updated every week."),
+    ("Speech-to-text model adds streaming for live captions", "The open model now transcribes in real time with low delay, which makes live captions for talks and meetings possible on modest hardware."),
+]
+
+
+@app.get("/demo-feed.xml")
+async def demo_feed(request: Request) -> Response:
+    """A fuller feed for the documentation screenshots: enough fresh stories for a few episodes."""
+    base = str(request.base_url).rstrip("/")
+    now = datetime.now(UTC)
+    items = "".join(
+        f"""<item><title>{escape(title)}</title><link>{base}/demo-articles/{n}</link>
+<guid>{base}/demo-articles/{n}</guid><pubDate>{format_datetime(now - timedelta(hours=n * 2))}</pubDate>
+<description>{escape(summary)}</description></item>"""
+        for n, (title, summary) in enumerate(DEMO_ARTICLES, start=1)
+    )
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Open Source AI Weekly</title><link>{base}</link>
+<description>News about open-source AI tooling</description>{items}</channel></rss>"""
+    return Response(xml, media_type="application/rss+xml")
+
+
+@app.get("/demo-articles/{number}")
+async def demo_article(number: int) -> Response:
+    title, summary = DEMO_ARTICLES[(number - 1) % len(DEMO_ARTICLES)]
+    html = f"<html><head><title>{escape(title)}</title></head><body><article><h1>{escape(title)}</h1><p>{escape(summary)}</p></article></body></html>"
+    return Response(html, media_type="text/html")
 
 
 @app.get("/articles/{number}")

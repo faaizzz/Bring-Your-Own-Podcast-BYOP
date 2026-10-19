@@ -12,6 +12,17 @@ starts a throwaway copy of the stack and drives it in a real browser (Playwright
    request with `206`;
 7. check the dashboard and the history show it.
 
+## Documentation pictures
+
+`make screenshots` reuses this stack to regenerate the pictures of the README (`docs/images/`). It
+needs no keys either: `tests/e2e/screenshots.spec.ts` seeds a demo show, "Open Source AI Weekly",
+with two connections ("Local Ollama" for the model and "Studio voices" behind a gateway), the
+mock servers' fuller news feed and three runs (two episodes published, one left as a draft), then
+takes every picture at 1440×900 in the light theme and one in the dark theme. The PNGs are shrunk
+with `tests/e2e/optimize-images.mjs` (palette quantisation, usually under 60 kB each). Look at each
+picture before committing: nothing real may appear in them. `E2E_SCREENSHOTS=<dir>` is what makes
+the spec run, so a plain `make e2e` skips it.
+
 ## The stack
 
 `docker-compose.e2e.yml` adds one service to the normal stack, `mock-services`

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up up-full up-kokoro up-minio up-langfuse build build-full e2e e2e-down down down-v logs logs-full migrate deps test lint typecheck check fmt
+.PHONY: help up up-full up-kokoro up-minio up-langfuse screenshots build build-full e2e e2e-down down down-v logs logs-full migrate deps test lint typecheck check fmt
 
 COMPOSE ?= docker compose
 API_DIR := apps/api
@@ -54,6 +54,13 @@ e2e: ## Run the browser end-to-end test against a throwaway stack with mock mode
 
 e2e-down: ## Remove the end-to-end stack and its data
 	$(E2E_COMPOSE) down -v
+
+screenshots: ## Regenerate the pictures in docs/images from a throwaway stack with demo data
+	$(E2E_COMPOSE) down -v
+	$(E2E_COMPOSE) up -d --build --wait
+	cd tests/e2e && { [ -d node_modules/sharp ] || npm install --no-audit --no-fund; } && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	cd tests/e2e && E2E_BASE_URL=http://localhost:$(E2E_PORT) E2E_SCREENSHOTS=$(CURDIR)/docs/images npx playwright test screenshots.spec.ts; status=$$?; \
+		[ $$status -ne 0 ] || node optimize-images.mjs $(CURDIR)/docs/images; $(E2E_COMPOSE) down -v; exit $$status
 
 down: ## Stop and remove every BYOP container, whichever profile started it (keeps volumes)
 	$(COMPOSE) --profile '*' down
