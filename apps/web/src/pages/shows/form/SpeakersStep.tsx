@@ -15,6 +15,7 @@ import {
   type ParamField,
   type ShowFormValues,
 } from './schema';
+import { VoiceModelPicker } from './VoiceModelPicker';
 import { VoicePicker, VoicePreview } from './VoicePicker';
 
 const BOOLEAN_OPTIONS = [
@@ -64,12 +65,19 @@ function SpeakerEditor({
   const provider = speaker.tts_provider;
   const fallbackProvider = speaker.fallback_tts_provider;
   const providerOptions = useProviderOptions('tts', provider);
+  const modelField = voiceParamsFor(provider).find((f) => f.model);
+  const model = modelField ? (speaker.params[modelField.name] ?? '') : '';
   const fallbackOptions = useProviderOptions('tts', fallbackProvider);
 
   const changeProvider = (next: string) => {
     // A voice id means nothing on another provider; keep only settings it also understands.
     setValue(`${prefix}.voice_id`, '');
-    const allowed = new Set(voiceParamsFor(next).map((f) => f.name));
+    // The voice model is another provider's too, so it starts over.
+    const allowed = new Set(
+      voiceParamsFor(next)
+        .filter((f) => !f.model)
+        .map((f) => f.name),
+    );
     const kept = Object.fromEntries(
       Object.entries(speaker.params).filter(([key]) => allowed.has(key)),
     );
@@ -105,10 +113,28 @@ function SpeakerEditor({
           options={providerOptions}
           onValueChange={changeProvider}
         />
+        {modelField && (
+          <VoiceModelPicker
+            id={`speaker-${String(index)}-voice-model`}
+            provider={provider}
+            value={model}
+            required={modelField.required === true}
+            error={errorOf(`params.${modelField.name}`)}
+            onChange={(next, voicesFollowModel) => {
+              setValue(`${prefix}.params.${modelField.name}`, next, {
+                shouldValidate: true,
+                shouldDirty: true,
+              });
+              // Another model can offer other voices.
+              if (voicesFollowModel && next !== model) setValue(`${prefix}.voice_id`, '');
+            }}
+          />
+        )}
         <VoicePicker
           id={`speaker-${String(index)}-voice`}
           label="Voice"
           provider={provider}
+          model={model || undefined}
           value={speaker.voice_id}
           onChange={(voiceId) => {
             setValue(`${prefix}.voice_id`, voiceId, { shouldValidate: true, shouldDirty: true });
@@ -153,11 +179,13 @@ function SpeakerEditor({
         >
           <div className="mt-2">
             <div className="row">
-              {voiceParamsFor(provider).map((field) => (
-                <div className="col-md-6" key={`${provider}-${field.name}`}>
-                  <ParamInput index={index} field={field} />
-                </div>
-              ))}
+              {voiceParamsFor(provider)
+                .filter((field) => !field.model)
+                .map((field) => (
+                  <div className="col-md-6" key={`${provider}-${field.name}`}>
+                    <ParamInput index={index} field={field} />
+                  </div>
+                ))}
             </div>
           </div>
         </Collapse>

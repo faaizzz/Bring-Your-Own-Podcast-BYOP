@@ -124,6 +124,10 @@ export function formHandlers(): Record<string, Handler> {
             status: 409,
             body: { detail: `Provider '${query.get('provider') ?? ''}' is not configured` },
           },
+    // Only Kokoro is set up here, and it has no choice of model.
+    'GET /api/voices/models': () => ({
+      body: { param: null, required: false, default: null, voices_follow_model: false, models: [] },
+    }),
     'GET /api/models': ({ query }) =>
       query.get('provider') === 'openrouter'
         ? { body: openrouterModels }

@@ -46,7 +46,7 @@ Schedules (`schedule_kind`, `schedule_time`, `timezone`, pause/resume) are descr
 **Shows** lists one card per show (placeholder cover, schedule badge, last episode, next
 run); an empty list offers *Create your first show*. **New show** is a five-step wizard:
 Topic, Speakers & voices (1–4 speakers with searchable voice pickers, an inline preview
-player, per-provider voice settings and an optional fallback voice), Models (provider and
+player, a *Voice model* list for providers with a choice of speech model, per-provider voice settings and an optional fallback voice), Models (provider and
 model with the price per 1M tokens), Schedule, Review. A show opens at `/shows/<id>` with the
 tabs Overview, Sources, Episodes, Runs and Settings (Sources, Episodes and Runs are
 placeholders until those features land). *Settings* edits the same four steps as sections

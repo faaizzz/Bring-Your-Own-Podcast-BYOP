@@ -174,3 +174,157 @@ async def test_an_empty_voice_list_is_not_cached(app: FastAPI, authed: AsyncClie
     response = await authed.get("/api/voices", params={"provider": "kokoro"})
 
     assert [v["id"] for v in response.json()] == ["af_bella"]
+
+
+# --- speech models ----------------------------------------------------------------------------
+
+OPENROUTER_SPEECH = "https://openrouter.ai/api/v1/models?output_modalities=speech"
+SPEECH = {
+    "data": [
+        {
+            "id": "mistralai/voxtral-mini-tts-3-0",
+            "name": "Voxtral",
+            "supported_voices": ["en_paul_neutral", "fr_marie_happy"],
+        },
+        {"id": "hexgrad/kokoro-82m", "name": "Kokoro", "supported_voices": ["af_bella"]},
+    ]
+}
+
+
+@respx.mock
+async def test_lists_openrouter_speech_models(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, openrouter_api_key=SecretStr("sk-or-speech-01-0123456789"))
+    respx.get(OPENROUTER_SPEECH).respond(200, json=SPEECH)
+
+    response = await authed.get("/api/voices/models", params={"provider": "openrouter"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "param": "model",
+        "required": True,
+        "default": None,
+        "voices_follow_model": True,
+        "models": [
+            {"id": "mistralai/voxtral-mini-tts-3-0", "name": "Voxtral", "description": None},
+            {"id": "hexgrad/kokoro-82m", "name": "Kokoro", "description": None},
+        ],
+    }
+
+
+@respx.mock
+async def test_openrouter_voices_depend_on_the_model_and_are_cached_per_model(
+    app: FastAPI, authed: AsyncClient
+) -> None:
+    configure(app, openrouter_api_key=SecretStr("sk-or-speech-02-0123456789"))
+    route = respx.get(OPENROUTER_SPEECH).respond(200, json=SPEECH)
+    params = {"provider": "openrouter", "model": "mistralai/voxtral-mini-tts-3-0"}
+
+    first = await authed.get("/api/voices", params=params)
+    again = await authed.get("/api/voices", params=params)
+    other = await authed.get(
+        "/api/voices", params={"provider": "openrouter", "model": "hexgrad/kokoro-82m"}
+    )
+
+    assert [v["id"] for v in first.json()] == ["en_paul_neutral", "fr_marie_happy"]
+    assert again.json() == first.json()
+    assert [v["id"] for v in other.json()] == ["af_bella"]
+    assert route.call_count == 2  # one per model; the repeat came from the cache
+
+
+async def test_the_model_does_not_change_the_voices_of_other_providers(
+    app: FastAPI, authed: AsyncClient
+) -> None:
+    configure(app, openai_api_key=SecretStr("sk-speech-openai-0123456789"))
+
+    plain = await authed.get("/api/voices", params={"provider": "openai"})
+    with_model = await authed.get("/api/voices", params={"provider": "openai", "model": "tts-1"})
+
+    assert plain.json() == with_model.json()
+
+
+async def test_openai_speech_models_and_default(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, openai_api_key=SecretStr("sk-speech-openai-0123456789"))
+
+    body = (await authed.get("/api/voices/models", params={"provider": "openai"})).json()
+
+    assert (body["param"], body["required"], body["default"]) == ("model", False, "gpt-4o-mini-tts")
+    assert [m["id"] for m in body["models"]] == ["gpt-4o-mini-tts", "tts-1", "tts-1-hd"]
+
+
+@respx.mock
+async def test_elevenlabs_speech_models_use_model_id(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, elevenlabs_api_key=SecretStr("xi-speech-01-0123456789"))
+    respx.get("https://api.elevenlabs.io/v1/models").respond(
+        200, json=[{"model_id": "eleven_multilingual_v2", "name": "Multilingual v2"}]
+    )
+
+    body = (await authed.get("/api/voices/models", params={"provider": "elevenlabs"})).json()
+
+    assert (body["param"], body["required"], body["default"]) == (
+        "model_id",
+        False,
+        "eleven_multilingual_v2",
+    )
+    assert body["models"][0]["name"] == "Multilingual v2"
+
+
+async def test_kokoro_has_no_choice_of_model(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, kokoro_base_url=KOKORO)
+
+    body = (await authed.get("/api/voices/models", params={"provider": "kokoro"})).json()
+
+    assert body == {
+        "param": None,
+        "required": False,
+        "default": None,
+        "voices_follow_model": False,
+        "models": [],
+    }
+
+
+@respx.mock
+async def test_a_connection_without_a_models_route_gives_an_empty_list_to_type_into(
+    authed: AsyncClient,
+) -> None:
+    saved = await authed.post(
+        "/api/connections", json={"name": "Gateway", "base_url": "http://gw.local/v1", "tts": True}
+    )
+    respx.get("http://gw.local/v1/models").respond(404)
+
+    response = await authed.get(
+        "/api/voices/models", params={"provider": f"conn:{saved.json()['id']}"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["models"] == [] and response.json()["param"] == "model"
+
+
+@respx.mock
+async def test_speech_models_are_cached(app: FastAPI, authed: AsyncClient) -> None:
+    configure(app, openrouter_api_key=SecretStr("sk-or-speech-03-0123456789"))
+    route = respx.get(OPENROUTER_SPEECH).respond(200, json=SPEECH)
+
+    await authed.get("/api/voices/models", params={"provider": "openrouter"})
+    await authed.get("/api/voices/models", params={"provider": "openrouter"})
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_speech_model_errors(app: FastAPI, authed: AsyncClient) -> None:
+    unconfigured = await authed.get("/api/voices/models", params={"provider": "openrouter"})
+    configure(app, openrouter_api_key=SecretStr("sk-or-speech-04-0123456789"))
+    respx.get(OPENROUTER_SPEECH).mock(side_effect=httpx.ConnectError("down"))
+
+    down = await authed.get("/api/voices/models", params={"provider": "openrouter"})
+
+    assert unconfigured.status_code == 409
+    assert down.status_code == 502 and "sk-or" not in down.text
+    assert (await authed.get("/api/voices/models")).status_code == 422  # provider is required
+    assert (await authed.get("/api/voices/models", params={"provider": "x"})).status_code == 422
+
+
+async def test_speech_models_require_a_session(client: AsyncClient) -> None:
+    assert (
+        await client.get("/api/voices/models", params={"provider": "openai"})
+    ).status_code == 401

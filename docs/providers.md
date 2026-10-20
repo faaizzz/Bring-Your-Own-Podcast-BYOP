@@ -159,14 +159,37 @@ parameters or over-long text raise `TTSParamError` before any request is sent
 (splitting long scripts is the synthesis stage's job). Failures raise `TTSError`;
 429, 5xx and network errors are retried like LLM calls.
 
-`GET /api/voices?provider=openai|elevenlabs|openrouter|kokoro` returns `id`, `name`,
+`GET /api/voices?provider=openai|elevenlabs|openrouter|kokoro` (or `conn:<id>`; `model=` for providers whose voices follow the model) returns `id`, `name`,
 `language`, `gender` and `preview_url`, cached for an hour per credential. OpenAI
 and OpenRouter have no voice-listing endpoint, so their built-in voice names are
 listed statically; Kokoro's come from the server and are decoded from their ids
 (`af_bella` = American English, female). Without `provider` the default one is used,
 and `GET /api/voices/default-provider` tells the UI which to preselect: the first
 configured paid provider (ElevenLabs, OpenAI, OpenRouter), else Kokoro when its server
-answers, else `null`. Speaker voice settings are validated from the same declarations (`voice_param_problems`) and clips can be auditioned with `POST /api/voices/preview` (see [shows](shows.md#voice-preview)). Adding a provider means one new subclass with its quirks plus a
+answers, else `null`.
+
+### Voice models
+
+A speaker on OpenRouter, OpenAI, ElevenLabs or a connection picks the **speech model** in a
+searchable *Voice model* list between *Voice provider* and *Voice* (it is the `model` or
+`model_id` voice setting, no longer a field under *Voice settings*). It is required for OpenRouter
+(the speaker cannot be saved without one, in the form or through the API), optional elsewhere,
+where the list shows the provider's default. A model that is not in the list, such as one a
+speaker already had, can be typed and is kept.
+
+`GET /api/voices/models?provider=…` returns `{param, required, default, voices_follow_model,
+models: [{id, name, description}]}`, cached for an hour per credential:
+
+| Provider | Models | Notes |
+| --- | --- | --- |
+| `openrouter` | `GET /models?output_modalities=speech` (OpenRouter keeps speech models out of its default list; the modality is `speech`, not `audio`); a short built-in list if it returns none | each model lists the voices it offers, so `GET /api/voices?provider=openrouter&model=…` returns those (OpenAI's names when it lists none) |
+| `openai` | the known speech models (`gpt-4o-mini-tts`, `tts-1`, `tts-1-hd`) | default `gpt-4o-mini-tts` |
+| `elevenlabs` | `GET /v1/models`, the ones that can do text to speech | default `eleven_multilingual_v2` |
+| connection | `GET /models` of the server | a server without it gives an empty list and the model is typed |
+| `kokoro` | none (`param` is null, no list is shown) | |
+
+The preview (`POST /api/voices/preview`) and synthesis use the chosen model, since it is part of the
+speaker's `voice_params`. Speaker voice settings are validated from the same declarations (`voice_param_problems`) and clips can be auditioned with `POST /api/voices/preview` (see [shows](shows.md#voice-preview)). Adding a provider means one new subclass with its quirks plus a
 line in `get_tts`; nothing else branches on the provider.
 
 ### Local voices with Kokoro (no API key)

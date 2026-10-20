@@ -104,7 +104,7 @@ describe('show form schema', () => {
       expect(found['speakers.0.params.volume_multiplier']).toBe('Enter a number');
       expect(found['speakers.1.params.stability']).toBe('Must be at most 1');
       expect(found['speakers.1.params.seed']).toBe('Enter a whole number');
-      expect(found['speakers.2.params.model']).toBe('Required');
+      expect(found['speakers.2.params.model']).toBe('Choose a voice model');
     });
 
     it('needs a complete fallback that carries no required settings', () => {

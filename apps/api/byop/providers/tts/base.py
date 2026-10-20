@@ -52,6 +52,17 @@ class Voice:
 
 
 @dataclass(frozen=True)
+class SpeechModel:
+    """A speech model a provider offers, for the "Voice model" picker."""
+
+    id: str
+    name: str
+    description: str | None = None
+    # The voices this model offers, when the provider says (OpenRouter does).
+    voices: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class TTSResult:
     audio_path: Path
     format: str
@@ -104,6 +115,11 @@ class ProviderQuirks:
     timeout_s: float = 120.0
     # Types and bounds for `supported_params`; a parameter without a spec is not checked.
     param_specs: Mapping[str, ParamSpec] = field(default_factory=dict)
+    # The voice parameter that names the speech model ("model", "model_id"); None when the
+    # provider has no choice of model. The web shows it as a "Voice model" list.
+    model_param: str | None = None
+    # Whether the list of voices depends on the chosen model (OpenRouter's does).
+    voices_follow_model: bool = False
     # How many requests may run at once against this provider; None means no limit of its own.
     # For servers that work through requests one at a time (a local model on a CPU).
     max_concurrency: int | None = None
@@ -137,6 +153,8 @@ def _is_retryable(exc: BaseException) -> bool:
 class TTSProvider(ABC):
     name: str
     quirks: ClassVar[ProviderQuirks]
+    # The speech model used when a speaker names none; None when the caller must choose.
+    default_model: ClassVar[str | None] = None
 
     def __init__(
         self,
@@ -167,8 +185,13 @@ class TTSProvider(ABC):
         """The HTTP request that synthesizes `text` in `audio_format`."""
 
     @abstractmethod
-    async def list_voices(self) -> list[Voice]:
-        """The voices this provider offers."""
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
+        """The voices this provider offers (those of `model` when voices depend on it)."""
+
+    async def list_models(self) -> list[SpeechModel]:
+        """The speech models to choose from; empty when the provider has no list of them (the
+        caller then lets the user type a model id)."""
+        return []
 
     # -- shared flow ------------------------------------------------------------------------
 

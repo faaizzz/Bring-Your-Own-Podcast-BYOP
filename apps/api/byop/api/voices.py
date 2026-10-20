@@ -11,11 +11,18 @@ from byop.providers.tts import (
     TTSParamError,
     UnsupportedTTSProvider,
     get_tts,
+    quirks_for,
     voice_param_problems,
 )
 from byop.redis_client import get_redis
 from byop.schemas.speaker import SpeakerIn, TTSProviderName
-from byop.schemas.voices import DefaultProviderResponse, VoicePreviewRequest, VoiceResponse
+from byop.schemas.voices import (
+    DefaultProviderResponse,
+    SpeechModelResponse,
+    SpeechModelsResponse,
+    VoicePreviewRequest,
+    VoiceResponse,
+)
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.defaults import default_tts_provider
 from byop.services.provider_ref import ProviderRef
@@ -23,7 +30,7 @@ from byop.services.speaker_defaults import default_speakers
 from byop.services.usage import capture_usage
 from byop.services.validation import error_detail, param_errors
 from byop.services.voice_preview import render_preview
-from byop.services.voices import list_voices_cached
+from byop.services.voices import list_speech_models_cached, list_voices_cached
 
 router = APIRouter(prefix="/voices", tags=["voices"])
 
@@ -42,16 +49,59 @@ async def get_default_speakers(user: CurrentUser, resolver: ResolverDep) -> list
     return default_speakers(provider)
 
 
+@router.get("/models", response_model=SpeechModelsResponse)
+async def list_speech_models(
+    user: CurrentUser,
+    resolver: ResolverDep,
+    redis: Annotated[Redis, Depends(get_redis)],
+    provider: Annotated[TTSProviderName, Query()],
+) -> SpeechModelsResponse:
+    """The speech models of a provider (cached for an hour) and which voice parameter names one.
+
+    `models` is empty for a provider without a list (a connection whose server has no `/models`);
+    `param` is null for one without a choice of model (Kokoro).
+    """
+    ref = ProviderRef.parse(provider)
+    quirks = quirks_for(ref.kind)
+    try:
+        config = await resolver.get_ref(user.id, ref, "tts")
+        tts = get_tts(config.provider, config)
+    except (ProviderNotConfigured, CredentialDecryptionError, UnsupportedTTSProvider) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    try:
+        try:
+            models = (
+                await list_speech_models_cached(redis, tts, config) if quirks.model_param else []
+            )
+        finally:
+            await tts.aclose()
+    except TTSError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Could not list speech models: {exc}"
+        ) from exc
+    return SpeechModelsResponse(
+        param=quirks.model_param,
+        required=quirks.model_param is not None and quirks.model_param in quirks.required_params,
+        default=tts.default_model if quirks.model_param else None,
+        voices_follow_model=quirks.voices_follow_model,
+        models=[
+            SpeechModelResponse(id=m.id, name=m.name, description=m.description) for m in models
+        ],
+    )
+
+
 @router.get("", response_model=list[VoiceResponse])
 async def list_voices(
     user: CurrentUser,
     resolver: ResolverDep,
     redis: Annotated[Redis, Depends(get_redis)],
     provider: Annotated[TTSProviderName | None, Query()] = None,
+    model: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[VoiceResponse]:
     """Voices offered by a text-to-speech provider (cached for an hour).
 
-    Without `provider` the default one is used (see `/voices/default-provider`).
+    Without `provider` the default one is used (see `/voices/default-provider`). `model` is the
+    speech model, for providers whose voices depend on it (OpenRouter).
     """
     if provider is None:
         default = await default_tts_provider(resolver, user.id)
@@ -70,7 +120,7 @@ async def list_voices(
 
     try:
         try:
-            voices = await list_voices_cached(redis, tts, config)
+            voices = await list_voices_cached(redis, tts, config, model)
         finally:
             await tts.aclose()
     except TTSError as exc:

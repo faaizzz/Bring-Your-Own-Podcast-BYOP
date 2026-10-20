@@ -2,7 +2,8 @@ from dataclasses import replace
 from typing import ClassVar
 
 from byop.providers.common import RetryPolicy
-from byop.providers.tts.base import ParamSpec, ProviderQuirks, Voice
+from byop.providers.tts.base import ParamSpec, ProviderQuirks, SpeechModel, Voice
+from byop.providers.tts.errors import TTSError
 from byop.providers.tts.kokoro_tts import describe_voice
 from byop.providers.tts.openai_tts import OpenAITTS
 
@@ -49,7 +50,21 @@ class OpenAICompatibleTTS(OpenAITTS):
     def auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
-    async def list_voices(self) -> list[Voice]:
+    async def list_models(self) -> list[SpeechModel]:
+        """The server's `GET /models`, if it has one; a server without it (or a failing one)
+        simply has no list, and the user types the model."""
+        try:
+            payload = await self._get_json(f"{self._base_url}/models", self.auth_headers())
+        except TTSError:
+            return []
+        entries = payload.get("data") if isinstance(payload, dict) else None
+        return [
+            SpeechModel(id=entry["id"], name=entry["id"])
+            for entry in (entries if isinstance(entries, list) else [])
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+        ]
+
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
         """The server's voice list (`GET /audio/voices`, as Kokoro-FastAPI offers it). Servers
         without one answer with an error; the caller then lets the user type a voice id."""
         payload = await self._get_json(f"{self._base_url}/audio/voices", self.auth_headers())

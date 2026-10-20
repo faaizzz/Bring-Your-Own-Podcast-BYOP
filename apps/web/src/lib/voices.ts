@@ -31,13 +31,45 @@ export const modelSchema = z.object({
 });
 export type ModelInfo = z.infer<typeof modelSchema>;
 
+export const speechModelsSchema = z.object({
+  /** The voice setting that names the model ("model", "model_id"); null when there is no choice. */
+  param: z.string().nullable(),
+  required: z.boolean(),
+  /** What the provider uses when none is chosen. */
+  default: z.string().nullable(),
+  voices_follow_model: z.boolean(),
+  /** Empty when the provider lists none: the model is typed in. */
+  models: z.array(
+    z.object({ id: z.string(), name: z.string(), description: z.string().nullish() }),
+  ),
+});
+export type SpeechModels = z.infer<typeof speechModelsSchema>;
+
 const FIVE_MINUTES = 5 * 60_000;
 
-export function useVoices(provider: TtsProvider) {
+/** The speech models of a voice provider, for the "Voice model" list. */
+export function useSpeechModels(provider: TtsProvider) {
   return useQuery({
-    queryKey: ['voices', provider],
+    queryKey: ['voices', 'models', provider],
     queryFn: () =>
-      api.get<Voice[]>('/voices', { query: { provider }, schema: z.array(voiceSchema) }),
+      api.get<SpeechModels>('/voices/models', {
+        query: { provider },
+        schema: speechModelsSchema,
+      }),
+    retry: false,
+    staleTime: FIVE_MINUTES,
+  });
+}
+
+/** `model` matters to providers whose voices follow the speech model (OpenRouter). */
+export function useVoices(provider: TtsProvider, model?: string) {
+  return useQuery({
+    queryKey: ['voices', provider, model ?? ''],
+    queryFn: () =>
+      api.get<Voice[]>('/voices', {
+        query: { provider, model: model || undefined },
+        schema: z.array(voiceSchema),
+      }),
     retry: false,
     staleTime: FIVE_MINUTES,
   });

@@ -567,8 +567,100 @@ describe('create-show wizard', () => {
       expect(screen.queryByRole('option', { name: /Bella/ })).not.toBeInTheDocument();
     });
 
-    it('asks for the required OpenRouter model under voice settings', async () => {
-      const { user } = await onSpeakers();
+    const openrouterSpeech = {
+      param: 'model',
+      required: true,
+      default: null,
+      voices_follow_model: true,
+      models: [
+        { id: 'mistralai/voxtral-mini-tts-3-0', name: 'Mistral: Voxtral TTS 3' },
+        { id: 'hexgrad/kokoro-82m', name: 'Kokoro 82M', description: 'Open weights' },
+      ],
+    };
+    const speechHandlers = (): Record<string, Handler> => ({
+      'GET /api/providers': () => ({
+        body: ttsProviders.map((p) => (p.id === 'openai' ? { ...p, configured: true } : p)),
+      }),
+      'GET /api/voices/models': ({ query }) =>
+        query.get('provider') === 'openrouter'
+          ? { body: openrouterSpeech }
+          : {
+              body: {
+                param: 'model',
+                required: false,
+                default: 'gpt-4o-mini-tts',
+                voices_follow_model: false,
+                models: [{ id: 'tts-1', name: 'TTS-1' }],
+              },
+            },
+      'GET /api/voices': ({ query }) => {
+        const provider = query.get('provider');
+        if (provider === 'openrouter') {
+          return {
+            body:
+              query.get('model') === 'hexgrad/kokoro-82m'
+                ? [{ id: 'af_bella', name: 'af_bella' }]
+                : [{ id: 'en_paul_neutral', name: 'en_paul_neutral' }],
+          };
+        }
+        return { body: kokoroVoices };
+      },
+    });
+
+    it('asks for a voice model before the voice when OpenRouter is chosen', async () => {
+      const { user } = await onSpeakers(speechHandlers());
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      expect(screen.queryByLabelText('Voice model')).not.toBeInTheDocument(); // Kokoro has none
+
+      await choose(user, provider, 'OpenRouter');
+      const model = await screen.findByLabelText('Voice model');
+      await user.click(model);
+
+      // The speech models only, as OpenRouter lists them.
+      expect(
+        screen.getAllByRole('option').map((option) => option.textContent.split('Open')[0]),
+      ).toEqual([
+        'Mistral: Voxtral TTS 3 (mistralai/voxtral-mini-tts-3-0)',
+        'Kokoro 82M (hexgrad/kokoro-82m)',
+      ]);
+      // Provider, then model, then voice.
+      const order = [provider, model, screen.getAllByLabelText('Voice')[0] as HTMLElement];
+      expect(order[0]?.compareDocumentPosition(order[1] as HTMLElement)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(order[1]?.compareDocumentPosition(order[2] as HTMLElement)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+
+    it('lists the voices of the chosen model, and starts the voice over when it changes', async () => {
+      const { user, fetchMock } = await onSpeakers(speechHandlers());
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      await choose(user, provider, 'OpenRouter');
+
+      await choose(user, await screen.findByLabelText('Voice model'), /Voxtral/);
+      const voice = screen.getAllByLabelText('Voice')[0] as HTMLElement;
+      await choose(user, voice, /en_paul_neutral/);
+      expect(chosen(voice)).toBe('en_paul_neutral');
+
+      await choose(user, screen.getByLabelText('Voice model'), /Kokoro 82M/);
+      expect(chosen(screen.getAllByLabelText('Voice')[0] as HTMLElement)).toBe('');
+      await user.click(screen.getAllByLabelText('Voice')[0] as HTMLElement);
+      expect(await screen.findByRole('option', { name: /af_bella/ })).toBeInTheDocument();
+      const asked = callsTo(fetchMock, 'GET /api/voices').map(([input]) => requestUrl(input));
+      expect(
+        asked.some(
+          (url) =>
+            url.searchParams.get('provider') === 'openrouter' &&
+            url.searchParams.get('model') === 'hexgrad/kokoro-82m',
+        ),
+      ).toBe(true);
+    });
+
+    it('will not move on from an OpenRouter speaker without a voice model', async () => {
+      const { user } = await onSpeakers(speechHandlers());
       const [provider] = screen.getAllByLabelText('Voice provider');
       if (!provider) throw new Error('provider');
 
@@ -578,8 +670,102 @@ describe('create-show wizard', () => {
       await user.type(voice, 'alloy{Enter}'); // a voice that is not in the list
       await user.click(next());
 
-      expect(await screen.findByText('Required')).toBeInTheDocument();
-      expect(screen.getByLabelText('Speech model')).toBeInTheDocument();
+      expect(await screen.findByText('Choose a voice model')).toBeInTheDocument();
+      expect(screen.getAllByTestId('speaker')).toHaveLength(2); // still on the speakers step
+    });
+
+    it('offers the provider’s default when the model is optional, and lets it be left empty', async () => {
+      const { user } = await onSpeakers(speechHandlers());
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+
+      await choose(user, provider, 'OpenAI');
+
+      expect(await screen.findByText('Leave empty to use gpt-4o-mini-tts.')).toBeInTheDocument();
+      expect(chosen(screen.getByLabelText('Voice model'))).toBe('');
+    });
+
+    it('drops the voice model when the provider changes', async () => {
+      const { user } = await onSpeakers(speechHandlers());
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      await choose(user, provider, 'OpenRouter');
+      await choose(user, await screen.findByLabelText('Voice model'), /Voxtral/);
+
+      await choose(user, provider, 'OpenAI');
+
+      expect(chosen(await screen.findByLabelText('Voice model'))).toBe('');
+    });
+
+    it('lets a model be typed when the provider lists none', async () => {
+      const { user } = await onSpeakers({
+        ...speechHandlers(),
+        'GET /api/voices/models': () => ({
+          body: {
+            param: 'model',
+            required: true,
+            default: null,
+            voices_follow_model: true,
+            models: [],
+          },
+        }),
+      });
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      await choose(user, provider, 'OpenRouter');
+
+      const model = await screen.findByLabelText('Voice model');
+      await user.type(model, 'vendor/new-tts');
+      await user.click(await screen.findByRole('option', { name: 'Use “vendor/new-tts”' }));
+
+      expect(chosen(model)).toBe('vendor/new-tts');
+      expect(screen.getByText('This provider lists no models. Enter a model id.')).toBeVisible();
+    });
+
+    it('previews with the chosen voice model', async () => {
+      vi.stubGlobal(
+        'URL',
+        Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: vi.fn() }),
+      );
+      const { user, fetchMock } = await onSpeakers({
+        ...speechHandlers(),
+        'POST /api/voices/preview': () => ({ body: {} }),
+      });
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      await choose(user, provider, 'OpenRouter');
+      await choose(user, await screen.findByLabelText('Voice model'), /Voxtral/);
+      await choose(user, screen.getAllByLabelText('Voice')[0] as HTMLElement, /en_paul_neutral/);
+
+      await user.click(screen.getAllByRole('button', { name: /Preview voice/ })[0] as HTMLElement);
+
+      await screen.findByLabelText('Voice preview');
+      expect(bodyOf(callsTo(fetchMock, 'POST /api/voices/preview')[0])).toEqual({
+        provider: 'openrouter',
+        voice_id: 'en_paul_neutral',
+        params: { model: 'mistralai/voxtral-mini-tts-3-0' },
+      });
+    });
+
+    it('saves the voice model with the speaker', async () => {
+      const { user, fetchMock } = await onSpeakers(speechHandlers());
+      const [provider] = screen.getAllByLabelText('Voice provider');
+      if (!provider) throw new Error('provider');
+      await choose(user, provider, 'OpenRouter');
+      await choose(user, await screen.findByLabelText('Voice model'), /Voxtral/);
+      await choose(user, screen.getAllByLabelText('Voice')[0] as HTMLElement, /en_paul_neutral/);
+      for (let i = 0; i < 4; i += 1) await user.click(next());
+      await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+      await waitFor(() => {
+        expect(callsTo(fetchMock, 'PUT /api/shows/s1/speakers')).toHaveLength(1);
+      });
+      const [first] = bodyOf(callsTo(fetchMock, 'PUT /api/shows/s1/speakers')[0]) as SpeakerInput[];
+      expect(first).toMatchObject({
+        tts_provider: 'openrouter',
+        voice_id: 'en_paul_neutral',
+        voice_params: { model: 'mistralai/voxtral-mini-tts-3-0' },
+      });
     });
 
     it('plays a preview with the speaker’s voice and settings', async () => {

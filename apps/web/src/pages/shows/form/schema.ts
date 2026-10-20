@@ -30,6 +30,8 @@ export type ParamField = {
   step?: number;
   required?: boolean;
   hint?: string;
+  /** The speech model: chosen from the "Voice model" list, not among the voice settings. */
+  model?: boolean;
 };
 
 const speed = (min: number, max: number): ParamField => ({
@@ -53,12 +55,12 @@ const unit = (name: string, label: string): ParamField => ({
 
 export const VOICE_PARAMS: Record<string, ParamField[]> = {
   openai: [
-    { name: 'model', label: 'Model', kind: 'text', hint: 'Defaults to gpt-4o-mini-tts' },
+    { name: 'model', label: 'Voice model', kind: 'text', model: true },
     speed(0.25, 4),
     { name: 'instructions', label: 'Delivery instructions', kind: 'text' },
   ],
   elevenlabs: [
-    { name: 'model_id', label: 'Model', kind: 'text', hint: 'Defaults to eleven_multilingual_v2' },
+    { name: 'model_id', label: 'Voice model', kind: 'text', model: true },
     unit('stability', 'Stability'),
     unit('similarity_boost', 'Similarity boost'),
     unit('style', 'Style'),
@@ -70,10 +72,10 @@ export const VOICE_PARAMS: Record<string, ParamField[]> = {
   openrouter: [
     {
       name: 'model',
-      label: 'Speech model',
+      label: 'Voice model',
       kind: 'text',
       required: true,
-      hint: 'A text-to-speech model OpenRouter offers, e.g. openai/gpt-4o-mini-tts',
+      model: true,
     },
     speed(0.25, 4),
     { name: 'instructions', label: 'Delivery instructions', kind: 'text' },
@@ -91,12 +93,7 @@ export const VOICE_PARAMS: Record<string, ParamField[]> = {
   // Any OpenAI-compatible server of the user's own (a connection): the OpenAI settings plus
   // the extras Kokoro-style servers take.
   connection: [
-    {
-      name: 'model',
-      label: 'Model',
-      kind: 'text',
-      hint: 'Whatever the server expects, if anything',
-    },
+    { name: 'model', label: 'Voice model', kind: 'text', model: true },
     speed(0.25, 4),
     { name: 'instructions', label: 'Delivery instructions', kind: 'text' },
     {
@@ -139,7 +136,11 @@ const speakerFormSchema = z
       const raw = (speaker.params[field.name] ?? '').trim();
       if (raw === '') {
         if (field.required) {
-          ctx.addIssue({ code: 'custom', path: ['params', field.name], message: 'Required' });
+          ctx.addIssue({
+            code: 'custom',
+            path: ['params', field.name],
+            message: field.model ? 'Choose a voice model' : 'Required',
+          });
         }
         continue;
       }

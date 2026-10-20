@@ -4,7 +4,14 @@ from urllib.parse import quote
 
 from byop.providers.common import RetryPolicy
 from byop.providers.tts.audio import AudioFormat
-from byop.providers.tts.base import AudioRequest, ParamSpec, ProviderQuirks, TTSProvider, Voice
+from byop.providers.tts.base import (
+    AudioRequest,
+    ParamSpec,
+    ProviderQuirks,
+    SpeechModel,
+    TTSProvider,
+    Voice,
+)
 
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
 DEFAULT_MODEL = "eleven_multilingual_v2"
@@ -23,12 +30,14 @@ class ElevenLabsTTS(TTSProvider):
     """ElevenLabs' native `POST /v1/text-to-speech/{voice_id}`."""
 
     name = "elevenlabs"
+    default_model: ClassVar[str | None] = DEFAULT_MODEL
     quirks: ClassVar[ProviderQuirks] = ProviderQuirks(
         # eleven_multilingual_v2's limit; the Flash/Turbo models accept more.
         max_chars_per_request=5000,
         formats=_FORMATS,
         default_format="pcm",
         supported_params=frozenset({"model_id", *_VOICE_SETTINGS, *_TOP_LEVEL}),
+        model_param="model_id",
         timeout_s=120.0,
         param_specs={
             "model_id": ParamSpec("string", max_length=100),
@@ -72,7 +81,25 @@ class ElevenLabsTTS(TTSProvider):
             query={"output_format": audio_format.api_value},
         )
 
-    async def list_voices(self) -> list[Voice]:
+    async def list_models(self) -> list[SpeechModel]:
+        """The models that can do text to speech (`GET /v1/models`)."""
+        payload = await self._get_json(f"{self._base_url}/models", {"xi-api-key": self._api_key})
+        entries = payload if isinstance(payload, list) else []
+        return [
+            SpeechModel(
+                id=entry["model_id"],
+                name=str(entry.get("name") or entry["model_id"]),
+                description=entry["description"]
+                if isinstance(entry.get("description"), str)
+                else None,
+            )
+            for entry in entries
+            if isinstance(entry, dict)
+            and isinstance(entry.get("model_id"), str)
+            and entry.get("can_do_text_to_speech", True)
+        ]
+
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
         payload = await self._get_json(f"{self._base_url}/voices", {"xi-api-key": self._api_key})
         entries = payload.get("voices", []) if isinstance(payload, dict) else []
         voices: list[Voice] = []

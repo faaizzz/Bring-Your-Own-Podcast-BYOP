@@ -1,7 +1,7 @@
 from typing import ClassVar
 
 from byop.providers.common import RetryPolicy
-from byop.providers.tts.base import ParamSpec, ProviderQuirks, Voice
+from byop.providers.tts.base import ParamSpec, ProviderQuirks, SpeechModel, Voice
 from byop.providers.tts.openai_tts import OpenAITTS
 
 # Kokoro voice ids are `<language><gender>_<name>`, e.g. `af_bella` or `bm_george`.
@@ -68,7 +68,10 @@ class KokoroTTS(OpenAITTS):
     def auth_headers(self) -> dict[str, str]:
         return {}  # a local server needs no key
 
-    async def list_voices(self) -> list[Voice]:
+    async def list_models(self) -> list[SpeechModel]:
+        return []  # one model; there is nothing to choose
+
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
         payload = await self._get_json(f"{self._base_url}/audio/voices", {})
         entries = payload.get("voices", []) if isinstance(payload, dict) else []
         # Kokoro-FastAPI lists voice objects (`{"id": "af_bella", ...}`); older builds plain names.

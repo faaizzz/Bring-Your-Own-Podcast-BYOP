@@ -3,7 +3,14 @@ from typing import ClassVar
 
 from byop.providers.common import RetryPolicy
 from byop.providers.tts.audio import AudioFormat
-from byop.providers.tts.base import AudioRequest, ParamSpec, ProviderQuirks, TTSProvider, Voice
+from byop.providers.tts.base import (
+    AudioRequest,
+    ParamSpec,
+    ProviderQuirks,
+    SpeechModel,
+    TTSProvider,
+    Voice,
+)
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini-tts"
@@ -13,6 +20,13 @@ OPENAI_VOICES = (
     "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx",
     "sage", "shimmer", "verse",
 )  # fmt: skip
+
+# No listing endpoint either: OpenAI's speech models.
+OPENAI_MODELS = (
+    SpeechModel("gpt-4o-mini-tts", "GPT-4o mini TTS", "Newest; takes delivery instructions"),
+    SpeechModel("tts-1", "TTS-1", "Fast"),
+    SpeechModel("tts-1-hd", "TTS-1 HD", "Higher quality"),
+)
 
 OPENAI_PARAM_SPECS = {
     "model": ParamSpec("string", max_length=200),
@@ -36,6 +50,7 @@ class OpenAITTS(TTSProvider):
         formats=_FORMATS,
         default_format="pcm",
         supported_params=frozenset({"model", "speed", "instructions"}),
+        model_param="model",
         timeout_s=120.0,
         param_specs=OPENAI_PARAM_SPECS,
     )
@@ -78,5 +93,8 @@ class OpenAITTS(TTSProvider):
     def auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"}
 
-    async def list_voices(self) -> list[Voice]:
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
         return [Voice(id=voice, name=voice.capitalize()) for voice in OPENAI_VOICES]
+
+    async def list_models(self) -> list[SpeechModel]:
+        return list(OPENAI_MODELS)

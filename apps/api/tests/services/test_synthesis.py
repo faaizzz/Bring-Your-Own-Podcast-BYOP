@@ -104,7 +104,7 @@ class FakeTTS(TTSProvider):
     def build_request(self, *args: object, **kwargs: object) -> AudioRequest:
         raise NotImplementedError
 
-    async def list_voices(self) -> list[Voice]:
+    async def list_voices(self, model: str | None = None) -> list[Voice]:
         return []
 
     async def aclose(self) -> None:

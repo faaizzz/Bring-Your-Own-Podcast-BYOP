@@ -93,7 +93,7 @@ async def db_session(connection: AsyncConnection) -> AsyncIterator[AsyncSession]
 async def _clean_rate_limits() -> None:
     """Rate-limit counters and cached model lists live in Redis; clear them between tests."""
     redis = get_redis_client()
-    for pattern in ("ratelimit:*", "models:*", "voices:*", "discovery:*"):
+    for pattern in ("ratelimit:*", "models:*", "voices:*", "speech_models:*", "discovery:*"):
         keys = [key async for key in redis.scan_iter(pattern)]
         if keys:
             await redis.delete(*keys)

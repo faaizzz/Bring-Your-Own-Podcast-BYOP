@@ -10,6 +10,8 @@ type VoicePickerProps = {
   id: string;
   label: string;
   provider: TtsProvider;
+  /** The speech model, for providers whose voices depend on it. */
+  model?: string;
   value: string;
   onChange: (voiceId: string) => void;
   error?: string;
@@ -33,11 +35,12 @@ export function VoicePicker({
   id,
   label,
   provider,
+  model,
   value,
   onChange,
   error,
 }: VoicePickerProps): React.JSX.Element {
-  const voices = useVoices(provider);
+  const voices = useVoices(provider, model);
   const options = useMemo(() => (voices.data ?? []).map(voiceOption), [voices.data]);
   const unavailable = voices.isError
     ? `Voices could not be loaded (${voices.error.message}). Enter a voice id.`

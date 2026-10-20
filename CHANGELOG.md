@@ -14,6 +14,10 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
   model and the instance default, is checked for web search when saved, and is used by the Discover
   dialog, the wizard, the worker and web-search sources (`GET/PUT/DELETE /api/settings/discovery-model`).
   New table `user_settings` (migration `0012`) for per-user defaults.
+- **Voice model picker:** a speaker on OpenRouter, OpenAI, ElevenLabs or a connection chooses the
+  speech model from a searchable list before the voice (`GET /api/voices/models`); OpenRouter's
+  speech models and their voices come from its `output_modalities=speech` listing, and a model is
+  required for OpenRouter speakers.
 - **Connections** (any number of OpenAI-compatible servers with custom headers), **searchable
   dropdowns** everywhere, **web-search validation** for source discovery and minimal vs. full builds
   (`make up` / `make up-full`).
