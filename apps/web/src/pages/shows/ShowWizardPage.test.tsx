@@ -786,6 +786,154 @@ describe('create-show wizard', () => {
       expect(screen.getByText('This provider lists no models. Enter a model id.')).toBeVisible();
     });
 
+    const library = [
+      {
+        id: 'p1',
+        name: 'Expert analyst',
+        persona: 'Calm and precise; brings the numbers.',
+        tts_provider: 'kokoro',
+        voice_id: 'bf_emma',
+        voice_params: { speed: 1.1, nonsense: 'dropped' },
+      },
+      {
+        id: 'p2',
+        name: 'Storyteller',
+        persona: 'Paints a picture.',
+        tts_provider: 'elevenlabs',
+        voice_id: 'rachel',
+        voice_params: {},
+      },
+      {
+        id: 'p3',
+        name: 'Friendly sceptic',
+        persona: 'Asks for evidence.',
+        tts_provider: null,
+        voice_id: null,
+        voice_params: {},
+      },
+    ];
+
+    it('fills a speaker from the persona library: the text, and the voice when it can be used', async () => {
+      const { user } = await onSpeakers({ 'GET /api/personas': () => ({ body: library }) });
+      const [persona] = screen.getAllByLabelText('Persona');
+      if (!persona) throw new Error('persona field');
+
+      await choose(
+        user,
+        screen.getAllByLabelText('From library')[0] as HTMLElement,
+        /Expert analyst/,
+      );
+
+      expect(persona).toHaveValue('Calm and precise; brings the numbers.');
+      expect(chosen(screen.getAllByLabelText('Voice provider')[0] as HTMLElement)).toBe(
+        'Kokoro (local)',
+      );
+      await waitFor(() => {
+        expect(chosen(screen.getAllByLabelText('Voice')[0] as HTMLElement)).toBe('Emma');
+      });
+      // The speaker's name and its other speaker are untouched.
+      expect(screen.getAllByLabelText('Name')[0]).toHaveValue('Alex');
+      expect(screen.getAllByLabelText('Persona')[1]).not.toHaveValue(
+        'Calm and precise; brings the numbers.',
+      );
+      // Settings the provider knows are kept (shown under Voice settings), others are dropped.
+      await user.click(screen.getAllByRole('button', { name: 'Voice settings' })[0] as HTMLElement);
+      expect(screen.getAllByLabelText('Speed')[0]).toHaveValue(1.1);
+    });
+
+    it('keeps the voice when the persona’s voice provider is not set up, and says so', async () => {
+      const { user } = await onSpeakers({ 'GET /api/personas': () => ({ body: library }) });
+
+      await choose(user, screen.getAllByLabelText('From library')[0] as HTMLElement, /Storyteller/);
+
+      expect(screen.getAllByLabelText('Persona')[0]).toHaveValue('Paints a picture.');
+      expect(chosen(screen.getAllByLabelText('Voice provider')[0] as HTMLElement)).toBe(
+        'Kokoro (local)',
+      );
+      expect(chosen(screen.getAllByLabelText('Voice')[0] as HTMLElement)).toBe('Bella');
+      expect(await screen.findByText(/voice of “Storyteller” was not applied/)).toBeInTheDocument();
+    });
+
+    it('applies only the text of a persona that has no voice', async () => {
+      const { user } = await onSpeakers({ 'GET /api/personas': () => ({ body: library }) });
+
+      await choose(
+        user,
+        screen.getAllByLabelText('From library')[0] as HTMLElement,
+        /Friendly sceptic/,
+      );
+
+      expect(screen.getAllByLabelText('Persona')[0]).toHaveValue('Asks for evidence.');
+      expect(chosen(screen.getAllByLabelText('Voice')[0] as HTMLElement)).toBe('Bella');
+    });
+
+    it('says when the library is empty', async () => {
+      await onSpeakers();
+
+      await userEvent.click(screen.getAllByLabelText('From library')[0] as HTMLElement);
+
+      expect(screen.getAllByText('No personas in the library yet').length).toBeGreaterThan(0);
+    });
+
+    it('saves a speaker’s persona and voice to the library', async () => {
+      const { user, fetchMock } = await onSpeakers({
+        'POST /api/personas': ({ body }) => ({
+          status: 201,
+          body: { id: 'n1', ...(body as object) },
+        }),
+      });
+      const [persona] = screen.getAllByLabelText('Persona');
+      if (!persona) throw new Error('persona field');
+      await user.clear(persona);
+      await user.type(persona, 'The night owl.');
+      await waitFor(() => {
+        expect(chosen(screen.getAllByLabelText('Voice')[0] as HTMLElement)).toBe('Bella');
+      });
+
+      await user.click(
+        screen.getAllByRole('button', { name: 'Save to library' })[0] as HTMLElement,
+      );
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByLabelText('Persona name')).toHaveValue('Alex');
+      await user.clear(within(dialog).getByLabelText('Persona name'));
+      await user.type(within(dialog).getByLabelText('Persona name'), 'Night owl');
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByText('Saved “Night owl” to the library')).toBeInTheDocument();
+      expect(bodyOf(callsTo(fetchMock, 'POST /api/personas')[0])).toEqual({
+        name: 'Night owl',
+        persona: 'The night owl.',
+        tts_provider: 'kokoro',
+        voice_id: 'af_bella',
+        voice_params: {},
+      });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('cannot save an empty persona, and shows the reason when the name is taken', async () => {
+      const { user } = await onSpeakers({
+        'POST /api/personas': () => ({
+          status: 409,
+          body: { detail: "There is already a persona called 'Alex'" },
+        }),
+      });
+      const [persona] = screen.getAllByLabelText('Persona');
+      if (!persona) throw new Error('persona field');
+      await user.clear(persona);
+      expect(screen.getAllByRole('button', { name: 'Save to library' })[0]).toBeDisabled();
+
+      await user.type(persona, 'Something.');
+      await user.click(
+        screen.getAllByRole('button', { name: 'Save to library' })[0] as HTMLElement,
+      );
+      await user.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('already a persona called');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
     it('previews with the chosen voice model', async () => {
       vi.stubGlobal(
         'URL',

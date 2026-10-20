@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
     "provider_connections",
     "user_settings",
     "styles",
+    "personas",
 }
 
 
@@ -367,5 +368,73 @@ async def test_downgrade_from_0014_drops_the_styles(empty_db: str) -> None:
                 )
             )
             assert columns == 0
+    finally:
+        await engine.dispose()
+
+
+# --- 0015: personas ---------------------------------------------------------------------------
+
+
+async def test_upgrade_from_0014_gives_existing_users_the_starters_once(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db, "0014")
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.begin() as conn:
+            first = await _seed_v010_shape(conn, "")
+            second = uuid.uuid4()
+            await conn.execute(
+                text("INSERT INTO users (id, email, password_hash) VALUES (:id, 'b@e.com', 'x')"),
+                {"id": second},
+            )
+
+        await asyncio.to_thread(migrate, empty_db)
+
+        async with engine.connect() as conn:
+            for user_id in (first, second):
+                names = (
+                    (
+                        await conn.execute(
+                            text("SELECT name FROM personas WHERE user_id = :u ORDER BY name"),
+                            {"u": user_id},
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                assert list(names) == sorted(
+                    [
+                        "Curious host",
+                        "Expert analyst",
+                        "Friendly sceptic",
+                        "Plain-language explainer",
+                        "Storyteller",
+                    ]
+                )
+            # Shows and speakers are untouched.
+            assert await conn.scalar(text("SELECT count(*) FROM shows")) == 2
+            assert await conn.scalar(text("SELECT persona FROM speakers")) == ""
+    finally:
+        await engine.dispose()
+
+
+async def test_an_empty_database_gets_no_personas_from_the_migration(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db)
+
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT count(*) FROM personas")) == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_downgrade_from_0015_drops_the_personas(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db)
+    await asyncio.to_thread(migrate, empty_db, "0014", downgrade=True)
+
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.connect() as conn:
+            assert "personas" not in await _tables(conn)
     finally:
         await engine.dispose()

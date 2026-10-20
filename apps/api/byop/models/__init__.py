@@ -1,6 +1,7 @@
 from byop.models.base import Base
 from byop.models.connection import ProviderConnection
 from byop.models.content import Episode, Item
+from byop.models.persona import Persona
 from byop.models.run import Run, RunEvent
 from byop.models.show import Show, Source, Speaker
 from byop.models.style import Style
@@ -11,6 +12,7 @@ __all__ = [
     "Base",
     "Episode",
     "Item",
+    "Persona",
     "PriceOverride",
     "ProviderConnection",
     "ProviderCredential",

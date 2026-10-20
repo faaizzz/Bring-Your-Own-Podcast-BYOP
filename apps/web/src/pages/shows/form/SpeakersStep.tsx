@@ -4,7 +4,10 @@ import { get, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 
-import { useProviders } from '../../../lib/providers';
+import { SearchableSelect } from '../../../components/SearchableSelect';
+import { useCreatePersona, usePersonas, type Persona } from '../../../lib/personas';
+import { useProviderLabel, useProviders } from '../../../lib/providers';
+import { useToast } from '../../../lib/toast';
 import { Field } from './Field';
 import { SelectField } from './SelectField';
 import { useProviderOptions } from './useProviderOptions';
@@ -15,6 +18,7 @@ import {
   type ParamField,
   type ShowFormValues,
 } from './schema';
+import { SavePersonaModal } from './SavePersonaModal';
 import { VoiceModelPicker } from './VoiceModelPicker';
 import { VoicePicker, VoicePreview } from './VoicePicker';
 
@@ -65,6 +69,12 @@ function SpeakerEditor({
   const provider = speaker.tts_provider;
   const fallbackProvider = speaker.fallback_tts_provider;
   const providerOptions = useProviderOptions('tts', provider);
+  const personas = usePersonas();
+  const createPersona = useCreatePersona();
+  const providers = useProviders('tts');
+  const labelOf = useProviderLabel();
+  const notify = useToast();
+  const [savingPersona, setSavingPersona] = useState(false);
   const modelField = voiceParamsFor(provider).find((f) => f.model);
   const model = modelField ? (speaker.params[modelField.name] ?? '') : '';
   const fallbackOptions = useProviderOptions('tts', fallbackProvider);
@@ -84,6 +94,54 @@ function SpeakerEditor({
     setValue(`${prefix}.params`, kept);
   };
 
+  /** Copy a library persona into this speaker: its text, and its voice when that can be used. */
+  const applyPersona = (persona: Persona) => {
+    setValue(`${prefix}.persona`, persona.persona, { shouldDirty: true, shouldValidate: true });
+    if (!persona.tts_provider || !persona.voice_id) return;
+    const usable = providers.data?.some(
+      (option) => option.id === persona.tts_provider && option.configured,
+    );
+    if (!usable) {
+      notify(
+        `The voice of “${persona.name}” was not applied: ${labelOf(persona.tts_provider)} is not set up.`,
+        'info',
+      );
+      return;
+    }
+    const allowed = new Set(voiceParamsFor(persona.tts_provider).map((f) => f.name));
+    const params = Object.fromEntries(
+      Object.entries(persona.voice_params)
+        .filter(([key]) => allowed.has(key))
+        .map(([key, value]) => [key, String(value)]),
+    );
+    setValue(`${prefix}.tts_provider`, persona.tts_provider, { shouldDirty: true });
+    setValue(`${prefix}.voice_id`, persona.voice_id, { shouldDirty: true, shouldValidate: true });
+    setValue(`${prefix}.params`, params, { shouldDirty: true });
+  };
+
+  const personaSummary = (): string => {
+    const voice = speaker.voice_id
+      ? `, with the voice ${labelOf(provider)} ${speaker.voice_id}`
+      : '';
+    return `Saves the persona text${voice}.`;
+  };
+
+  const saveToLibrary = async (name: string): Promise<void> => {
+    await createPersona.mutateAsync({
+      name,
+      persona: speaker.persona.trim(),
+      ...(speaker.voice_id.trim() === ''
+        ? {}
+        : {
+            tts_provider: provider,
+            voice_id: speaker.voice_id.trim(),
+            voice_params: paramsToApi(provider, speaker.params),
+          }),
+    });
+    setSavingPersona(false);
+    notify(`Saved “${name}” to the library`, 'success');
+  };
+
   return (
     <Card className="mb-3 border" data-testid="speaker">
       <Card.Body>
@@ -100,6 +158,46 @@ function SpeakerEditor({
           </Button>
         </div>
         <Field name={`${prefix}.name`} label="Name" />
+        <div className="row align-items-end">
+          <div className="col-md-8">
+            <Form.Group className="mb-2">
+              <Form.Label htmlFor={`speaker-${String(index)}-library`}>From library</Form.Label>
+              <SearchableSelect
+                inputId={`speaker-${String(index)}-library`}
+                value=""
+                options={(personas.data ?? []).map((persona) => ({
+                  value: persona.id,
+                  label: persona.name,
+                  description: persona.persona.slice(0, 90),
+                  keywords: persona.persona,
+                  badge: persona.voice_id ? 'Voice' : undefined,
+                }))}
+                placeholder={
+                  personas.data?.length === 0
+                    ? 'No personas in the library yet'
+                    : 'Fill in a persona…'
+                }
+                isLoading={personas.isPending}
+                onChange={(id) => {
+                  const picked = personas.data?.find((persona) => persona.id === id);
+                  if (picked) applyPersona(picked);
+                }}
+              />
+            </Form.Group>
+          </div>
+          <div className="col-md-4 mb-2">
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              disabled={speaker.persona.trim() === ''}
+              onClick={() => {
+                setSavingPersona(true);
+              }}
+            >
+              Save to library
+            </Button>
+          </div>
+        </div>
         <Field
           name={`${prefix}.persona`}
           label="Persona"
@@ -107,6 +205,16 @@ function SpeakerEditor({
           rows={2}
           hint="Role and speaking style, e.g. the curious lead host."
         />
+        {savingPersona && (
+          <SavePersonaModal
+            name={speaker.name}
+            summary={personaSummary()}
+            onClose={() => {
+              setSavingPersona(false);
+            }}
+            onSave={saveToLibrary}
+          />
+        )}
         <SelectField
           name={`${prefix}.tts_provider`}
           label="Voice provider"

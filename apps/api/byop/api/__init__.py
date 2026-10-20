@@ -12,6 +12,7 @@ from byop.api import (
     history,
     integrations,
     models,
+    personas,
     providers,
     runs,
     show_audio,
@@ -44,6 +45,7 @@ protected.include_router(covers.router)
 protected.include_router(show_audio.router)
 protected.include_router(sources.router)
 protected.include_router(discovery.router)
+protected.include_router(personas.router)
 protected.include_router(speakers.router)
 protected.include_router(styles.router)
 protected.include_router(episodes.router)

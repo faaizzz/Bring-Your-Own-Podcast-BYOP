@@ -151,6 +151,7 @@ export const builtInStyles: Style[] = [
 export function formHandlers(): Record<string, Handler> {
   return {
     'GET /api/styles': () => ({ body: builtInStyles }),
+    'GET /api/personas': () => ({ body: [] }),
     'GET /api/providers': ({ query }) => ({
       body: query.get('capability') === 'llm' ? llmProviders : ttsProviders,
     }),

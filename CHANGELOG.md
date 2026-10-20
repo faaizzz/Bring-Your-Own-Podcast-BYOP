@@ -18,6 +18,10 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
   speech model from a searchable list before the voice (`GET /api/voices/models`); OpenRouter's
   speech models and their voices come from its `output_modalities=speech` listing, and a model is
   required for OpenRouter speakers.
+- **Persona library:** keep reusable speaker personas (with an optional default voice) under
+  Settings › Personas; apply one to a speaker with *From library* or keep a speaker's with *Save to
+  library*. Five starter personas for every user (`personas` table, migration `0015`;
+  `GET/POST/PATCH/DELETE /api/personas`).
 - **Styles:** read exactly what each built-in style tells the model, duplicate one into your own,
   or write a new one (Settings › Styles); a show picks a built-in or custom style (`styles` table
   and `shows.custom_style_id`, migration `0014`; `GET/POST/PATCH/DELETE /api/styles`).

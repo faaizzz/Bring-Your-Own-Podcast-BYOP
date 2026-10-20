@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from byop.config import Settings
 from byop.models import User
 from byop.security.passwords import hash_password
+from byop.services.personas import seed_starter_personas
 
 log = structlog.get_logger(__name__)
 
@@ -30,6 +31,8 @@ async def ensure_admin_user(session: AsyncSession, settings: Settings) -> User |
         is_admin=True,
     )
     session.add(user)
+    await session.flush()
+    await seed_starter_personas(session, user.id)
     await session.commit()
     log.info("admin_seeded", email=email)
     return user

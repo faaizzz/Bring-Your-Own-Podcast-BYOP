@@ -79,3 +79,33 @@ async def test_startup_survives_an_unreachable_database(
             pass  # reaching here means the failed seed did not crash startup
     finally:
         await dead.dispose()
+
+
+async def test_a_new_install_gets_the_starter_personas_once(db_session: AsyncSession) -> None:
+    from byop.models import Persona
+    from byop.services.personas import STARTER_PERSONAS
+
+    user = await ensure_admin_user(db_session, make_settings())
+    assert user is not None
+    await ensure_admin_user(db_session, make_settings())  # the next start changes nothing
+
+    names = list(await db_session.scalars(select(Persona.name).where(Persona.user_id == user.id)))
+    assert sorted(names) == sorted(n for n, _ in STARTER_PERSONAS)
+
+
+async def test_a_deleted_starter_does_not_come_back_on_restart(db_session: AsyncSession) -> None:
+    from byop.models import Persona
+
+    user = await ensure_admin_user(db_session, make_settings())
+    assert user is not None
+    gone = await db_session.scalar(select(Persona).where(Persona.user_id == user.id))
+    assert gone is not None
+    await db_session.delete(gone)
+    await db_session.commit()
+
+    await ensure_admin_user(db_session, make_settings())
+
+    remaining = await db_session.scalar(
+        select(func.count()).select_from(Persona).where(Persona.user_id == user.id)
+    )
+    assert remaining == 4

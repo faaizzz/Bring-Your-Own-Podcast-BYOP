@@ -95,6 +95,24 @@ cannot be a fallback. Problems come back as `422` with one entry per field, loca
 FastAPI's own errors, e.g. `{"loc": ["body", 1, "voice_params", "speed"], "msg": "must be at most 4"}`.
 Replacing keeps the ids of speakers that stay in the same position.
 
+## Persona library
+
+**Settings › Personas** keeps personas you reuse: a name, the persona text, and optionally a default
+voice (provider, voice, and a voice model where the provider has one). Every user starts with five
+you can edit or delete (curious host, expert analyst, friendly sceptic, storyteller, plain-language
+explainer): they are added when the user is created, and by the upgrade to existing users once.
+
+In a show's **Speakers** step, *From library* copies a persona into the speaker: its text, and its
+voice when that voice provider is set up (otherwise you are told it was left out). *Save to library*
+keeps the speaker's persona, and its voice with settings, as a new persona. Both are copies:
+speakers never point back at the library, so editing or deleting a persona changes no show.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/personas` | your personas by name |
+| `POST /api/personas` | create `{name, persona, tts_provider?, voice_id?, voice_params?}`; names are unique per user (`409`); a voice needs a provider and a voice together and valid settings (`422`) |
+| `PATCH /api/personas/{id}`, `DELETE /api/personas/{id}` | change (omitted fields keep their value; `tts_provider` and `voice_id` set to null remove the voice) / delete |
+
 ## Voice preview
 
 `POST /api/voices/preview` with `{"provider", "voice_id", "params"?, "text"?}` returns a

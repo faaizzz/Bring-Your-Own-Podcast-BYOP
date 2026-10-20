@@ -6,6 +6,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import EpisodeReviewPage from './pages/episodes/EpisodeReviewPage';
 import HistoryPage from './pages/history/HistoryPage';
 import IntegrationsPage from './pages/settings/IntegrationsPage';
+import PersonasPage from './pages/settings/PersonasPage';
 import PricingPage from './pages/settings/PricingPage';
 import StylesPage from './pages/settings/StylesPage';
 import RunPage from './pages/runs/RunPage';
@@ -34,6 +35,7 @@ export function AppRoutes(): React.JSX.Element {
             <Route path="history" element={<HistoryPage />} />
             <Route path="costs" element={<CostsPage />} />
             <Route path="settings/integrations" element={<IntegrationsPage />} />
+            <Route path="settings/personas" element={<PersonasPage />} />
             <Route path="settings/pricing" element={<PricingPage />} />
             <Route path="settings/styles" element={<StylesPage />} />
             <Route path="*" element={<p className="text-muted">Page not found.</p>} />
