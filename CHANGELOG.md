@@ -54,6 +54,10 @@ that discovers sources.
   dropdowns** everywhere, **web-search validation** for source discovery and minimal vs. full builds
   (`make up` / `make up-full`).
 
+### Security
+
+- `certifi` 2026.10.19 (GHSA-6q48-6c7w-9gw2).
+
 ## [0.1.0] - 2026-10-19
 
 The first release: a self-hosted app that turns your sources into a scheduled, multi-speaker AI
