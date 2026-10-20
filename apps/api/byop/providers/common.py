@@ -6,7 +6,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,28 @@ def reset_usage_sink(token: Token[UsageSink | None]) -> None:
 
 def current_usage_sink() -> UsageSink | None:
     return _sink.get()
+
+
+@runtime_checkable
+class NoticeSink(Protocol):
+    """A sink that also wants to hear about things worth telling the user, such as a wait."""
+
+    def notice(self, message: str) -> None: ...
+
+
+def record_notice(message: str) -> None:
+    """Tell whoever is collecting about something noteworthy (the run's log; nobody otherwise)."""
+    sink = _sink.get()
+    if isinstance(sink, NoticeSink):
+        sink.notice(message)
+
+
+class Throttle(Protocol):
+    """Spaces out the requests to one provider; a provider awaits it before every request."""
+
+    async def wait(self) -> float:
+        """Returns once the request may go out; how many seconds it waited."""
+        ...
 
 
 def record_usage(usage: UsageRecord) -> None:

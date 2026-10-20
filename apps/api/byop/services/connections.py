@@ -114,6 +114,7 @@ def _view(
         tts=record.tts,
         web_search=record.web_search,
         enabled=record.enabled,
+        min_interval_s=record.min_interval_s,
         shows_using=usage.shows,
         speakers_using=usage.speakers,
         problem=problem,
@@ -186,6 +187,7 @@ async def create_connection(
         llm=data.llm,
         tts=data.tts,
         web_search=data.web_search,
+        min_interval_s=data.min_interval_s,
         enabled=data.enabled,
     )
     session.add(record)
@@ -250,6 +252,8 @@ async def update_connection(
         record.name = data.name
     if data.base_url is not None:
         record.base_url = str(data.base_url).rstrip("/")
+    if data.min_interval_s is not None:
+        record.min_interval_s = data.min_interval_s
     for flag in ("llm", "tts", "web_search", "enabled"):
         value = getattr(data, flag)
         if value is not None:

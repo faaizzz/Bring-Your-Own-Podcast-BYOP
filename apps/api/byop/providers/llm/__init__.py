@@ -12,6 +12,7 @@ from byop.providers.llm.base import (
 from byop.providers.llm.openai_compatible import OPENAI_BASE_URL, OpenAICompatibleLLM
 from byop.providers.llm.openrouter import OpenRouterLLM
 from byop.services.credentials import ProviderConfig
+from byop.services.throttle import throttle_for
 
 # Built-in providers that can serve chat completions (connections come on top of these).
 LLM_PROVIDERS = (
@@ -32,6 +33,18 @@ def get_llm(
     retry: RetryPolicy | None = None,
 ) -> LLMProvider:
     """Build the LLM client for `provider` from resolved credentials."""
+    llm = _build(provider, config, timeout_s=timeout_s, retry=retry)
+    llm.throttle = throttle_for(config)  # the wait the user asked for between requests
+    return llm
+
+
+def _build(
+    provider: CredentialProvider,
+    config: ProviderConfig,
+    *,
+    timeout_s: float,
+    retry: RetryPolicy | None,
+) -> LLMProvider:
     key = config.api_key.get_secret_value() if config.api_key else None
     match provider:
         case CredentialProvider.OPENROUTER:

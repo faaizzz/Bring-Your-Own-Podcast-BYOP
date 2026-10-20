@@ -11,6 +11,8 @@ FORBIDDEN_HEADERS = frozenset({"host", "content-length", "transfer-encoding", "c
 MAX_HEADERS = 10
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+# Seconds to wait between two requests; see `services/throttle.py`.
+MinInterval = Annotated[float, Field(ge=0, le=60)]
 
 
 class HeaderIn(BaseModel):
@@ -42,6 +44,7 @@ class ConnectionCreate(BaseModel):
     tts: bool = False
     web_search: bool = False
     enabled: bool = True
+    min_interval_s: MinInterval = 0
 
     @model_validator(mode="after")
     def _check(self) -> "ConnectionCreate":
@@ -65,6 +68,7 @@ class ConnectionUpdate(BaseModel):
     tts: bool | None = None
     web_search: bool | None = None
     enabled: bool | None = None
+    min_interval_s: MinInterval | None = None
 
     @model_validator(mode="after")
     def _check(self) -> "ConnectionUpdate":
@@ -90,6 +94,8 @@ class ConnectionResponse(BaseModel):
     tts: bool
     web_search: bool
     enabled: bool
+    # Seconds to wait between two requests to the server (0 = no wait).
+    min_interval_s: float
     # How many shows / speakers refer to the connection (it cannot be deleted while > 0).
     shows_using: int
     speakers_using: int

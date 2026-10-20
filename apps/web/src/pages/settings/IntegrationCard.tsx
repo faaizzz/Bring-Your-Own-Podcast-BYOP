@@ -3,6 +3,7 @@ import { Badge, Button, Card } from 'react-bootstrap';
 import type { IconType } from 'react-icons';
 import { FiActivity, FiCpu, FiMic, FiVolume2, FiZap } from 'react-icons/fi';
 
+import { formatDelay } from './requestDelay';
 import {
   integrationStatus,
   PROVIDERS,
@@ -71,8 +72,14 @@ export function IntegrationCard({
           </p>
         )}
 
-        {configured && (
+        {(configured || integration.min_interval_s > 0) && (
           <dl className="small mb-3">
+            {integration.min_interval_s > 0 && (
+              <div className="d-flex" data-testid="request-delay">
+                <dt className="me-2 fw-normal text-muted">Waits</dt>
+                <dd className="mb-0">{formatDelay(integration.min_interval_s)} between requests</dd>
+              </div>
+            )}
             {integration.api_key_masked && (
               <div className="d-flex">
                 <dt className="me-2 fw-normal text-muted">{spec.apiKeyLabel}</dt>

@@ -23,6 +23,7 @@ from tenacity import AsyncRetrying, RetryCallState, retry_if_exception, stop_aft
 from byop.providers.common import (
     CallMetadata,
     RetryPolicy,
+    Throttle,
     UsageRecord,
     backoff_seconds,
     record_usage,
@@ -155,6 +156,8 @@ class TTSProvider(ABC):
     quirks: ClassVar[ProviderQuirks]
     # The speech model used when a speaker names none; None when the caller must choose.
     default_model: ClassVar[str | None] = None
+    # Spaces out the requests when the user set a wait for this provider (see `get_tts`).
+    throttle: Throttle | None = None
 
     def __init__(
         self,
@@ -249,6 +252,8 @@ class TTSProvider(ABC):
         """Stream the audio response to `destination` (never buffering a whole file)."""
 
         async def attempt() -> None:
+            if self.throttle is not None:
+                await self.throttle.wait()  # every try, including a retry after a 429
             async with self._http.stream(
                 "POST",
                 request.url,

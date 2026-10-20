@@ -15,6 +15,7 @@ import {
 } from '../../lib/connections';
 import { useToast } from '../../lib/toast';
 import { ConnectionModal } from './ConnectionModal';
+import { formatDelay } from './requestDelay';
 
 function messageOf(error: unknown): string {
   return error instanceof ApiError || error instanceof Error ? error.message : 'Request failed.';
@@ -90,6 +91,12 @@ function ConnectionCard({
               <dd className="mb-0">
                 <code>{connection.api_key_masked}</code>
               </dd>
+            </div>
+          )}
+          {connection.min_interval_s > 0 && (
+            <div className="d-flex" data-testid="request-delay">
+              <dt className="me-2 fw-normal text-muted">Waits</dt>
+              <dd className="mb-0">{formatDelay(connection.min_interval_s)} between requests</dd>
             </div>
           )}
           {connection.headers.length > 0 && (

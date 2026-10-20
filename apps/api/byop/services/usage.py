@@ -36,6 +36,7 @@ class UsageCollector:
 
     def __init__(self, listener: Callable[[UsageRecord], None] | None = None) -> None:
         self._pending: list[UsageRecord] = []
+        self._notices: list[str] = []
         self._listener = listener  # e.g. a tracer that wants to see the same calls
 
     def record(self, usage: UsageRecord) -> None:
@@ -45,6 +46,15 @@ class UsageCollector:
                 self._listener(usage)
             except Exception:  # noqa: BLE001 - observers must never break the call they observe
                 log.warning("usage_listener_failed", exc_info=True)
+
+    def notice(self, message: str) -> None:
+        """Something to tell the user, e.g. a wait for a rate limit (see `NoticeSink`)."""
+        self._notices.append(message)
+
+    def take_notices(self) -> list[str]:
+        """The notices collected since the last call; the run writes them to its log."""
+        taken, self._notices = self._notices, []
+        return taken
 
     @property
     def pending(self) -> int:
@@ -81,6 +91,12 @@ class UsageCollector:
         await session.commit()
         del self._pending[: len(batch)]
         return len(batch)
+
+
+def take_current_notices() -> list[str]:
+    """The notices of the active collector (nothing when none is collecting)."""
+    sink = current_usage_sink()
+    return sink.take_notices() if isinstance(sink, UsageCollector) else []
 
 
 async def flush_current(session: AsyncSession, user_id: uuid.UUID) -> None:

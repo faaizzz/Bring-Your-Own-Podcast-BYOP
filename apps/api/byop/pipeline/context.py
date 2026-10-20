@@ -11,7 +11,7 @@ from byop.models.enums import EventLevel, RunStatus
 from byop.pipeline.errors import RunStopped
 from byop.services.credentials import CredentialResolver
 from byop.services.run_stream import announce
-from byop.services.usage import flush_current
+from byop.services.usage import flush_current, take_current_notices
 
 
 @dataclass
@@ -40,6 +40,7 @@ class RunContext:
         self, message: str, *, level: EventLevel = EventLevel.INFO, **data: object
     ) -> None:
         """Append a line to the run's log (visible while the run is still going)."""
+        self._add_notices()
         self.session.add(
             RunEvent(
                 user_id=self.run.user_id,
@@ -54,6 +55,20 @@ class RunContext:
         await flush_current(self.session, self.user_id)
         await announce(self.redis, self.run.id)
 
+    def _add_notices(self) -> None:
+        """Waits for a provider's rate limit, noted by providers (which never touch the
+        database themselves), become lines of the run's log."""
+        for message in take_current_notices():
+            self.session.add(
+                RunEvent(
+                    user_id=self.run.user_id,
+                    run_id=self.run.id,
+                    level=EventLevel.INFO,
+                    stage=self.stage,
+                    message=message,
+                )
+            )
+
     async def progress(self, fraction: float) -> None:
         """Report how far through this stage the work is (0.0 to 1.0).
 
@@ -61,6 +76,7 @@ class RunContext:
         is considered stuck, so stages that take long must call this regularly.
         """
         span = self.progress_end - self.progress_start
+        self._add_notices()
         self.run.progress = self.progress_start + round(span * min(1.0, max(0.0, fraction)))
         self.run.updated_at = func.now()
         await self.session.commit()

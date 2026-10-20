@@ -18,6 +18,7 @@ from byop.services.credentials import (
     ProviderNotConfigured,
 )
 from byop.services.integration_check import check_provider
+from byop.services.user_settings import request_interval, save_request_interval
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -29,7 +30,7 @@ def get_resolver(session: SessionDep, settings: SettingsDep) -> CredentialResolv
 ResolverDep = Annotated[CredentialResolver, Depends(get_resolver)]
 
 
-def _response(view: CredentialView) -> IntegrationResponse:
+def _response(view: CredentialView, min_interval_s: float = 0) -> IntegrationResponse:
     return IntegrationResponse(
         provider=view.provider,
         source=view.source,
@@ -38,6 +39,7 @@ def _response(view: CredentialView) -> IntegrationResponse:
         base_url=view.base_url,
         extra_masked=dict(view.extra_masked),
         problem=view.problem,
+        min_interval_s=min_interval_s,
     )
 
 
@@ -52,10 +54,13 @@ def _built_in(provider: CredentialProvider) -> None:
 
 @router.get("/{provider}", response_model=IntegrationResponse)
 async def get_integration(
-    provider: CredentialProvider, user: CurrentUser, resolver: ResolverDep
+    provider: CredentialProvider, user: CurrentUser, resolver: ResolverDep, session: SessionDep
 ) -> IntegrationResponse:
     _built_in(provider)
-    return _response(await resolver.view(user.id, provider))
+    return _response(
+        await resolver.view(user.id, provider),
+        await request_interval(session, user.id, provider.value),
+    )
 
 
 @router.put("/{provider}", response_model=IntegrationResponse)
@@ -64,8 +69,16 @@ async def put_integration(
     body: IntegrationUpdate,
     user: CurrentUser,
     resolver: ResolverDep,
+    session: SessionDep,
 ) -> IntegrationResponse:
     _built_in(provider)
+    if body.model_fields_set == {"min_interval_s"} and body.min_interval_s is not None:
+        # Only the wait changed: no override is made or touched, so a key from `.env` keeps working.
+        await save_request_interval(session, user.id, provider.value, body.min_interval_s)
+        return _response(
+            await resolver.view(user.id, provider),
+            await request_interval(session, user.id, provider.value),
+        )
     api_key = body.api_key.get_secret_value() if body.api_key else None
     base_url = str(body.base_url).rstrip("/") if body.base_url else None
 
@@ -86,7 +99,12 @@ async def put_integration(
         extra=body.extra,
         enabled=body.enabled,
     )
-    return _response(await resolver.view(user.id, provider))
+    if body.min_interval_s is not None:
+        await save_request_interval(session, user.id, provider.value, body.min_interval_s)
+    return _response(
+        await resolver.view(user.id, provider),
+        await request_interval(session, user.id, provider.value),
+    )
 
 
 @router.delete("/{provider}", status_code=status.HTTP_204_NO_CONTENT)

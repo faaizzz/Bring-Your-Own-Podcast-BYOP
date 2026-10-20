@@ -8,7 +8,14 @@ import { renderApp } from '../../test/render';
 const state: Record<string, Integration> = {};
 
 function fresh(provider: ProviderId, patch: Partial<Integration> = {}): Integration {
-  return { provider, source: 'none', enabled: true, extra_masked: {}, ...patch };
+  return {
+    provider,
+    source: 'none',
+    enabled: true,
+    extra_masked: {},
+    min_interval_s: 0,
+    ...patch,
+  };
 }
 
 function integrationHandlers(
@@ -95,6 +102,7 @@ describe('IntegrationsPage', () => {
     const [, init] = callsTo(fetchMock, 'PUT /api/integrations/openai')[0] ?? [];
     expect(JSON.parse(typeof init?.body === 'string' ? init.body : '')).toEqual({
       api_key: 'sk-test-0123456789',
+      min_interval_s: 0,
     });
     expect(await screen.findByText(/OpenAI: ok/)).toBeInTheDocument();
   });
@@ -147,7 +155,9 @@ describe('IntegrationsPage', () => {
       expect(callsTo(fetchMock, 'PUT /api/integrations/elevenlabs')).toHaveLength(1);
     });
     const [, init] = callsTo(fetchMock, 'PUT /api/integrations/elevenlabs')[0] ?? [];
-    expect(JSON.parse(typeof init?.body === 'string' ? init.body : '')).toEqual({});
+    expect(JSON.parse(typeof init?.body === 'string' ? init.body : '')).toEqual({
+      min_interval_s: 0,
+    });
   });
 
   it('collects host and both keys for Langfuse and a base URL for Kokoro', async () => {
@@ -185,6 +195,7 @@ describe('IntegrationsPage', () => {
       api_key: 'sk-lf-456',
       base_url: 'https://lf.example.com',
       extra: { public_key: 'pk-lf-123' },
+      min_interval_s: 0,
     });
   });
 
@@ -235,5 +246,78 @@ describe('IntegrationsPage', () => {
     await actions.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(await screen.findByRole('article', { name: 'OpenAI' })).toBeInTheDocument();
+  });
+
+  it('saves only the wait for a provider whose key comes from .env, and shows it on the card', async () => {
+    const actions = userEvent.setup();
+    const handlers = integrationHandlers({
+      openrouter: fresh('openrouter', { source: 'env', api_key_masked: 'sk-…1234' }),
+    });
+    handlers['PUT /api/integrations/openrouter'] = ({ body }) => {
+      state.openrouter = fresh('openrouter', {
+        source: 'env',
+        api_key_masked: 'sk-…1234',
+        min_interval_s: (body as { min_interval_s: number }).min_interval_s,
+      });
+      return { body: state.openrouter };
+    };
+    const { fetchMock } = await renderApp('/settings/integrations', { handlers });
+
+    await actions.click(
+      within(await screen.findByRole('article', { name: 'OpenRouter' })).getByRole('button', {
+        name: 'Configure',
+      }),
+    );
+    expect(screen.getByLabelText('API key')).toHaveValue(''); // nothing to re-enter
+    await actions.type(screen.getByLabelText(/Wait between requests/), '5');
+    await actions.click(screen.getByRole('button', { name: 'Save and test' }));
+
+    await waitFor(() => {
+      expect(within(card('OpenRouter')).getByTestId('request-delay')).toHaveTextContent(
+        '5 s between requests',
+      );
+    });
+    const [, init] = callsTo(fetchMock, 'PUT /api/integrations/openrouter')[0] ?? [];
+    expect(JSON.parse(typeof init?.body === 'string' ? init.body : '')).toEqual({
+      min_interval_s: 5,
+    });
+    expect(within(card('OpenRouter')).getByTestId('status')).toHaveTextContent('From .env');
+  });
+
+  it('still asks for a key when nothing is configured yet, even with a wait set', async () => {
+    const actions = userEvent.setup();
+    const { fetchMock } = await renderApp('/settings/integrations', {
+      handlers: integrationHandlers({}),
+    });
+
+    await actions.click(
+      within(await screen.findByRole('article', { name: 'OpenAI' })).getByRole('button', {
+        name: 'Configure',
+      }),
+    );
+    await actions.type(screen.getByLabelText(/Wait between requests/), '5');
+    await actions.click(screen.getByRole('button', { name: 'Save and test' }));
+
+    expect(await screen.findByText('API key is required')).toBeInTheDocument();
+    expect(callsTo(fetchMock, 'PUT /api/integrations/openai')).toHaveLength(0);
+  });
+
+  it('refuses a wait above 60 seconds', async () => {
+    const actions = userEvent.setup();
+    await renderApp('/settings/integrations', {
+      handlers: integrationHandlers({
+        openai: fresh('openai', { source: 'env', api_key_masked: 'sk-…1234' }),
+      }),
+    });
+
+    await actions.click(
+      within(await screen.findByRole('article', { name: 'OpenAI' })).getByRole('button', {
+        name: 'Configure',
+      }),
+    );
+    await actions.type(screen.getByLabelText(/Wait between requests/), '90');
+    await actions.click(screen.getByRole('button', { name: 'Save and test' }));
+
+    expect(await screen.findByText('Enter 0 to 60 seconds')).toBeInTheDocument();
   });
 });

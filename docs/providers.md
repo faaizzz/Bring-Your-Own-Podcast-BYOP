@@ -49,6 +49,30 @@ Upgrading from 0.1: an existing *OpenAI-compatible* integration becomes a connec
 "OpenAI-compatible" and the shows that used it point at it. If its key could not be read (a
 changed `BYOP_SECRET_KEY`) it is created disabled with a placeholder URL for you to fix.
 
+## Rate limits: wait between requests
+
+Providers with low limits answer a busy run with HTTP 429. For each built-in provider (the
+**Wait between requests (seconds)** field of its *Configure* dialog) and each connection (its
+dialog), you can make BYOP wait 0–60 seconds (decimals allowed) between two requests; the card shows
+*Waits N s between requests*. 0 means no wait, the default.
+
+- It applies to every language-model request and every voice request of that provider: ranking,
+  discovery, writing and revising scripts, each clip of the voice stage, voice previews. Listing
+  models or voices is not delayed. A retry after a 429 waits too.
+- The wait is shared: concurrent tasks and several workers queue up on one Redis key per user and
+  provider (`throttle:<user>:<provider>` or `…:conn:<id>`, `services/throttle.py`), so two calls start
+  at least N seconds apart however many run at once. If Redis is unavailable the request goes out
+  without waiting, and a warning is logged.
+- A wait of half a second or more is written to the run's log as *Waiting N s for the OpenRouter rate
+  limit* (and to the structured log as `throttle_wait`), so a slow run explains itself.
+- For a built-in provider the value belongs to your account, not to the key: set it alone (the
+  dialog leaves a key from `.env` in use; `PUT /api/integrations/<provider>` with only
+  `{"min_interval_s": 5}`) or together with a key. It is stored in `user_settings.request_intervals`.
+  For a connection it is the connection's `min_interval_s` (`POST/PATCH /api/connections`).
+
+Automatic back-off tuning and per-model limits are not part of this: the setting is one number
+per provider.
+
 ## LLMs
 
 Every LLM call goes through `byop.providers.llm.LLMProvider`:

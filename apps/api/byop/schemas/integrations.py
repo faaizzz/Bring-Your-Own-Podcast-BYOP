@@ -12,6 +12,9 @@ class IntegrationUpdate(BaseModel):
     base_url: HttpUrl | None = None
     extra: dict[str, str] | None = None
     enabled: bool = True
+    # Seconds to wait between two requests to the provider (0 = no wait). Sent alone, it changes
+    # nothing else, so a key that comes from `.env` stays where it is.
+    min_interval_s: float | None = Field(default=None, ge=0, le=60)
 
     @model_validator(mode="after")
     def _limit_extra(self) -> "IntegrationUpdate":
@@ -30,6 +33,7 @@ class IntegrationResponse(BaseModel):
     base_url: str | None = None
     extra_masked: dict[str, str] = Field(default_factory=dict)
     problem: str | None = None
+    min_interval_s: float = 0
 
 
 class IntegrationTestResponse(BaseModel):

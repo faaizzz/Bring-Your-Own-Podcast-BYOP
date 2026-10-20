@@ -10,8 +10,9 @@ import {
   type IntegrationUpdate,
   type ProviderId,
 } from '../../lib/integrations';
+import { delayProblem, delayText, delayValue, RequestDelayField } from './requestDelay';
 
-type FormValues = { apiKey: string; baseUrl: string; publicKey: string };
+type FormValues = { apiKey: string; baseUrl: string; publicKey: string; delay: string };
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -23,15 +24,33 @@ function isHttpUrl(value: string): boolean {
 }
 
 /** Secrets are never sent back to the form, so a blank field means "keep what is stored". */
-function buildSchema(provider: ProviderId, hasStoredOverride: boolean) {
+function buildSchema(
+  provider: ProviderId,
+  hasStoredOverride: boolean,
+  storedUrl: string,
+  keepsEnv: boolean,
+) {
   const spec = PROVIDERS[provider];
   return z
     .object({
       apiKey: z.string().trim(),
       baseUrl: z.string().trim(),
       publicKey: z.string().trim(),
+      delay: z.string(),
     })
     .superRefine((values, ctx) => {
+      const delay = delayProblem(values.delay);
+      if (delay) ctx.addIssue({ code: 'custom', path: ['delay'], message: delay });
+      // Nothing typed for the credentials of a provider that already works from `.env`: only
+      // the wait is being saved, and the `.env` value stays in use.
+      if (
+        keepsEnv &&
+        !values.apiKey &&
+        !values.publicKey &&
+        (values.baseUrl === '' || values.baseUrl === storedUrl)
+      ) {
+        return;
+      }
       if (spec.apiKey === 'required' && !hasStoredOverride && !values.apiKey) {
         ctx.addIssue({
           code: 'custom',
@@ -54,8 +73,9 @@ function buildSchema(provider: ProviderId, hasStoredOverride: boolean) {
     });
 }
 
-function toUpdate(values: FormValues): IntegrationUpdate {
-  const body: IntegrationUpdate = {};
+function toUpdate(values: FormValues, keepsEnv: boolean, storedUrl: string): IntegrationUpdate {
+  const body: IntegrationUpdate = { min_interval_s: delayValue(values.delay) };
+  if (keepsEnv && !values.apiKey && !values.publicKey && values.baseUrl === storedUrl) return body;
   if (values.apiKey) body.api_key = values.apiKey;
   if (values.baseUrl) body.base_url = values.baseUrl;
   if (values.publicKey) body.extra = { public_key: values.publicKey };
@@ -78,9 +98,11 @@ export function IntegrationModal({
 }: IntegrationModalProps): React.JSX.Element {
   const spec = PROVIDERS[provider];
   const hasStoredOverride = integration.source === 'user' && !integration.problem;
+  const keepsEnv = integration.source === 'env';
+  const storedUrl = integration.base_url ?? '';
   const schema = useMemo(
-    () => buildSchema(provider, hasStoredOverride),
-    [provider, hasStoredOverride],
+    () => buildSchema(provider, hasStoredOverride, storedUrl, keepsEnv),
+    [provider, hasStoredOverride, storedUrl, keepsEnv],
   );
   const [error, setError] = useState<string | null>(null);
   const {
@@ -90,7 +112,12 @@ export function IntegrationModal({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     // Only non-secret values are pre-filled.
-    defaultValues: { apiKey: '', baseUrl: integration.base_url ?? '', publicKey: '' },
+    defaultValues: {
+      apiKey: '',
+      baseUrl: storedUrl,
+      publicKey: '',
+      delay: delayText(integration.min_interval_s),
+    },
   });
 
   const keepHint = (masked: string | null | undefined) =>
@@ -99,7 +126,7 @@ export function IntegrationModal({
   const submit = async (values: FormValues) => {
     setError(null);
     try {
-      await onSave(toUpdate(values));
+      await onSave(toUpdate(values, keepsEnv, storedUrl));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save the integration.');
     }
@@ -169,6 +196,11 @@ export function IntegrationModal({
               {spec.baseUrlHint && <Form.Text muted>{spec.baseUrlHint}</Form.Text>}
             </Form.Group>
           )}
+          <RequestDelayField
+            id="integration-delay"
+            register={register('delay')}
+            error={errors.delay?.message}
+          />
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={onClose}>

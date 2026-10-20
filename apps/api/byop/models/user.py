@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, false, true
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, false, text, true
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from byop.models.base import Base
@@ -56,5 +57,11 @@ class UserSettings(Base):
     # The model that searches the web for sources (a provider ref and a model id); both or neither.
     discovery_llm_provider: Mapped[str | None] = mapped_column(String(50), default=None)
     discovery_llm_model: Mapped[str | None] = mapped_column(String(200), default=None)
+    # Seconds to wait between two requests to a built-in provider, by provider name
+    # ({"openrouter": 5.0}); a provider that is absent has no wait. Connections keep theirs
+    # on the connection.
+    request_intervals: Mapped[dict[str, float]] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), default=dict
+    )
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()

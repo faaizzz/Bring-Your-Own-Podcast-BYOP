@@ -19,6 +19,7 @@ from byop.providers.tts.openai_compatible_tts import OpenAICompatibleTTS
 from byop.providers.tts.openai_tts import OPENAI_BASE_URL, OpenAITTS
 from byop.providers.tts.openrouter_tts import OpenRouterTTS
 from byop.services.credentials import ProviderConfig
+from byop.services.throttle import throttle_for
 
 # Credential providers that can synthesize speech through this interface.
 TTS_PROVIDERS = (
@@ -77,6 +78,18 @@ def get_tts(
     retry: RetryPolicy | None = None,
 ) -> TTSProvider:
     """Build the TTS client for `provider` from resolved credentials."""
+    tts = _build(provider, config, timeout_s=timeout_s, retry=retry)
+    tts.throttle = throttle_for(config)  # the wait the user asked for between requests
+    return tts
+
+
+def _build(
+    provider: CredentialProvider,
+    config: ProviderConfig,
+    *,
+    timeout_s: float | None,
+    retry: RetryPolicy | None,
+) -> TTSProvider:
     if provider not in TTS_PROVIDERS:
         raise UnsupportedTTSProvider(f"'{provider.value}' is not a TTS provider")
     if provider is CredentialProvider.KOKORO:

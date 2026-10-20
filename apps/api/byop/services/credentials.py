@@ -6,7 +6,7 @@
 
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 import structlog
@@ -20,6 +20,7 @@ from byop.models.columns import JsonObject
 from byop.models.enums import CredentialProvider
 from byop.security.crypto import CryptoError, decrypt_json, encrypt_json
 from byop.services.provider_ref import ProviderRef
+from byop.services.user_settings import request_interval
 
 log = structlog.get_logger(__name__)
 
@@ -70,6 +71,10 @@ class ProviderConfig:
     label: str | None = None
     # Connections only: the user says the server's models can search the web.
     web_search: bool = False
+    # Seconds to wait between two requests to the provider (0 = none), and the Redis key that
+    # spaces them out across workers (see `services/throttle.py`).
+    min_interval_s: float = 0.0
+    throttle_key: str | None = None
 
     @property
     def usage_name(self) -> str:
@@ -177,11 +182,20 @@ class CredentialResolver:
         """The user's enabled override first, then the environment, else `ProviderNotConfigured`."""
         record = await self._record(user_id, provider)
         if record is not None and record.enabled:
-            return self._decrypt(record)
+            return await self._throttled(user_id, self._decrypt(record))
         env = _env_config(self._settings, provider)
         if env is None:
             raise ProviderNotConfigured(provider)
-        return env
+        return await self._throttled(user_id, env)
+
+    async def _throttled(self, user_id: uuid.UUID, config: ProviderConfig) -> ProviderConfig:
+        """Add the user's wait between requests to a built-in provider."""
+        interval = await request_interval(self._session, user_id, config.provider.value)
+        return replace(
+            config,
+            min_interval_s=interval,
+            throttle_key=f"throttle:{user_id}:{config.provider.value}",
+        )
 
     # -- connections ------------------------------------------------------------------------
 
@@ -197,6 +211,8 @@ class CredentialResolver:
             connection_id=record.id,
             label=record.name,
             web_search=record.web_search,
+            min_interval_s=record.min_interval_s,
+            throttle_key=f"throttle:{record.user_id}:conn:{record.id}",
         )
 
     def open_connection(self, record: ProviderConnection) -> tuple[str | None, dict[str, str]]:

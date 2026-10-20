@@ -19,6 +19,7 @@ function connection(patch: Partial<Connection> = {}): Connection {
     tts: false,
     web_search: false,
     enabled: true,
+    min_interval_s: 0,
     shows_using: 0,
     speakers_using: 0,
     ...patch,
@@ -36,6 +37,7 @@ function server(initial: Connection[] = []): Record<string, Handler> {
         base_url: string;
         api_key?: string;
         headers?: { name: string }[];
+        min_interval_s?: number;
       };
       const created = connection({
         id: `c${String(rows.length + 1)}`,
@@ -43,6 +45,7 @@ function server(initial: Connection[] = []): Record<string, Handler> {
         base_url: input.base_url,
         api_key_masked: input.api_key ? 'sk-…6789' : null,
         headers: (input.headers ?? []).map((h) => ({ name: h.name, value_masked: 'gat…3456' })),
+        min_interval_s: input.min_interval_s ?? 0,
         llm: (body as { llm: boolean }).llm,
         tts: (body as { tts: boolean }).tts,
       });
@@ -106,6 +109,50 @@ describe('OpenAI-compatible connections', () => {
     expect(within(card).getByText('Voices')).toBeInTheDocument();
     expect(within(card).getByText('sk-…6789')).toBeInTheDocument();
     expect(within(card).getByText('X-Gateway-Token')).toBeInTheDocument();
+  });
+
+  it('adds a connection that waits between requests and shows it on the card', async () => {
+    const { user, fetchMock } = await openPage(server());
+
+    await user.click(screen.getByRole('button', { name: 'Add connection' }));
+    await user.type(screen.getByLabelText('Name'), 'Slow box');
+    await user.type(screen.getByLabelText('Base URL'), 'https://slow.example/v1');
+    await user.type(screen.getByLabelText(/Wait between requests/), '2.5');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const card = await screen.findByRole('article', { name: 'Slow box' });
+    expect(within(card).getByTestId('request-delay')).toHaveTextContent('2.5 s between requests');
+    expect(bodyOf(callsTo(fetchMock, 'POST /api/connections')[0])).toMatchObject({
+      min_interval_s: 2.5,
+    });
+  });
+
+  it('sends no wait for a connection when the field is left empty, and shows none', async () => {
+    const { user, fetchMock } = await openPage(server());
+
+    await user.click(screen.getByRole('button', { name: 'Add connection' }));
+    await user.type(screen.getByLabelText('Name'), 'Quick box');
+    await user.type(screen.getByLabelText('Base URL'), 'https://quick.example/v1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const card = await screen.findByRole('article', { name: 'Quick box' });
+    expect(within(card).queryByTestId('request-delay')).not.toBeInTheDocument();
+    expect(bodyOf(callsTo(fetchMock, 'POST /api/connections')[0])).toMatchObject({
+      min_interval_s: 0,
+    });
+  });
+
+  it('refuses a wait outside 0 to 60 seconds', async () => {
+    const { user, fetchMock } = await openPage(server());
+
+    await user.click(screen.getByRole('button', { name: 'Add connection' }));
+    await user.type(screen.getByLabelText('Name'), 'Odd box');
+    await user.type(screen.getByLabelText('Base URL'), 'https://odd.example/v1');
+    await user.type(screen.getByLabelText(/Wait between requests/), '61');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Enter 0 to 60 seconds')).toBeInTheDocument();
+    expect(callsTo(fetchMock, 'POST /api/connections')).toHaveLength(0);
   });
 
   it('adds a connection with a key and a custom header, then tests it', async () => {

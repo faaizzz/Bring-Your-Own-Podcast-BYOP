@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, String, Text, UniqueConstraint, false, true
+from sqlalchemy import Boolean, Float, String, Text, UniqueConstraint, false, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from byop.models.base import Base
@@ -33,5 +33,7 @@ class ProviderConnection(Base):
     tts: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     web_search: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
+    # Seconds to wait between two requests to the server (0 = no wait), for low rate limits.
+    min_interval_s: Mapped[float] = mapped_column(Float, server_default=text("0"), default=0.0)
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()

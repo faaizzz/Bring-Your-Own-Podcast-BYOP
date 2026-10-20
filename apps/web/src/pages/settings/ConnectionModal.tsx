@@ -6,6 +6,7 @@ import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import { z } from 'zod';
 
 import type { Connection, ConnectionBody } from '../../lib/connections';
+import { delayProblem, delayText, delayValue, RequestDelayField } from './requestDelay';
 
 // Mirrors schemas/connections.py; the API stays the authority.
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,64}$/;
@@ -41,8 +42,12 @@ const schema = z
     tts: z.boolean(),
     webSearch: z.boolean(),
     enabled: z.boolean(),
+    /** Seconds between requests; typed, so it stays text until it is sent. */
+    delay: z.string(),
   })
   .superRefine((values, ctx) => {
+    const delay = delayProblem(values.delay);
+    if (delay) ctx.addIssue({ code: 'custom', path: ['delay'], message: delay });
     if (values.baseUrl && !isHttpUrl(values.baseUrl)) {
       ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: 'Enter a valid http(s) URL' });
     }
@@ -87,6 +92,7 @@ function toBody(values: FormValues, editing: boolean): ConnectionBody {
     tts: values.tts,
     web_search: values.webSearch,
     enabled: values.enabled,
+    min_interval_s: delayValue(values.delay),
   };
   if (values.apiKey) body.api_key = values.apiKey;
   else if (editing && values.removeKey) body.api_key = '';
@@ -104,6 +110,7 @@ function defaults(connection: Connection | null): FormValues {
     tts: connection?.tts ?? false,
     webSearch: connection?.web_search ?? false,
     enabled: connection?.enabled ?? true,
+    delay: delayText(connection?.min_interval_s),
   };
 }
 
@@ -281,6 +288,11 @@ export function ConnectionModal({
               </div>
             )}
           </fieldset>
+          <RequestDelayField
+            id="connection-delay"
+            register={register('delay')}
+            error={errors.delay?.message}
+          />
           <Form.Check
             id="connection-enabled"
             type="switch"

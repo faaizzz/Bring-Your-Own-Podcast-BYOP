@@ -75,6 +75,35 @@ async def clear_discovery_choice(session: AsyncSession, user_id: uuid.UUID) -> N
         await session.commit()
 
 
+async def request_interval(session: AsyncSession, user_id: uuid.UUID, provider: str) -> float:
+    """Seconds to wait between requests to a built-in provider; 0 when none is set."""
+    row = await _row(session, user_id)
+    value = row.request_intervals.get(provider, 0.0) if row is not None else 0.0
+    return float(value)
+
+
+async def request_intervals(session: AsyncSession, user_id: uuid.UUID) -> dict[str, float]:
+    row = await _row(session, user_id)
+    return dict(row.request_intervals) if row is not None else {}
+
+
+async def save_request_interval(
+    session: AsyncSession, user_id: uuid.UUID, provider: str, seconds: float
+) -> None:
+    """Set a provider's wait; 0 removes it."""
+    row = await _row(session, user_id)
+    if row is None:
+        row = UserSettings(user_id=user_id, request_intervals={})
+        session.add(row)
+    intervals = dict(row.request_intervals)
+    if seconds > 0:
+        intervals[provider] = seconds
+    else:
+        intervals.pop(provider, None)
+    row.request_intervals = intervals  # a new object, so the change is noticed
+    await session.commit()
+
+
 async def discovery_choice_uses(
     session: AsyncSession, user_id: uuid.UUID, connection_id: uuid.UUID
 ) -> bool:

@@ -282,3 +282,41 @@ async def test_downgrade_from_0012_drops_the_table(empty_db: str) -> None:
             assert "user_settings" not in await _tables(conn)
     finally:
         await engine.dispose()
+
+
+# --- 0013: delay between requests ---------------------------------------------------------
+
+
+async def test_upgrade_from_0012_adds_the_wait_settings_without_changing_anything(
+    empty_db: str,
+) -> None:
+    await asyncio.to_thread(migrate, empty_db, "0012")
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.begin() as conn:
+            user_id = await _seed_v010_shape(conn, "")
+            await conn.execute(
+                text(
+                    "INSERT INTO provider_connections (user_id, name, base_url, secret_encrypted) "
+                    "VALUES (:u, 'Box', 'http://box/v1', 'x')"
+                ),
+                {"u": user_id},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO user_settings (user_id, discovery_llm_provider, "
+                    "discovery_llm_model) VALUES (:u, 'openrouter', 'perplexity/sonar')"
+                ),
+                {"u": user_id},
+            )
+
+        await asyncio.to_thread(migrate, empty_db)
+
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT min_interval_s FROM provider_connections")) == 0
+            row = (await conn.execute(text("SELECT * FROM user_settings"))).mappings().one()
+            assert row["request_intervals"] == {}
+            assert row["discovery_llm_model"] == "perplexity/sonar"  # the earlier setting survived
+            assert await conn.scalar(text("SELECT count(*) FROM shows")) == 2
+    finally:
+        await engine.dispose()

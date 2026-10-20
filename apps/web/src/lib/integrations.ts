@@ -79,6 +79,8 @@ export const integrationSchema = z.object({
   base_url: z.string().nullish(),
   extra_masked: z.record(z.string(), z.string()).default({}),
   problem: z.string().nullish(),
+  /** Seconds to wait between requests to the provider; 0 for no wait. */
+  min_interval_s: z.number().default(0),
 });
 export type Integration = z.infer<typeof integrationSchema>;
 
@@ -89,6 +91,8 @@ export type IntegrationUpdate = {
   api_key?: string;
   base_url?: string;
   extra?: Record<string, string>;
+  /** Alone, it changes nothing else (a key from `.env` stays in use). */
+  min_interval_s?: number;
 };
 
 export type StatusKey = 'connected' | 'env' | 'none' | 'error';

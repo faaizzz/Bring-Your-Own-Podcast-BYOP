@@ -13,6 +13,8 @@ export const connectionSchema = z.object({
   tts: z.boolean(),
   web_search: z.boolean(),
   enabled: z.boolean(),
+  /** Seconds to wait between requests to the server; 0 for no wait. */
+  min_interval_s: z.number().default(0),
   shows_using: z.number(),
   speakers_using: z.number(),
   problem: z.string().nullish(),
@@ -45,6 +47,7 @@ export type ConnectionBody = {
   tts?: boolean;
   web_search?: boolean;
   enabled?: boolean;
+  min_interval_s?: number;
 };
 
 export const CONNECTIONS_KEY = ['connections'] as const;

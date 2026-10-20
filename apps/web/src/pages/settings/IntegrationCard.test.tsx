@@ -5,7 +5,13 @@ import { vi } from 'vitest';
 import type { Integration, TestResult } from '../../lib/integrations';
 import { IntegrationCard } from './IntegrationCard';
 
-const none: Integration = { provider: 'openai', source: 'none', enabled: true, extra_masked: {} };
+const none: Integration = {
+  provider: 'openai',
+  source: 'none',
+  enabled: true,
+  extra_masked: {},
+  min_interval_s: 0,
+};
 const env: Integration = { ...none, source: 'env', api_key_masked: 'sk-…1234' };
 const user: Integration = { ...none, source: 'user', api_key_masked: 'sk-…9999' };
 
@@ -80,6 +86,7 @@ describe('IntegrationCard status', () => {
           api_key_masked: 'sk-…abcd',
           base_url: 'https://lf.example.com',
           extra_masked: { public_key: 'pk-…wxyz' },
+          min_interval_s: 0,
         }}
         testing={false}
         onEdit={vi.fn()}

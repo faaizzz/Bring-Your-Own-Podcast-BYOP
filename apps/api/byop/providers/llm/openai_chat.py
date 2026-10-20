@@ -206,6 +206,8 @@ class OpenAIChatProvider(LLMProvider):
         )
 
         async def attempt() -> ChatCompletion:
+            if self.throttle is not None:
+                await self.throttle.wait()  # every try, including a retry after a 429
             # A plain coroutine function: tenacity only awaits callables it recognises as async.
             call_kwargs: Any = params  # assembled dynamically; the SDK validates them at runtime
             return await self.client.chat.completions.create(**call_kwargs)  # type: ignore[no-any-return]

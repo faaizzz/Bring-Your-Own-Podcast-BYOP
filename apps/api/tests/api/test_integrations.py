@@ -43,6 +43,7 @@ async def test_get_reports_none_when_nothing_is_configured(authed: AsyncClient) 
         "base_url": None,
         "extra_masked": {},
         "problem": None,
+        "min_interval_s": 0,
     }
 
 
@@ -304,3 +305,51 @@ async def test_secrets_never_appear_in_logs_or_responses(
     everything = captured.out + captured.err + caplog.text + "".join(r.text for r in responses)
     assert KEY not in everything
     assert "abcdef1234567890" not in everything
+
+
+# --- wait between requests -----------------------------------------------------------------------
+
+
+async def test_a_wait_can_be_set_without_touching_the_key_from_env(
+    app: FastAPI, authed: AsyncClient
+) -> None:
+    use_settings(app, openai_api_key=SecretStr("sk-from-env-9876543210"))
+
+    response = await authed.put("/api/integrations/openai", json={"min_interval_s": 5})
+
+    body = response.json()
+    assert response.status_code == 200
+    assert (body["source"], body["min_interval_s"]) == ("env", 5)  # no override was made
+    assert body["api_key_masked"] == "sk-…3210"
+    assert (await authed.get("/api/integrations/openai")).json()["min_interval_s"] == 5
+    assert (await authed.get("/api/integrations/openrouter")).json()["min_interval_s"] == 0
+
+
+async def test_a_wait_can_come_with_a_key_and_zero_removes_it(authed: AsyncClient) -> None:
+    saved = await put(authed, min_interval_s=2.5)
+    assert saved.json()["min_interval_s"] == 2.5
+
+    await authed.put("/api/integrations/openai", json={"min_interval_s": 0})
+
+    assert (await authed.get("/api/integrations/openai")).json()["min_interval_s"] == 0
+    # Removing the override leaves the wait alone: it is a setting of the account, not of the key.
+    await put(authed, min_interval_s=7)
+    await authed.delete("/api/integrations/openai")
+    assert (await authed.get("/api/integrations/openai")).json()["min_interval_s"] == 7
+
+
+@pytest.mark.parametrize("value", [-1, 60.5, 1000])
+async def test_the_wait_is_between_0_and_60_seconds(authed: AsyncClient, value: float) -> None:
+    response = await authed.put("/api/integrations/openai", json={"min_interval_s": value})
+
+    assert response.status_code == 422
+    assert (await authed.get("/api/integrations/openai")).json()["min_interval_s"] == 0
+
+
+async def test_a_rejected_key_does_not_change_the_wait(authed: AsyncClient) -> None:
+    response = await authed.put(
+        "/api/integrations/openai", json={"min_interval_s": 9, "enabled": True}
+    )  # a first override needs a key
+
+    assert response.status_code == 422
+    assert (await authed.get("/api/integrations/openai")).json()["min_interval_s"] == 0

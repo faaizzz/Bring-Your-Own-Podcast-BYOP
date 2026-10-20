@@ -5,7 +5,7 @@ from typing import Literal, overload
 
 from pydantic import BaseModel
 
-from byop.providers.common import CallMetadata
+from byop.providers.common import CallMetadata, Throttle
 
 
 class LLMError(Exception):
@@ -84,6 +84,8 @@ class ModelInfo:
 
 class LLMProvider(ABC):
     name: str
+    # Spaces out the requests when the user set a wait for this provider (see `get_llm`).
+    throttle: Throttle | None = None
 
     @overload
     async def complete[T: BaseModel](

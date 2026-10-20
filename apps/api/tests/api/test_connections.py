@@ -292,3 +292,35 @@ async def test_a_single_model_is_not_pluralised(authed: AsyncClient) -> None:
     result = (await authed.post(f"/api/connections/{created['id']}/test")).json()
 
     assert result["checks"][0]["detail"] == "Works: 1 model listed"
+
+
+async def test_a_connection_keeps_its_wait_between_requests(authed: AsyncClient) -> None:
+    created = await authed.post(
+        "/api/connections",
+        json={"name": "Slow box", "base_url": "http://slow.local/v1", "min_interval_s": 3.5},
+    )
+    plain = await authed.post(
+        "/api/connections", json={"name": "Fast box", "base_url": "http://fast.local/v1"}
+    )
+    conn_id = created.json()["id"]
+
+    assert created.json()["min_interval_s"] == 3.5 and plain.json()["min_interval_s"] == 0
+    changed = await authed.patch(f"/api/connections/{conn_id}", json={"min_interval_s": 10})
+    untouched = await authed.patch(f"/api/connections/{conn_id}", json={"llm": True})
+    cleared = await authed.patch(f"/api/connections/{conn_id}", json={"min_interval_s": 0})
+
+    assert changed.json()["min_interval_s"] == 10
+    assert untouched.json()["min_interval_s"] == 10  # omitted fields keep their value
+    assert cleared.json()["min_interval_s"] == 0
+
+
+@pytest.mark.parametrize("value", [-0.1, 61])
+async def test_a_connections_wait_is_between_0_and_60_seconds(
+    authed: AsyncClient, value: float
+) -> None:
+    response = await authed.post(
+        "/api/connections",
+        json={"name": "Bad", "base_url": "http://bad.local/v1", "min_interval_s": value},
+    )
+
+    assert response.status_code == 422
