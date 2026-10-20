@@ -7,13 +7,27 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
+Your own styles and personas (and a model to draft them), any number of OpenAI-compatible
+connections, a voice model picker, a per-provider wait between requests and a choice of the model
+that discovers sources.
+
+### Upgrading
+
+- The database migrates itself when the API starts (migrations `0011` to `0015`). A saved
+  OpenAI-compatible credential becomes a connection called "OpenAI-compatible" and the shows that
+  used it point at it.
+- `DEFAULT_LLM_PROVIDER` and `DISCOVERY_LLM_PROVIDER` no longer accept `openai_compatible`; the API
+  refuses to start with it. Use `conn:<id>` (the id of the connection under Settings ›
+  Integrations) or leave the variable empty and choose the discovery model in Settings.
+
 ### Added
 
 - **Documentation:** the README and the docs describe styles, personas, Design with AI, the voice
   model, the wait between requests and the discovery model; `make screenshots` takes pictures of
   them (Styles, Personas, the Design with AI dialog, the Voice model dropdown, the Discovery model
   card).
-
 - **Discovery model in Settings:** choose the model that searches the web for sources under
   Settings › Integrations › Discovery model. It takes precedence over `DISCOVERY_LLM_*`, the show's
   model and the instance default, is checked for web search when saved, and is used by the Discover

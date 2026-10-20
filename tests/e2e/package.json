@@ -1,6 +1,6 @@
 {
   "name": "byop-e2e",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "End-to-end test of BYOP against the e2e compose stack (see docs/e2e.md)",
   "type": "module",
