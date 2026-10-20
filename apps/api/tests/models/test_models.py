@@ -16,6 +16,7 @@ from byop.models import (
     Show,
     Source,
     Speaker,
+    Style,
     UsageEvent,
     User,
 )
@@ -328,3 +329,51 @@ async def test_trigram_index_accelerates_title_similarity(db_session: AsyncSessi
     ).all()
 
     assert rows == [("OpenAI releases a new model",)]
+
+
+async def test_a_style_in_use_cannot_be_deleted_from_the_database(db_session: AsyncSession) -> None:
+    user = await make_user(db_session)
+    show = await make_show(db_session, user)
+    style = Style(user_id=user.id, name="Mine", instructions="Talk.")
+    db_session.add(style)
+    await db_session.flush()
+    show.custom_style_id = style.id
+    await db_session.flush()
+
+    with pytest.raises(IntegrityError, match="fk_shows_custom_style_id_styles"):
+        async with db_session.begin_nested():
+            await db_session.delete(style)
+
+
+async def test_deleting_a_user_also_removes_their_styles_even_when_shows_use_them(
+    db_session: AsyncSession,
+) -> None:
+    user = await make_user(db_session)
+    show = await make_show(db_session, user)
+    style = Style(user_id=user.id, name="Mine", instructions="Talk.")
+    db_session.add(style)
+    await db_session.flush()
+    show.custom_style_id = style.id
+    await db_session.flush()
+
+    await db_session.delete(user)
+    await db_session.flush()
+    db_session.expire_all()
+
+    assert await count(db_session, Style) == 0 and await count(db_session, Show) == 0
+
+
+async def test_a_style_name_is_unique_per_user(db_session: AsyncSession) -> None:
+    first, second = await make_user(db_session), await make_user(db_session, "b@example.com")
+    db_session.add_all(
+        [
+            Style(user_id=first.id, name="Same", instructions="x"),
+            Style(user_id=second.id, name="Same", instructions="x"),  # another user: fine
+        ]
+    )
+    await db_session.flush()
+
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(Style(user_id=first.id, name="Same", instructions="y"))
+            await db_session.flush()

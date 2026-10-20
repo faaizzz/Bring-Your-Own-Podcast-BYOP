@@ -18,6 +18,9 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
   speech model from a searchable list before the voice (`GET /api/voices/models`); OpenRouter's
   speech models and their voices come from its `output_modalities=speech` listing, and a model is
   required for OpenRouter speakers.
+- **Styles:** read exactly what each built-in style tells the model, duplicate one into your own,
+  or write a new one (Settings › Styles); a show picks a built-in or custom style (`styles` table
+  and `shows.custom_style_id`, migration `0014`; `GET/POST/PATCH/DELETE /api/styles`).
 - **Wait between requests:** a per-provider and per-connection delay (0–60 s) between calls, shared
   across workers through Redis, to stay under low rate limits; waits show in the run log.
 - **Connections** (any number of OpenAI-compatible servers with custom headers), **searchable

@@ -36,6 +36,24 @@ another user's show is a `404`.
 - **Schedule fields** are stored as sent; `next_run_at` is computed from them (read-only) and
   recomputed whenever the schedule, the time zone or `paused` changes ([scheduling](scheduling.md)).
 
+## Styles
+
+**Settings › Styles** lists the four built-in styles with the exact instructions each gives the
+model (read-only), and your own. *Duplicate* copies any style (built-in or yours) into a new one you
+can edit; *Add style* starts from nothing. A show picks a style in its Topic step (grouped Built-in /
+Custom, with a preview of the instructions and a *Manage styles* link); the overview shows its name.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/styles` | the built-ins (`kind: builtin`, `id` is the key such as `conversational`, with their `instructions`) then yours (`kind: custom`, UUID `id`); `shows_using` counts the shows |
+| `POST /api/styles` | create `{name, description?, instructions}`; names are unique per user (`409`); instructions that do not render are a `422` |
+| `PATCH /api/styles/{id}`, `DELETE /api/styles/{id}` | change / delete one of yours; deleting a style that shows use is a `409` that names them |
+
+A show sends `style` (a built-in key) **or** `custom_style_id` (not both, `422`); choosing a built-in
+style clears `custom_style_id`, and `custom_style_id: null` goes back to the built-in `style`. The
+database refuses to delete a style that a show uses (`ON DELETE RESTRICT`). How the instructions
+reach the model is in [scripts](scripts.md#styles). Existing shows keep their built-in style.
+
 ## Scheduling
 
 Schedules (`schedule_kind`, `schedule_time`, `timezone`, pause/resume) are described in

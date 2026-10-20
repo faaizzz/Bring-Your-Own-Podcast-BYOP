@@ -1,13 +1,20 @@
 import { languageOptions } from '../../../lib/languages';
-import { STYLE_LABELS, STYLES } from '../../../lib/shows';
+import { Link } from 'react-router-dom';
+import { useFormContext, useWatch } from 'react-hook-form';
+
+import type { ShowFormValues } from './schema';
+import { styleValue, useStyleOptions } from './useStyleOptions';
 import { Field } from './Field';
 import { SelectField } from './SelectField';
 
 const LANGUAGES = languageOptions();
-const STYLE_OPTIONS = STYLES.map((style) => ({ value: style, label: STYLE_LABELS[style] }));
 
 /** `children` is rendered after the fields (the cover picker, which differs between create and edit). */
 export function TopicStep({ children }: { children?: React.ReactNode }): React.JSX.Element {
+  const { control } = useFormContext<ShowFormValues>();
+  const style = useWatch({ control, name: 'style' });
+  const { options, styles } = useStyleOptions(style);
+  const chosen = styles.find((candidate) => styleValue(candidate) === style);
   return (
     <>
       <Field name="title" label="Title" placeholder="Daily AI Briefing" />
@@ -37,7 +44,16 @@ export function TopicStep({ children }: { children?: React.ReactNode }): React.J
           />
         </div>
         <div className="col-md-6">
-          <SelectField name="style" label="Style" options={STYLE_OPTIONS} />
+          <SelectField name="style" label="Style" options={options} hint={chosen?.description} />
+          {chosen && (
+            <details className="mb-3 small" data-testid="style-preview">
+              <summary>What this style tells the model</summary>
+              <pre className="bg-light p-2 mt-1 mb-1 small text-wrap">{chosen.instructions}</pre>
+            </details>
+          )}
+          <div className="mb-3 small">
+            <Link to="/settings/styles">Manage styles</Link>
+          </div>
         </div>
         <div className="col-md-6">
           <Field

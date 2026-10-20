@@ -4,7 +4,8 @@ import { Link, NavLink, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../lib/api';
 import { describeSchedule, formatDate, formatDateTime } from '../../lib/format';
-import { STYLE_LABELS, useShow, useSpeakers, type Show } from '../../lib/shows';
+import { useShow, useSpeakers, type Show } from '../../lib/shows';
+import { styleLabel, styleValueOf, useStyles } from '../../lib/styles';
 import { useProviderLabel } from '../../lib/providers';
 import { EpisodesTab } from '../episodes/EpisodesTab';
 import { RunHistory } from '../history/RunHistory';
@@ -26,10 +27,14 @@ type TabId = (typeof TABS)[number]['id'];
 function Overview({ show }: { show: Show }): React.JSX.Element {
   const speakers = useSpeakers(show.id);
   const labelOf = useProviderLabel();
+  const styles = useStyles();
   const facts: [string, string][] = [
     ['Topic', show.topic],
     ['Language', show.language],
-    ['Style', `${STYLE_LABELS[show.style]}, about ${String(show.target_minutes)} min`],
+    [
+      'Style',
+      `${styleLabel(styleValueOf(show), styles.data)}, about ${String(show.target_minutes)} min`,
+    ],
     ['Stories per episode', String(show.items_per_episode)],
     [
       'Model',

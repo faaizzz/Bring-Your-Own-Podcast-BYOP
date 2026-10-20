@@ -1,5 +1,5 @@
 import type { IconType } from 'react-icons';
-import { FiClock, FiDollarSign, FiHome, FiKey, FiMic, FiTag } from 'react-icons/fi';
+import { FiClock, FiDollarSign, FiEdit3, FiHome, FiKey, FiMic, FiTag } from 'react-icons/fi';
 
 export type MenuItem = {
   id: string;
@@ -36,6 +36,13 @@ export const menu: MenuGroup[] = [
         title: 'Integrations',
         url: '/settings/integrations',
         icon: FiKey,
+        parentTitle: 'Settings',
+      },
+      {
+        id: 'styles',
+        title: 'Styles',
+        url: '/settings/styles',
+        icon: FiEdit3,
         parentTitle: 'Settings',
       },
       {

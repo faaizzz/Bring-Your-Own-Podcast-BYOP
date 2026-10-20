@@ -60,6 +60,11 @@ class Show(Base):
         server_default=ShowStyle.NEWS_BRIEFING.value,
         default=ShowStyle.NEWS_BRIEFING,
     )
+    # A style of the user's own, used instead of `style` while set. A style in use cannot be
+    # deleted (RESTRICT).
+    custom_style_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("styles.id", ondelete="RESTRICT"), index=True
+    )
     prompt_override: Mapped[str | None] = mapped_column(Text)
     # Free-text guidance for choosing stories, e.g. "prefer releases over funding news".
     ranking_hints: Mapped[str | None] = mapped_column(Text)

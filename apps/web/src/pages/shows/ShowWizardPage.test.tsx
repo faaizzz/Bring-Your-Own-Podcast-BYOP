@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 import type { SpeakerInput } from '../../lib/shows';
 import {
+  builtInStyles,
   formHandlers,
   kokoroHosts,
   kokoroVoices,
@@ -74,6 +75,69 @@ describe('create-show wizard', () => {
 
     expect(await screen.findByText('At most 60 minutes')).toBeInTheDocument();
     expect(callsTo(fetchMock, 'POST /api/shows')).toHaveLength(0);
+  });
+
+  it('groups the styles, previews what the chosen one tells the model, and links to manage them', async () => {
+    const mine = {
+      id: 'c1',
+      kind: 'custom',
+      name: 'Late-night chat',
+      description: 'Slow and warm.',
+      instructions: 'Keep it calm.',
+      shows_using: 0,
+    };
+    const { user } = await openWizard({
+      'GET /api/styles': () => ({ body: [...builtInStyles, mine] }),
+    });
+
+    expect(chosen('Style')).toBe('News briefing');
+    expect(await screen.findByTestId('style-preview')).toHaveTextContent(
+      'The episode is a brisk, well-organised briefing.',
+    );
+    expect(screen.getByRole('link', { name: 'Manage styles' })).toHaveAttribute(
+      'href',
+      '/settings/styles',
+    );
+    await user.click(screen.getByLabelText('Style'));
+    expect(screen.getByText('Built-in')).toBeInTheDocument(); // the group headings
+    expect(screen.getByText('Custom')).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Late-night chat/ }));
+
+    expect(chosen('Style')).toBe('Late-night chat');
+    expect(screen.getByTestId('style-preview')).toHaveTextContent('Keep it calm.');
+  });
+
+  it('creates a show with one of your own styles', async () => {
+    const mine = {
+      id: 'c1',
+      kind: 'custom',
+      name: 'Late-night chat',
+      description: '',
+      instructions: 'Keep it calm.',
+      shows_using: 0,
+    };
+    const { user, fetchMock } = await openWizard({
+      'GET /api/styles': () => ({ body: [...builtInStyles, mine] }),
+    });
+    await fillTopic(user);
+    await choose(user, 'Style', /Late-night chat/);
+    for (let i = 0; i < 5; i += 1) await user.click(next());
+    await user.click(screen.getByRole('button', { name: 'Create show' }));
+
+    await waitFor(() => {
+      expect(callsTo(fetchMock, 'POST /api/shows')).toHaveLength(1);
+    });
+    const body = bodyOf(callsTo(fetchMock, 'POST /api/shows')[0]) as Record<string, unknown>;
+    expect(body.custom_style_id).toBe('c1');
+    expect(body).not.toHaveProperty('style');
+  });
+
+  it('still offers the built-in styles when the list cannot be loaded', async () => {
+    await openWizard({ 'GET /api/styles': () => ({ status: 500, body: { detail: 'down' } }) });
+
+    await userEvent.click(screen.getByLabelText('Style'));
+
+    expect(screen.getByRole('option', { name: 'Deep dive' })).toBeInTheDocument();
   });
 
   it('creates a show end to end with Kokoro voices only', async () => {

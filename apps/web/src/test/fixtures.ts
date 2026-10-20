@@ -1,4 +1,5 @@
 import type { Show, Speaker, SpeakerInput } from '../lib/shows';
+import type { Style } from '../lib/styles';
 import type { ModelInfo, Voice } from '../lib/voices';
 import type { Handler } from './mockApi';
 
@@ -13,6 +14,7 @@ export function makeShow(patch: Partial<Show> = {}): Show {
     language: 'en',
     target_minutes: 10,
     style: 'news_briefing',
+    custom_style_id: null,
     prompt_override: null,
     ranking_hints: null,
     llm_provider: null,
@@ -110,9 +112,45 @@ export const ttsProviders = [
   provider('kokoro', 'Kokoro (local)', true, ['tts']),
 ];
 
+export const builtInStyles: Style[] = [
+  {
+    id: 'news_briefing',
+    kind: 'builtin',
+    name: 'News briefing',
+    description: 'A brisk, well-organised briefing.',
+    instructions: 'The episode is a brisk, well-organised briefing.',
+    shows_using: 1,
+  },
+  {
+    id: 'conversational',
+    kind: 'builtin',
+    name: 'Conversational',
+    description: 'Friends talking about the week.',
+    instructions: 'The episode feels like friends talking.',
+    shows_using: 0,
+  },
+  {
+    id: 'deep_dive',
+    kind: 'builtin',
+    name: 'Deep dive',
+    description: 'Few stories explored in depth.',
+    instructions: 'The episode takes its time with few stories.',
+    shows_using: 0,
+  },
+  {
+    id: 'interview',
+    kind: 'builtin',
+    name: 'Interview',
+    description: 'An interviewer draws out expert guests.',
+    instructions: '{{ speakers[0].name }} is the interviewer.',
+    shows_using: 0,
+  },
+];
+
 /** The read-only endpoints every show form needs, with Kokoro as the only voice provider. */
 export function formHandlers(): Record<string, Handler> {
   return {
+    'GET /api/styles': () => ({ body: builtInStyles }),
     'GET /api/providers': ({ query }) => ({
       body: query.get('capability') === 'llm' ? llmProviders : ttsProviders,
     }),

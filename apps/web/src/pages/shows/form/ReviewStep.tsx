@@ -1,7 +1,7 @@
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { describeSchedule } from '../../../lib/format';
-import { STYLE_LABELS } from '../../../lib/shows';
+import { styleLabel, useStyles } from '../../../lib/styles';
 import { useProviderLabel } from '../../../lib/providers';
 import type { ShowFormValues } from './schema';
 
@@ -15,6 +15,7 @@ export function ReviewStep({
   const { control } = useFormContext<ShowFormValues>();
   const values = useWatch({ control }) as ShowFormValues;
   const labelOf = useProviderLabel();
+  const styles = useStyles();
   const schedule = describeSchedule({
     schedule_kind: values.schedule_kind,
     schedule_time: values.schedule_time,
@@ -28,7 +29,7 @@ export function ReviewStep({
     ['Language', values.language],
     [
       'Style',
-      `${STYLE_LABELS[values.style]}, about ${String(values.target_minutes)} min, ${String(values.items_per_episode)} stories`,
+      `${styleLabel(values.style, styles.data)}, about ${String(values.target_minutes)} min, ${String(values.items_per_episode)} stories`,
     ],
     [
       'Speakers',

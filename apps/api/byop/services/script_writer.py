@@ -12,6 +12,7 @@ from byop.models import Item, Show
 from byop.models.enums import ShowStyle
 from byop.providers.llm import CallMetadata, LLMProvider, Message
 from byop.schemas.script import Script
+from byop.services.styles import render_instructions
 
 log = structlog.get_logger(__name__)
 
@@ -102,11 +103,25 @@ def _clip(text: str, limit: int = 600) -> str:
     return " ".join(text.split())[:limit]
 
 
-def render_prompt(show: Show, speakers: list[SpeakerSpec], stories: list[Story]) -> str:
-    """The user prompt for the show's style; `ShowStyle` picks the template."""
+@dataclass(frozen=True)
+class CustomStyle:
+    """One of the user's own styles, as the prompt needs it."""
+
+    name: str
+    instructions: str
+
+
+def render_prompt(
+    show: Show,
+    speakers: list[SpeakerSpec],
+    stories: list[Story],
+    custom_style: CustomStyle | None = None,
+) -> str:
+    """The user prompt for the show's style: the built-in style's template, or `custom.md` with
+    the user's own instructions in it (they can use the same placeholders, e.g. `{{ topic }}`)."""
     target, low, high, unit = length_targets(show.language, show.target_minutes)
     base = language_base(show.language)
-    return _templates.get_template(f"{ShowStyle(show.style).value}.md").render(
+    values = dict(
         show_title=show.title,
         topic=show.topic,
         language=show.language,
@@ -134,6 +149,13 @@ def render_prompt(show: Show, speakers: list[SpeakerSpec], stories: list[Story])
             }
             for story in stories
         ],
+    )
+    if custom_style is None:
+        return _templates.get_template(f"{ShowStyle(show.style).value}.md").render(**values)
+    return _templates.get_template("custom.md").render(
+        **values,
+        style_name=custom_style.name,
+        style_instructions=render_instructions(custom_style.instructions, values),
     )
 
 
@@ -219,6 +241,7 @@ async def write_script(
     stories: list[Story],
     *,
     run_id: uuid.UUID | None = None,
+    custom_style: CustomStyle | None = None,
 ) -> WrittenScript:
     """Ask the model for the script; if it is not usable, tell it what is wrong and ask once more.
 
@@ -228,7 +251,7 @@ async def write_script(
     metadata = CallMetadata(show_id=show.id, run_id=run_id, stage=STAGE)
     messages = [
         Message("system", SYSTEM_PROMPT),
-        Message("user", render_prompt(show, speakers, stories)),
+        Message("user", render_prompt(show, speakers, stories, custom_style)),
     ]
     numbers = [s.number for s in stories]
     target, _low, _high, _unit = length_targets(show.language, show.target_minutes)

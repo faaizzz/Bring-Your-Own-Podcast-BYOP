@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { Show, SpeakerInput } from '../../lib/shows';
-import { formHandlers, makeShow, savedSpeakers } from '../../test/fixtures';
+import { builtInStyles, formHandlers, makeShow, savedSpeakers } from '../../test/fixtures';
 import { callsTo, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
 import { choose } from '../../test/select';
@@ -57,6 +57,31 @@ describe('show detail page', () => {
     expect(screen.getByText('OpenRouter: anthropic/claude-sonnet')).toBeInTheDocument();
     expect(await screen.findByText(/Alex/)).toBeInTheDocument();
     expect(screen.getByText(/Sam/)).toBeInTheDocument();
+  });
+
+  it('names the style of the show, also when it is one of your own', async () => {
+    const mine = {
+      id: 'c1',
+      kind: 'custom',
+      name: 'Late-night chat',
+      description: '',
+      instructions: 'x',
+      shows_using: 1,
+    };
+    const { handlers } = showApi(
+      { style: 'interview', custom_style_id: 'c1' },
+      { 'GET /api/styles': () => ({ body: [...builtInStyles, mine] }) },
+    );
+    await renderApp('/shows/s1', { handlers });
+
+    expect(await screen.findByText(/Late-night chat, about 10 min/)).toBeInTheDocument();
+  });
+
+  it('names a built-in style by its label', async () => {
+    const { handlers } = showApi({ style: 'deep_dive' });
+    await renderApp('/shows/s1', { handlers });
+
+    expect(await screen.findByText(/Deep dive, about 10 min/)).toBeInTheDocument();
   });
 
   it('names a connection by its name, not its id, as the model provider and voice provider', async () => {

@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { ApiError } from '../../../lib/api';
 import {
   SCHEDULE_KINDS,
-  STYLES,
   type ParamValue,
   type Show,
   type ShowBody,
@@ -12,6 +11,7 @@ import {
   type SpeakerInput,
 } from '../../../lib/shows';
 import { isConnection } from '../../../lib/providers';
+import { customStyleId, isCustomStyleValue, isStyleValue, styleValueOf } from '../../../lib/styles';
 import type { TtsProvider } from '../../../lib/voices';
 
 // The rules below mirror what the API enforces (schemas/show.py, schemas/speaker.py and the
@@ -196,7 +196,7 @@ export const showFormSchema = z
     description: z.string().trim().max(5000, 'At most 5000 characters'),
     ranking_hints: z.string().trim().max(2000, 'At most 2000 characters'),
     language: z.string().trim().regex(LANGUAGE_PATTERN, 'Use a language tag such as en or pt-BR'),
-    style: z.enum(STYLES),
+    style: z.string().refine(isStyleValue, 'Choose a style'),
     target_minutes: z
       .number({ error: 'Enter the length in minutes' })
       .int('Use whole minutes')
@@ -406,7 +406,7 @@ export function showToValues(show: Show, speakers: Speaker[]): ShowFormValues {
     description: show.description,
     ranking_hints: show.ranking_hints ?? '',
     language: show.language,
-    style: show.style,
+    style: styleValueOf(show),
     target_minutes: show.target_minutes,
     items_per_episode: show.items_per_episode,
     speakers: speakers.map(speakerToForm),
@@ -434,6 +434,11 @@ function scheduleFields(values: ShowFormValues): ShowBody {
   };
 }
 
+/** A built-in style is sent as `style`, one of the user's own as `custom_style_id`. */
+function styleFields(value: string): ShowBody {
+  return isCustomStyleValue(value) ? { custom_style_id: customStyleId(value) } : { style: value };
+}
+
 /** `POST /shows`: only what the user decided; the server fills the rest. */
 export function toCreateBody(values: ShowFormValues): ShowBody {
   const body: ShowBody = {
@@ -441,7 +446,7 @@ export function toCreateBody(values: ShowFormValues): ShowBody {
     topic: values.topic.trim(),
     description: values.description.trim(),
     language: values.language.trim(),
-    style: values.style,
+    ...styleFields(values.style),
     target_minutes: values.target_minutes,
     items_per_episode: values.items_per_episode,
     ...scheduleFields(values),
@@ -481,7 +486,7 @@ function pathFromLoc(loc: Loc, kind: 'show' | 'speakers'): string | null {
   const rest = loc[0] === 'body' ? loc.slice(1) : loc;
   if (rest.length === 0) return null;
   if (kind === 'show') {
-    const field = String(rest[0]);
+    const field = rest[0] === 'custom_style_id' ? 'style' : String(rest[0]);
     return (showFormSchema.shape as Record<string, unknown>)[field] && field !== 'speakers'
       ? field
       : null;
@@ -532,6 +537,8 @@ export function applyServerErrors(
   // Plain-text details come from the service layer, e.g. an unknown model.
   if (kind === 'show' && /^Model '|llm_provider and llm_model/.test(error.message)) {
     place('llm_model', error.message);
+  } else if (kind === 'show' && /style does not exist/.test(error.message)) {
+    place('style', error.message);
   } else {
     result.general.push(error.message);
   }

@@ -18,6 +18,7 @@ from byop.api import (
     shows,
     sources,
     speakers,
+    styles,
     user_settings,
     voices,
 )
@@ -44,6 +45,7 @@ protected.include_router(show_audio.router)
 protected.include_router(sources.router)
 protected.include_router(discovery.router)
 protected.include_router(speakers.router)
+protected.include_router(styles.router)
 protected.include_router(episodes.router)
 protected.include_router(episodes.show_router)
 protected.include_router(dashboard.router)

@@ -8,8 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Episode, Item, Run, Show, Speaker, User
-from byop.models.enums import EpisodeStatus, EventLevel, RunStatus
+from byop.models import Episode, Item, Run, Show, Speaker, Style, User
+from byop.models.enums import EpisodeStatus, EventLevel, RunStatus, ShowStyle
 from byop.pipeline.errors import TransientStageError
 from byop.pipeline.orchestrator import Stage, StageResult, run_stage
 from byop.pipeline.stages import script as script_stage
@@ -97,6 +97,13 @@ async def run_it(session: AsyncSession, run: Run, cfg: Settings | None = None) -
     return await run_stage(session, cfg or settings(), run.id, "script", stages=STAGES)
 
 
+def user_prompt(route: respx.Route) -> str:
+    """The prompt the model was asked to write the script from."""
+    messages = body_of(route)["messages"]
+    assert isinstance(messages, list)
+    return str(messages[1]["content"])
+
+
 async def error_of(session: AsyncSession, run: Run) -> str | None:
     await session.refresh(run)
     return run.error
@@ -133,6 +140,62 @@ async def test_the_script_becomes_a_draft_episode_with_title_description_and_scr
     # the prompt carried the show's data, with the merged coverage attached to story 1
     prompt = json.dumps(body_of(route)["messages"])
     assert "Alex" in prompt and "Story 3" in prompt and "Also reported by" in prompt
+
+
+@respx.mock
+async def test_a_show_with_a_custom_style_is_written_with_its_instructions(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show, run, _ = await prepare(db_session, admin_user)
+    style = Style(
+        user_id=admin_user.id,
+        name="Late-night chat",
+        instructions="Whisper like it is 2 a.m., and have {{ speakers[1].name }} close the show.",
+    )
+    db_session.add(style)
+    await db_session.flush()
+    show.custom_style_id = style.id
+    await db_session.flush()
+    route = respx.post(OPENROUTER_URL).mock(return_value=reply())
+
+    assert await run_it(db_session, run) is StageResult.DONE
+
+    prompt = user_prompt(route)
+    assert "## Format: Late-night chat" in prompt
+    assert "Whisper like it is 2 a.m., and have Sam close the show." in prompt
+    assert "a news briefing" not in prompt  # not the show's built-in style
+    assert "Reply with JSON only" in prompt  # the output contract is unchanged
+
+
+@respx.mock
+async def test_a_style_that_no_longer_renders_fails_the_stage_with_the_reason(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show, run, _ = await prepare(db_session, admin_user)
+    style = Style(user_id=admin_user.id, name="Broken", instructions="{{ gone }}")
+    db_session.add(style)
+    await db_session.flush()
+    show.custom_style_id = style.id
+    await db_session.flush()
+    respx.post(OPENROUTER_URL).mock(return_value=reply())
+
+    assert await run_it(db_session, run) is StageResult.FAILED
+
+    assert "The show's style cannot be used" in (await error_of(db_session, run) or "")
+
+
+@respx.mock
+async def test_a_show_with_a_built_in_style_is_unchanged(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show, run, _ = await prepare(db_session, admin_user)
+    show.style = ShowStyle.DEEP_DIVE
+    await db_session.flush()
+    route = respx.post(OPENROUTER_URL).mock(return_value=reply())
+
+    await run_it(db_session, run)
+
+    assert "## Format: a deep dive" in user_prompt(route)
 
 
 @respx.mock

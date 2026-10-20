@@ -155,6 +155,33 @@ describe('conversion to and from the API', () => {
     expect(monthly).toMatchObject({ schedule_weekday: null, schedule_monthday: 15 });
   });
 
+  it('sends a built-in style as `style` and one of your own as `custom_style_id`', () => {
+    expect(toCreateBody(valid({ style: 'deep_dive' }))).toMatchObject({ style: 'deep_dive' });
+    expect(toCreateBody(valid({ style: 'deep_dive' }))).not.toHaveProperty('custom_style_id');
+
+    const custom = toCreateBody(valid({ style: 'custom:abc-123' }));
+    expect(custom).toMatchObject({ custom_style_id: 'abc-123' });
+    expect(custom).not.toHaveProperty('style');
+    expect(toUpdateBody(valid({ style: 'custom:abc-123' }))).toMatchObject({
+      custom_style_id: 'abc-123',
+    });
+    expect(toUpdateBody(valid({ style: 'interview' }))).toMatchObject({ style: 'interview' });
+  });
+
+  it('shows a custom style as the show’s style in the form', () => {
+    expect(showToValues(makeShow({ style: 'interview' }), savedSpeakers()).style).toBe('interview');
+    expect(
+      showToValues(makeShow({ style: 'interview', custom_style_id: 'abc-123' }), savedSpeakers())
+        .style,
+    ).toBe('custom:abc-123');
+  });
+
+  it('accepts only a built-in style or a custom one with an id', () => {
+    expect(problems(valid({ style: 'custom:abc' }))['style']).toBeUndefined();
+    expect(problems(valid({ style: 'custom:' }))['style']).toBe('Choose a style');
+    expect(problems(valid({ style: 'rock_opera' }))['style']).toBe('Choose a style');
+  });
+
   it('sends story priorities only when there are some, and clears them on update', () => {
     expect(toCreateBody(valid())).not.toHaveProperty('ranking_hints');
     expect(toCreateBody(valid({ ranking_hints: '  Prefer releases  ' }))).toMatchObject({

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from byop.models.enums import ShowStyle
 from byop.providers.llm import CallMetadata, LLMProvider, LLMResult, Message, ModelInfo, TokenUsage
 from byop.schemas.script import Script, Segment
 from byop.services.script_writer import (
+    CustomStyle,
     Problems,
     ScriptInvalid,
     SpeakerSpec,
@@ -23,6 +25,7 @@ from byop.services.script_writer import (
     render_prompt,
     write_script,
 )
+from byop.services.styles import StyleInvalid, builtin_instructions, builtin_name
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 
@@ -389,3 +392,88 @@ async def test_story_numbers_the_model_invents_are_ignored() -> None:
     written = await write(llm)
 
     assert written.segment_item_ids[1] == [uuid.UUID(int=101)]
+
+
+# --- the user's own styles ---------------------------------------------------------------------
+
+
+def custom_prompt(
+    instructions: str, speakers: list[SpeakerSpec] | None = None, **show: object
+) -> str:
+    return render_prompt(
+        make_show(**show),
+        speakers or [ALEX, SAM],
+        stories(2),
+        CustomStyle("Late-night chat", instructions),
+    )
+
+
+def test_a_custom_style_puts_its_instructions_into_the_prompt() -> None:
+    prompt = custom_prompt("Keep it calm and speak slowly.")
+
+    assert (
+        "## Format: Late-night chat\n\nKeep it calm and speak slowly.\n\n## The speakers" in prompt
+    )
+    assert prompt.startswith('You are the script writer for the podcast "Open Source Weekly"')
+    # What every style shares: the rules and output contract, the speakers and the stories.
+    assert "Reply with JSON only" in prompt and '"segments"' in prompt
+    assert "about 1500 words in total" in prompt
+    assert "- **Alex** (the lead host)" in prompt and "### Story 2: Story title 2" in prompt
+    assert "Keep it calm" not in prompt.split("## Source material")[1]  # only where it belongs
+
+
+def test_the_instructions_may_use_the_values_of_the_prompt() -> None:
+    prompt = custom_prompt(
+        "{{ speakers[0].name }} opens a show about {{ topic }} in {{ language_name }}.\n"
+        "{% if speakers|length == 2 %}Two of you.{% else %}A crowd.{% endif %}"
+    )
+
+    assert "Alex opens a show about open-source AI tooling in English.\nTwo of you." in prompt
+
+
+def test_instructions_are_not_taken_as_a_template_for_the_rest_of_the_prompt() -> None:
+    prompt = custom_prompt("Say: {{ '{{ not a placeholder }}' }}")
+
+    assert "Say: {{ not a placeholder }}" in prompt
+
+
+@pytest.mark.parametrize("style", list(ShowStyle))
+def test_a_built_in_style_copied_into_a_custom_one_gives_the_same_prompt(style: ShowStyle) -> None:
+    """Duplicating a built-in style must change nothing about how the model is told to write."""
+    for speakers in ([ALEX], [ALEX, SAM], [ALEX, SAM, RIO]):
+        built_in = render_prompt(make_show(style=style), speakers, stories(2))
+        copied = render_prompt(
+            make_show(style=style),
+            speakers,
+            stories(2),
+            CustomStyle(builtin_name(style), builtin_instructions(style)),
+        )
+
+        # Only the opening line ("a news briefing about" / "a podcast about") and the name in the
+        # heading differ.
+        def body(prompt: str) -> str:
+            return re.sub(r"^## Format: .*$", "## Format:", prompt.split("\n", 1)[1], flags=re.M)
+
+        assert body(built_in) == body(copied)
+
+
+def test_an_instruction_that_cannot_be_rendered_is_reported() -> None:
+    with pytest.raises(StyleInvalid, match="cannot be used"):
+        custom_prompt("{{ missing_value }}")
+
+
+def test_the_built_in_instructions_are_the_files_the_prompts_include() -> None:
+    for style in ShowStyle:
+        text = builtin_instructions(style)
+        assert text.strip() and "\n\n\n" not in text
+        assert (
+            text
+            in (
+                Path(__file__).parents[2]
+                / "byop"
+                / "pipeline"
+                / "prompts"
+                / "styles"
+                / f"{style.value}.md"
+            ).read_text()
+        )

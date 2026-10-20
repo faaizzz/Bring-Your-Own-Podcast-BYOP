@@ -28,7 +28,8 @@ stories are marked as used by that episode.
 ## The prompt
 
 One Jinja2 template per show style in `byop/pipeline/prompts/` (`news_briefing`, `conversational`,
-`deep_dive`, `interview`), sharing `_speakers.md` (names and personas; the wording changes for 1, 2
+`deep_dive`, `interview`; what a style asks of the model is its own partial in `prompts/styles/`,
+which the [styles](#styles) API returns as it is), sharing `_speakers.md` (names and personas; the wording changes for 1, 2
 and 3-4 speakers), `_rules.md` (language, length, coverage, output format) and `_sources.md` (the
 stories, with merged coverage as "also reported by"). The prompt contains:
 
@@ -39,6 +40,18 @@ stories, with merged coverage as "also reported by"). The prompt contains:
 - the speakers with their personas (the first one is the lead host / interviewer);
 - the show's `prompt_override`, if any, as "Extra instructions from the show's owner";
 - the source material, marked as data to report on rather than instructions to follow.
+
+### Styles
+
+A show uses one of the four built-in styles (`Show.style`) or one of the user's own
+(`Show.custom_style_id`, which wins while set). The built-in instructions are the files in
+`byop/pipeline/prompts/styles/`; a custom style's text is put in their place by `custom.md`, which
+shares everything else with the built-in templates (speakers, rules, the JSON output contract, word
+targets, the sources). The text is rendered like the built-in partials, in a Jinja2 sandbox with the
+same values (`{{ topic }}`, `{{ show_title }}`, `{{ language_name }}`, `{{ speakers[0].name }}`,
+`{% if speakers|length == 1 %}…{% endif %}`, …), so a copy of a built-in style behaves exactly like
+the original (tested for every style and 1–3 speakers). An unknown placeholder or invalid syntax is a
+`422` when the style is saved, and fails the script stage with the reason if it ever breaks later.
 
 Rendered prompts are snapshot-tested (`tests/pipeline/snapshots/`); after changing a template, review
 the diff and accept it with `UPDATE_SNAPSHOTS=1 uv run pytest tests/pipeline/test_script_writer.py`.

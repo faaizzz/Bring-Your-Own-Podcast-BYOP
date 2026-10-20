@@ -60,6 +60,7 @@ Email = Annotated[str, StringConstraints(max_length=320), AfterValidator(_check_
 # Fields that may be cleared with an explicit null; everything else must keep a value.
 NULLABLE_FIELDS = frozenset(
     {
+        "custom_style_id",
         "prompt_override",
         "ranking_hints",
         "llm_provider",
@@ -99,6 +100,8 @@ class ShowCreate(BaseModel):
     target_minutes: TargetMinutes = 10
     # None selects the instance default (see DEFAULT_SHOW_STYLE / DEFAULT_LLM_*).
     style: ShowStyle | None = None
+    # One of the user's own styles, instead of a built-in `style`.
+    custom_style_id: uuid.UUID | None = None
     prompt_override: Annotated[str, StringConstraints(max_length=20000)] | None = None
     ranking_hints: RankingHints | None = None
     llm_provider: LLMProviderName | None = None
@@ -120,6 +123,12 @@ class ShowCreate(BaseModel):
     feed_enabled: bool = True
 
     @model_validator(mode="after")
+    def _one_style(self) -> "ShowCreate":
+        if self.style is not None and self.custom_style_id is not None:
+            raise ValueError("Choose either a built-in style or one of your own, not both")
+        return self
+
+    @model_validator(mode="after")
     def _complete_schedule(self) -> "ShowCreate":
         problem = schedule_problem(
             self.schedule_kind, self.schedule_time, self.schedule_weekday, self.schedule_monthday
@@ -139,6 +148,9 @@ class ShowUpdate(BaseModel):
     language: Language | None = None
     target_minutes: TargetMinutes | None = None
     style: ShowStyle | None = None
+    # Set to switch to one of the user's styles; null (or choosing a built-in `style`) goes back
+    # to a built-in.
+    custom_style_id: uuid.UUID | None = None
     prompt_override: Annotated[str, StringConstraints(max_length=20000)] | None = None
     ranking_hints: RankingHints | None = None
     llm_provider: LLMProviderName | None = None
@@ -160,6 +172,12 @@ class ShowUpdate(BaseModel):
     feed_enabled: bool | None = None
 
     @model_validator(mode="after")
+    def _one_style(self) -> "ShowUpdate":
+        if self.style is not None and self.custom_style_id is not None:
+            raise ValueError("Choose either a built-in style or one of your own, not both")
+        return self
+
+    @model_validator(mode="after")
     def _only_optional_fields_may_be_null(self) -> "ShowUpdate":
         for name in self.model_fields_set - NULLABLE_FIELDS:
             if getattr(self, name) is None:
@@ -178,6 +196,8 @@ class ShowResponse(BaseModel):
     language: str
     target_minutes: int
     style: ShowStyle
+    # Set when the show uses one of the user's own styles (then `style` is not used).
+    custom_style_id: uuid.UUID | None
     prompt_override: str | None
     ranking_hints: str | None
     llm_provider: str | None

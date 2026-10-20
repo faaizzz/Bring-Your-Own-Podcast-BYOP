@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from byop.config import Settings
-from byop.models import Episode, Run, Show, Speaker
+from byop.models import Episode, Run, Show, Speaker, Style
 from byop.models.enums import CredentialProvider, RunStatus
 from byop.providers.llm import UnsupportedLLMProvider, get_llm
 from byop.schemas.show import ShowCreate, ShowUpdate, schedule_problem
@@ -173,6 +173,15 @@ async def verify_model(
     return []
 
 
+async def _check_custom_style(
+    session: AsyncSession, user_id: uuid.UUID, style_id: uuid.UUID
+) -> None:
+    """The style must be one of the user's own."""
+    if await session.scalar(select(Style.id).where(Style.id == style_id, Style.user_id == user_id)):
+        return
+    raise ShowInvalid("That style does not exist. Choose one of your styles, or a built-in one.")
+
+
 def _check_model_pair(provider: str | None, model: str | None) -> None:
     if (provider is None) != (model is None):
         raise ShowInvalid("llm_provider and llm_model must be set together")
@@ -198,6 +207,8 @@ async def create_show(
         warnings += await verify_model(
             resolver, redis, user_id, values["llm_provider"], values["llm_model"]
         )
+    if values["custom_style_id"] is not None:
+        await _check_custom_style(session, user_id, values["custom_style_id"])
     if values["style"] is None:
         values["style"] = settings.default_show_style
 
@@ -260,6 +271,11 @@ async def update_show(
         if await session.scalar(select(Show.id).where(Show.slug == new_slug)):
             raise ShowConflict(f"The slug '{new_slug}' is already taken")
         changes["slug"] = new_slug
+
+    if changes.get("custom_style_id") is not None:
+        await _check_custom_style(session, user_id, changes["custom_style_id"])
+    elif "style" in changes and "custom_style_id" not in changes:
+        changes["custom_style_id"] = None  # choosing a built-in style leaves the custom one
 
     if "llm_provider" in changes or "llm_model" in changes:
         provider = changes.get("llm_provider", show.llm_provider)

@@ -37,6 +37,7 @@ def response_for(view: ShowView, settings: Settings) -> ShowResponse:
         language=show.language,
         target_minutes=show.target_minutes,
         style=show.style,
+        custom_style_id=show.custom_style_id,
         prompt_override=show.prompt_override,
         ranking_hints=show.ranking_hints,
         llm_provider=show.llm_provider,

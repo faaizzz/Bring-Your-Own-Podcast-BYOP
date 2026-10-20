@@ -29,6 +29,7 @@ EXPECTED_TABLES = {
     "price_overrides",
     "provider_connections",
     "user_settings",
+    "styles",
 }
 
 
@@ -318,5 +319,53 @@ async def test_upgrade_from_0012_adds_the_wait_settings_without_changing_anythin
             assert row["request_intervals"] == {}
             assert row["discovery_llm_model"] == "perplexity/sonar"  # the earlier setting survived
             assert await conn.scalar(text("SELECT count(*) FROM shows")) == 2
+    finally:
+        await engine.dispose()
+
+
+# --- 0014: styles -------------------------------------------------------------------------------
+
+
+async def test_upgrade_from_0013_keeps_every_shows_built_in_style(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db, "0013")
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.begin() as conn:
+            await _seed_v010_shape(conn, "")
+            await conn.execute(text("UPDATE shows SET style = 'interview' WHERE slug = 'b'"))
+
+        await asyncio.to_thread(migrate, empty_db)
+
+        async with engine.connect() as conn:
+            rows = (
+                await conn.execute(
+                    text("SELECT slug, style, custom_style_id FROM shows ORDER BY slug")
+                )
+            ).all()
+            assert [tuple(r) for r in rows] == [
+                ("a", "news_briefing", None),
+                ("b", "interview", None),
+            ]
+            assert await conn.scalar(text("SELECT count(*) FROM styles")) == 0
+            assert await conn.scalar(text("SELECT count(*) FROM speakers")) == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_downgrade_from_0014_drops_the_styles(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db)
+    await asyncio.to_thread(migrate, empty_db, "0013", downgrade=True)
+
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.connect() as conn:
+            assert "styles" not in await _tables(conn)
+            columns = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM information_schema.columns "
+                    "WHERE table_name = 'shows' AND column_name = 'custom_style_id'"
+                )
+            )
+            assert columns == 0
     finally:
         await engine.dispose()

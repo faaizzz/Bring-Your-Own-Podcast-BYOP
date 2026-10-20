@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from byop.models import Episode, Item, Speaker
+from byop.models import Episode, Item, Speaker, Style
 from byop.models.enums import EpisodeStatus, EventLevel
 from byop.pipeline.context import RunContext
 from byop.pipeline.errors import StageFailed, TransientStageError
@@ -11,12 +11,14 @@ from byop.providers.llm import LLMError, LLMResponseError, UnsupportedLLMProvide
 from byop.services.credentials import CredentialDecryptionError, ProviderNotConfigured
 from byop.services.llm_choice import show_model
 from byop.services.script_writer import (
+    CustomStyle,
     ScriptInvalid,
     SpeakerSpec,
     Story,
     WrittenScript,
     write_script,
 )
+from byop.services.styles import StyleInvalid
 
 SCRIPT_VERSION = 1
 TITLE_MAX = 300
@@ -100,11 +102,26 @@ def _script_json(
     }
 
 
+async def _custom_style(ctx: RunContext) -> CustomStyle | None:
+    """The user's own style the show uses, if any."""
+    if ctx.show.custom_style_id is None:
+        return None
+    style = await ctx.session.scalar(
+        select(Style).where(Style.id == ctx.show.custom_style_id, Style.user_id == ctx.user_id)
+    )
+    if style is None:  # the database does not allow deleting a style in use
+        raise StageFailed(
+            "The show's style no longer exists. Choose a style in the show's settings."
+        )
+    return CustomStyle(style.name, style.instructions)
+
+
 async def run(ctx: RunContext) -> None:
     """Write the episode's script and keep it, with its title and description, as a draft."""
     await ctx.checkpoint()
     stories = await _stories(ctx)
     speakers = await _speakers(ctx)
+    custom_style = await _custom_style(ctx)
     chosen = show_model(ctx.settings, ctx.show)
     if chosen is None:
         raise StageFailed(
@@ -123,7 +140,11 @@ async def run(ctx: RunContext) -> None:
     await ctx.progress(0.1)
 
     try:
-        written = await write_script(llm, model, ctx.show, speakers, stories, run_id=ctx.run.id)
+        written = await write_script(
+            llm, model, ctx.show, speakers, stories, run_id=ctx.run.id, custom_style=custom_style
+        )
+    except StyleInvalid as exc:
+        raise StageFailed(f"The show's style cannot be used: {exc}") from exc
     except ScriptInvalid as exc:
         raise StageFailed(f"The language model did not write a usable script: {exc}") from exc
     except LLMResponseError as exc:

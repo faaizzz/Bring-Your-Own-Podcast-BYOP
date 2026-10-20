@@ -28,6 +28,8 @@ export const showSchema = z.object({
   language: z.string(),
   target_minutes: z.number(),
   style: z.enum(STYLES),
+  /** Set when the show uses one of your own styles (then `style` is not used). */
+  custom_style_id: z.string().nullable(),
   prompt_override: z.string().nullable(),
   ranking_hints: z.string().nullable(),
   llm_provider: z.string().nullable(),
