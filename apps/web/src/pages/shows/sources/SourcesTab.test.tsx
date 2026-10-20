@@ -165,10 +165,9 @@ describe('the discovery model', () => {
     const notice = await within(dialog).findByTestId('discovery-model');
     expect(notice).toHaveTextContent('No web search');
     expect(notice).toHaveTextContent("The model 'gpt-4o' on OpenAI cannot search the web");
-    expect(within(notice).getByRole('link', { name: 'Change the show’s model' })).toHaveAttribute(
-      'href',
-      '/shows/s1/settings',
-    );
+    expect(
+      within(notice).getByRole('link', { name: 'Change the discovery model' }),
+    ).toHaveAttribute('href', '/settings/integrations#discovery');
     expect(callsTo(fetchMock, 'GET /api/sources/discover/model')[0]?.[0]).toBeDefined();
   });
 

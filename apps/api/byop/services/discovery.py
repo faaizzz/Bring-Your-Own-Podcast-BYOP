@@ -15,7 +15,7 @@ from byop.config import Settings
 from byop.models import Source
 from byop.models.enums import CredentialProvider, SourceKind
 from byop.providers.llm import CallMetadata, Message, UnsupportedLLMProvider, get_llm
-from byop.schemas.discovery import DiscoveredSource, RawCandidate, RawCandidates
+from byop.schemas.discovery import DiscoveredSource, DiscoveryModel, RawCandidate, RawCandidates
 from byop.services.credentials import (
     CredentialDecryptionError,
     CredentialResolver,
@@ -49,6 +49,9 @@ class DiscoveryRequest:
     language: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
+    # The model chosen in Settings (`load_discovery_choice`); it comes before everything else.
+    discovery_llm_provider: str | None = None
+    discovery_llm_model: str | None = None
 
 
 def search_model_id(provider: ProviderRef, model: str) -> str:
@@ -64,14 +67,15 @@ def search_model_id(provider: ProviderRef, model: str) -> str:
 
 
 # Where the discovery model came from, in the order they are tried.
-ModelSource = Literal["discovery_setting", "show", "default"]
+ModelSource = Literal["user_setting", "discovery_setting", "show", "default"]
 
 
 def choose_model(
     settings: Settings, request: DiscoveryRequest
 ) -> tuple[ProviderRef, str, ModelSource]:
-    """The discovery model (DISCOVERY_LLM_*), then the show's, then the instance default."""
+    """The model chosen in Settings, then DISCOVERY_LLM_*, then the show's, then the default."""
     choices: tuple[tuple[str | None, str | None, ModelSource], ...] = (
+        (request.discovery_llm_provider, request.discovery_llm_model, "user_setting"),
         (settings.discovery_llm_provider, settings.discovery_llm_model, "discovery_setting"),
         (request.llm_provider, request.llm_model, "show"),
         (settings.default_llm_provider, settings.default_llm_model, "default"),
@@ -80,13 +84,13 @@ def choose_model(
         if provider and model:
             return ProviderRef.parse(provider), model, source
     raise DiscoveryUnavailable(
-        "No language model is set up for discovery. Choose one for the show, or set "
-        "DEFAULT_LLM_PROVIDER and DEFAULT_LLM_MODEL (or DISCOVERY_LLM_*) in .env."
+        "No language model is set up for discovery. Choose one under Settings › Integrations, "
+        "choose one for the show, or set DEFAULT_LLM_PROVIDER and DEFAULT_LLM_MODEL in .env."
     )
 
 
 def pick_model(settings: Settings, request: DiscoveryRequest) -> tuple[ProviderRef, str]:
-    """The discovery model, then the show's, then the instance default."""
+    """The model `choose_model` picks, without where it came from."""
     provider, model, _ = choose_model(settings, request)
     return provider, model
 
@@ -115,6 +119,17 @@ async def plan_discovery(
     provider, model, source = choose_model(settings, request)
     check = await check_web_search(resolver, redis, request.user_id, provider, model)
     return DiscoveryPlan(provider, model, source, check)
+
+
+def describe_plan(plan: DiscoveryPlan) -> DiscoveryModel:
+    return DiscoveryModel(
+        provider=str(plan.provider),
+        provider_label=plan.check.provider_label,
+        model=plan.model,
+        source=plan.source,
+        web_search=plan.check.support.value,
+        message=plan.check.message,
+    )
 
 
 async def precheck_discovery(

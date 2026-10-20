@@ -20,6 +20,7 @@ from byop.schemas.source import (
 from byop.services import sources as service
 from byop.services.discovery import DiscoveryRefused, DiscoveryRequest, precheck_discovery
 from byop.services.shows import ShowNotFound, get_show
+from byop.services.user_settings import load_discovery_choice
 from byop.services.validation import FieldValidationError, error_detail
 from byop.tasks.discovery import enqueue_discovery
 
@@ -123,6 +124,7 @@ async def discover_sources(
         show = (await get_show(session, user.id, show_id)).show
     except ShowNotFound as exc:
         raise _http_error(exc) from exc
+    chosen = await load_discovery_choice(session, user.id)
     request = DiscoveryRequest(
         user_id=user.id,
         show_id=show.id,
@@ -130,6 +132,8 @@ async def discover_sources(
         language=show.language,
         llm_provider=show.llm_provider,
         llm_model=show.llm_model,
+        discovery_llm_provider=chosen.provider,
+        discovery_llm_model=chosen.model,
     )
     try:
         warnings = await precheck_discovery(resolver, redis, settings, request)

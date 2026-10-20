@@ -23,16 +23,24 @@ function modelOption(model: ModelInfo): SelectOption {
   };
 }
 
-function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element {
-  const {
-    setValue,
-    control,
-    formState: { errors },
-  } = useFormContext<ShowFormValues>();
-  const value = useWatch({ control, name: 'llm_model' });
+type ModelPickerProps = {
+  provider: LlmProvider;
+  value: string;
+  onChange: (model: string) => void;
+  error?: string;
+  inputId?: string;
+};
+
+/** Pick a model of a provider from its list (with prices and a web-search badge), or type one. */
+export function ModelPicker({
+  provider,
+  value,
+  onChange,
+  error,
+  inputId = 'model-select',
+}: ModelPickerProps): React.JSX.Element {
   const models = useModels(provider);
   const labelOf = useProviderLabel();
-  const error = errors.llm_model?.message;
   const list = models.data ?? [];
   const selected = list.find((model) => model.id === value);
 
@@ -55,17 +63,15 @@ function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element
         </Alert>
       )}
       <Form.Group className="mb-3">
-        <Form.Label htmlFor="model-select">Model</Form.Label>
+        <Form.Label htmlFor={inputId}>Model</Form.Label>
         <SearchableSelect
-          inputId="model-select"
+          inputId={inputId}
           value={value}
           options={list.map(modelOption)}
           placeholder="Choose or type a model…"
           allowCustom
           isInvalid={error !== undefined}
-          onChange={(id) => {
-            setValue('llm_model', id, { shouldValidate: true, shouldDirty: true });
-          }}
+          onChange={onChange}
         />
         {error !== undefined && <div className="invalid-feedback d-block">{error}</div>}
         {selected && (
@@ -79,6 +85,25 @@ function ModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element
         )}
       </Form.Group>
     </>
+  );
+}
+
+function FormModelPicker({ provider }: { provider: LlmProvider }): React.JSX.Element {
+  const {
+    setValue,
+    control,
+    formState: { errors },
+  } = useFormContext<ShowFormValues>();
+  const value = useWatch({ control, name: 'llm_model' });
+  return (
+    <ModelPicker
+      provider={provider}
+      value={value}
+      error={errors.llm_model?.message}
+      onChange={(id) => {
+        setValue('llm_model', id, { shouldValidate: true, shouldDirty: true });
+      }}
+    />
   );
 }
 
@@ -100,7 +125,7 @@ export function ModelStep(): React.JSX.Element {
           setValue('llm_model', '');
         }}
       />
-      {provider !== '' && <ModelPicker provider={provider} />}
+      {provider !== '' && <FormModelPicker provider={provider} />}
     </>
   );
 }

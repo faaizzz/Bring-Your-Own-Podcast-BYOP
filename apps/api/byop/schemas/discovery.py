@@ -62,8 +62,8 @@ class DiscoveryModel(BaseModel):
     provider: str
     provider_label: str
     model: str
-    # Where it comes from: DISCOVERY_LLM_*, the show's own choice, or the instance default.
-    source: Literal["discovery_setting", "show", "default"]
+    # Where it comes from: Settings, DISCOVERY_LLM_*, the show's own choice or the default.
+    source: Literal["user_setting", "discovery_setting", "show", "default"]
     web_search: Literal["yes", "no", "unknown"]
     # Why discovery would be refused (`no`) or what could not be confirmed (`unknown`).
     message: str | None = None

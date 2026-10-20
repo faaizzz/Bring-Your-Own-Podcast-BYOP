@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from dataclasses import replace
 
 import structlog
 from redis.asyncio import Redis
@@ -17,6 +18,7 @@ from byop.services.discovery import (
 )
 from byop.services.discovery_errors import explain_llm_error, explain_unexpected
 from byop.services.discovery_jobs import create_job, load_job, save_job
+from byop.services.user_settings import load_discovery_choice
 from byop.services.web_search import PROVIDER_LABELS
 from byop.tasks.runtime import task_deps
 from byop.worker import celery_app
@@ -36,6 +38,11 @@ async def run_discovery_job(
     record = await load_job(redis, job_id)
     if record is None:  # expired before the worker got to it
         return
+    # The Settings choice is read when the job runs, so a change made while it waited counts.
+    chosen = await load_discovery_choice(session, request.user_id)
+    request = replace(
+        request, discovery_llm_provider=chosen.provider, discovery_llm_model=chosen.model
+    )
     record.status = DiscoveryStatus.RUNNING
     await save_job(redis, job_id, record)
     try:

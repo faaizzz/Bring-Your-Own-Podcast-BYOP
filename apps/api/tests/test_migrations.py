@@ -28,6 +28,7 @@ EXPECTED_TABLES = {
     "usage_events",
     "price_overrides",
     "provider_connections",
+    "user_settings",
 }
 
 
@@ -204,5 +205,80 @@ async def test_downgrade_restores_the_single_credential(empty_db: str) -> None:
             assert decrypt_json(str(stored), SECRET)["base_url"] == "http://ollama:11434/v1"
             ref = await conn.scalar(text("SELECT llm_provider FROM shows WHERE slug = 'a'"))
             assert ref == "openai_compatible"
+    finally:
+        await engine.dispose()
+
+
+# --- 0012: user settings --------------------------------------------------------------------------
+
+
+async def test_upgrade_from_0011_adds_user_settings_and_keeps_everything_else(
+    empty_db: str,
+) -> None:
+    await asyncio.to_thread(migrate, empty_db, "0011")
+    token = encrypt_json({"api_key": None, "headers": []}, SECRET)
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.begin() as conn:
+            user_id = await _seed_v010_shape(conn, token)
+
+        await asyncio.to_thread(migrate, empty_db)
+
+        async with engine.connect() as conn:
+            assert "user_settings" in await _tables(conn)
+            assert await conn.scalar(text("SELECT count(*) FROM user_settings")) == 0
+            refs = (await conn.execute(text("SELECT slug, llm_provider FROM shows"))).all()
+            assert sorted(tuple(r) for r in refs) == [("a", "openrouter"), ("b", "openai")]
+            assert await conn.scalar(text("SELECT count(*) FROM speakers")) == 1
+            # A row can be saved for the existing user, once.
+            await conn.execute(
+                text(
+                    "INSERT INTO user_settings (user_id, discovery_llm_provider, "
+                    "discovery_llm_model) VALUES (:u, 'openrouter', 'perplexity/sonar')"
+                ),
+                {"u": user_id},
+            )
+            with pytest.raises(Exception, match="uq_user_settings_user_id"):
+                await conn.execute(
+                    text("INSERT INTO user_settings (user_id) VALUES (:u)"), {"u": user_id}
+                )
+    finally:
+        await engine.dispose()
+
+
+async def _seed_v010_shape(conn: AsyncConnection, _token: str) -> uuid.UUID:
+    """A user with two shows and a speaker, as an existing installation has."""
+    user_id = uuid.uuid4()
+    await conn.execute(
+        text("INSERT INTO users (id, email, password_hash) VALUES (:id, 'a@example.com', 'x')"),
+        {"id": user_id},
+    )
+    for slug, provider in (("a", "openrouter"), ("b", "openai")):
+        await conn.execute(
+            text(
+                "INSERT INTO shows (user_id, title, slug, topic, llm_provider, llm_model) "
+                "VALUES (:u, :slug, :slug, 't', :p, 'm')"
+            ),
+            {"u": user_id, "slug": slug, "p": provider},
+        )
+    show_id = await conn.scalar(text("SELECT id FROM shows WHERE slug = 'a'"))
+    await conn.execute(
+        text(
+            "INSERT INTO speakers (user_id, show_id, position, name, tts_provider, voice_id) "
+            "VALUES (:u, :s, 0, 'Alex', 'kokoro', 'af_bella')"
+        ),
+        {"u": user_id, "s": show_id},
+    )
+    return user_id
+
+
+async def test_downgrade_from_0012_drops_the_table(empty_db: str) -> None:
+    await asyncio.to_thread(migrate, empty_db)
+    await asyncio.to_thread(migrate, empty_db, "0011", downgrade=True)
+
+    engine = create_async_engine(empty_db)
+    try:
+        async with engine.connect() as conn:
+            assert "user_settings" not in await _tables(conn)
     finally:
         await engine.dispose()

@@ -33,9 +33,9 @@ PROVIDER_LABELS = {
 }
 
 HOW_TO_FIX = (
-    "Choose a model that can search the web for this show (on OpenRouter, any text model works "
-    "through the ':online' plugin and 'perplexity/sonar' searches natively), or set "
-    "DISCOVERY_LLM_PROVIDER and DISCOVERY_LLM_MODEL in .env to a model that can."
+    "Choose a model that can search the web under Settings › Integrations › Discovery model (on "
+    "OpenRouter, any text model works through the ':online' plugin and 'perplexity/sonar' "
+    "searches natively), or set DISCOVERY_LLM_PROVIDER and DISCOVERY_LLM_MODEL in .env."
 )
 
 
@@ -127,8 +127,9 @@ async def check_web_search(
                 model,
                 f"the connection '{label}' is not marked as able to search the web.",
                 "If the server's models can search, turn on 'Web search' for the connection under "
-                "Settings › Integrations; otherwise choose a model that can, or set "
-                "DISCOVERY_LLM_PROVIDER and DISCOVERY_LLM_MODEL in .env.",
+                "Settings › Integrations; otherwise choose a model that can under Settings › "
+                "Integrations › Discovery model, or set DISCOVERY_LLM_PROVIDER and "
+                "DISCOVERY_LLM_MODEL in .env.",
             ),
         )
     if ref.builtin is CredentialProvider.OPENROUTER:
@@ -143,8 +144,8 @@ async def check_web_search(
                 label,
                 model,
                 "only OpenAI's search models (such as gpt-4o-search-preview) do.",
-                "Choose one of them, or a model on OpenRouter, for this show, or set "
-                "DISCOVERY_LLM_PROVIDER and DISCOVERY_LLM_MODEL in .env.",
+                "Choose one of them, or a model on OpenRouter, under Settings › Integrations › "
+                "Discovery model, or set DISCOVERY_LLM_PROVIDER and DISCOVERY_LLM_MODEL in .env.",
             ),
         )
     return SearchCheck(

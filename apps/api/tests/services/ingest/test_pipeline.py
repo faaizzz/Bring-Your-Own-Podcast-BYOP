@@ -16,6 +16,7 @@ from byop.models import Item, Run, Source, User
 from byop.models.enums import RunTrigger, SourceKind
 from byop.services.credentials import CredentialResolver
 from byop.services.ingest.pipeline import IngestResult, ShowMissing, ingest_show
+from byop.services.user_settings import save_discovery_choice
 from tests.helpers import make_settings
 from tests.models.factories import make_show, make_user
 from tests.providers.llm.helpers import OPENROUTER_URL, body_of, completion
@@ -515,6 +516,20 @@ async def test_web_search_sources_use_the_model_and_the_same_filters(
     body = body_of(route)
     assert body["model"] == "vendor/model:online"
     assert "rust language news" in json.dumps(body["messages"])
+
+
+@respx.mock
+async def test_web_search_sources_use_the_model_saved_in_settings(
+    db_session: AsyncSession, admin_user: User
+) -> None:
+    show = await make_show(db_session, admin_user)
+    await add_source(db_session, admin_user, show.id, SourceKind.WEB_SEARCH, "rust language news")
+    await save_discovery_choice(db_session, admin_user.id, "openrouter", "perplexity/sonar")
+    route = respx.post(OPENROUTER_URL).respond(200, json=completion(json.dumps({"items": []})))
+
+    await run(db_session, show.id, search_settings())
+
+    assert body_of(route)["model"] == "perplexity/sonar"  # not the default, not ':online'
 
 
 @respx.mock

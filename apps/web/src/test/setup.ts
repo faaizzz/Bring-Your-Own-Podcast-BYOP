@@ -9,6 +9,9 @@ configure({ asyncUtilTimeout: 5000 });
 URL.createObjectURL = vi.fn(() => 'blob:mock');
 URL.revokeObjectURL = vi.fn();
 
+// jsdom does not lay anything out, so it cannot scroll.
+Element.prototype.scrollIntoView = vi.fn();
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();

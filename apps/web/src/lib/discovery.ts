@@ -43,8 +43,8 @@ export const discoveryModelSchema = z.object({
   provider: z.string(),
   provider_label: z.string(),
   model: z.string(),
-  /** Where the model comes from: DISCOVERY_LLM_*, the show's own choice, or the default. */
-  source: z.enum(['discovery_setting', 'show', 'default']),
+  /** Where the model comes from: Settings, DISCOVERY_LLM_*, the show's own choice or the default. */
+  source: z.enum(['user_setting', 'discovery_setting', 'show', 'default']),
   web_search: z.enum(['yes', 'no', 'unknown']),
   message: z.string().nullish(),
 });

@@ -31,6 +31,7 @@ function keyOf(candidate: DiscoveredSource): string {
 }
 
 const SOURCE_TEXT = {
+  user_setting: 'chosen in Settings',
   discovery_setting: 'set by DISCOVERY_LLM_PROVIDER / DISCOVERY_LLM_MODEL',
   show: 'the show’s model',
   default: 'the instance default model',
@@ -40,26 +41,18 @@ const SOURCE_TEXT = {
 function ModelNotice({
   model,
   error,
-  target,
 }: {
   model: DiscoveryModel | undefined;
   error: string | undefined;
-  target: DiscoveryTarget;
 }): React.JSX.Element | null {
   if (error !== undefined) {
     return (
       <Alert variant="warning" role="note" data-testid="discovery-model">
-        {error}
+        {error} <Link to="/settings/integrations#discovery">Choose a discovery model</Link>
       </Alert>
     );
   }
   if (!model) return null;
-  const change =
-    target.kind === 'show' ? (
-      <Link to={`/shows/${target.showId}/settings`}>Change the show’s model</Link>
-    ) : (
-      'Change the model in the Models step.'
-    );
   return (
     <div className="mb-3" data-testid="discovery-model">
       <div className="small">
@@ -67,7 +60,8 @@ function ModelNotice({
         <span className="text-muted">({SOURCE_TEXT[model.source]})</span>{' '}
         {model.web_search === 'yes' && <Badge bg="success">Web search</Badge>}
         {model.web_search === 'unknown' && <Badge bg="secondary">Web search not confirmed</Badge>}
-        {model.web_search === 'no' && <Badge bg="danger">No web search</Badge>}
+        {model.web_search === 'no' && <Badge bg="danger">No web search</Badge>}{' '}
+        <Link to="/settings/integrations#discovery">Change the discovery model</Link>
       </div>
       {model.web_search !== 'yes' && model.message && (
         <Alert
@@ -75,8 +69,7 @@ function ModelNotice({
           role="note"
           className="mt-2 mb-0"
         >
-          {model.message} {change}
-          {model.source === 'discovery_setting' && ' (or change DISCOVERY_LLM_* in .env)'}
+          {model.message}
         </Alert>
       )}
     </div>
@@ -152,7 +145,6 @@ export function DiscoverSources({
       <ModelNotice
         model={modelInfo.data}
         error={modelInfo.isError ? modelInfo.error.message : undefined}
-        target={target}
       />
       {start.isError && <Alert variant="danger">{start.error.message}</Alert>}
       {(job.data?.warnings ?? start.data?.warnings ?? []).map((warning) => (

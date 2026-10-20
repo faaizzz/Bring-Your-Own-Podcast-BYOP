@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Col, Row, Spinner } from 'react-bootstrap';
+import { useLocation } from 'react-router-dom';
 
 import { ApiError } from '../../lib/api';
 import {
@@ -16,6 +17,7 @@ import {
 import { useToast } from '../../lib/toast';
 import { MainCard } from '../../layout/MainCard';
 import { ConnectionsSection } from './ConnectionsSection';
+import { DiscoveryModelCard } from './DiscoveryModelCard';
 import { IntegrationCard } from './IntegrationCard';
 import { IntegrationModal } from './IntegrationModal';
 
@@ -36,6 +38,12 @@ export default function IntegrationsPage(): React.JSX.Element {
   useEffect(() => {
     document.title = 'Integrations | BYOP';
   }, []);
+
+  // A link like /settings/integrations#discovery lands on the card once it is on the page.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash !== '') document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash]);
 
   const runTest = async (id: ProviderId): Promise<void> => {
     const label = PROVIDERS[id].label;
@@ -122,6 +130,7 @@ export default function IntegrationsPage(): React.JSX.Element {
         </Row>
       )}
       <ConnectionsSection />
+      <DiscoveryModelCard />
       {editing && editingIntegration && (
         <IntegrationModal
           provider={editing}

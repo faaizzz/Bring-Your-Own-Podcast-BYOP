@@ -5,6 +5,19 @@ All notable changes to BYOP are listed here. The format follows
 [Semantic Versioning](https://semver.org/). When a release is tagged, replace "unreleased" in its
 heading with the date (see [docs/releasing.md](docs/releasing.md)).
 
+## [Unreleased]
+
+### Added
+
+- **Discovery model in Settings:** choose the model that searches the web for sources under
+  Settings › Integrations › Discovery model. It takes precedence over `DISCOVERY_LLM_*`, the show's
+  model and the instance default, is checked for web search when saved, and is used by the Discover
+  dialog, the wizard, the worker and web-search sources (`GET/PUT/DELETE /api/settings/discovery-model`).
+  New table `user_settings` (migration `0012`) for per-user defaults.
+- **Connections** (any number of OpenAI-compatible servers with custom headers), **searchable
+  dropdowns** everywhere, **web-search validation** for source discovery and minimal vs. full builds
+  (`make up` / `make up-full`).
+
 ## [0.1.0] - 2026-10-19
 
 The first release: a self-hosted app that turns your sources into a scheduled, multi-speaker AI

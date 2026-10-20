@@ -30,6 +30,7 @@ from byop.services.credentials import (
     mask_secret,
 )
 from byop.services.provider_ref import CONNECTION_PREFIX, InvalidProviderRef, ProviderRef
+from byop.services.user_settings import discovery_choice_uses
 from byop.services.validation import FieldError
 
 TIMEOUT_SECONDS = 10.0
@@ -55,6 +56,8 @@ def _ref(connection_id: uuid.UUID) -> str:
 class Usage:
     shows: int
     speakers: int
+    # The discovery model saved in Settings (0 or 1) is a language-model use too.
+    settings: int = 0
 
 
 async def usage_of(session: AsyncSession, user_id: uuid.UUID, connection_id: uuid.UUID) -> Usage:
@@ -72,7 +75,21 @@ async def usage_of(session: AsyncSession, user_id: uuid.UUID, connection_id: uui
             or_(Speaker.tts_provider == ref, Speaker.fallback_tts_provider == ref),
         )
     )
-    return Usage(shows or 0, speakers or 0)
+    chosen = await discovery_choice_uses(session, user_id, connection_id)
+    return Usage(shows or 0, speakers or 0, int(chosen))
+
+
+def _uses(shows: int, speakers: int, settings: int) -> str:
+    parts = [
+        f"{count} {noun}"
+        for count, noun in (
+            (shows, "show(s)"),
+            (speakers, "speaker(s)"),
+            (settings, "the discovery model setting"),
+        )
+        if count
+    ]
+    return " and ".join(parts)
 
 
 def _view(
@@ -192,15 +209,19 @@ async def update_connection(
         raise ConnectionConflict(f"There is already a connection called '{data.name}'")
 
     usage = await usage_of(session, user_id, record.id)
-    for flag, used in (("llm", usage.shows), ("tts", usage.speakers)):
-        if getattr(data, flag) is False and used:
-            raise ConnectionConflict(
-                f"Cannot switch off {'language models' if flag == 'llm' else 'voices'}: "
-                f"{used} {'show' if flag == 'llm' else 'speaker'}(s) use this connection that way"
-            )
-    if data.enabled is False and (usage.shows or usage.speakers):
+    if data.llm is False and (usage.shows or usage.settings):
         raise ConnectionConflict(
-            "Cannot disable a connection that shows or speakers use; move them first"
+            "Cannot switch off language models: "
+            f"{_uses(usage.shows, 0, usage.settings)} this connection that way"
+        )
+    if data.tts is False and usage.speakers:
+        raise ConnectionConflict(
+            f"Cannot switch off voices: {usage.speakers} speaker(s) use this connection that way"
+        )
+    if data.enabled is False and (usage.shows or usage.speakers or usage.settings):
+        raise ConnectionConflict(
+            "Cannot disable a connection that shows, speakers or the discovery model setting "
+            "use; move them first"
         )
 
     # Secrets are rewritten only when one of them is part of the request.
@@ -245,9 +266,9 @@ async def delete_connection(
 ) -> None:
     record = await get_record(session, user_id, connection_id)
     usage = await usage_of(session, user_id, record.id)
-    if usage.shows or usage.speakers:
+    if usage.shows or usage.speakers or usage.settings:
         raise ConnectionConflict(
-            f"'{record.name}' is used by {usage.shows} show(s) and {usage.speakers} speaker(s). "
+            f"'{record.name}' is used by {_uses(usage.shows, usage.speakers, usage.settings)}. "
             "Choose another provider for them first."
         )
     await session.delete(record)

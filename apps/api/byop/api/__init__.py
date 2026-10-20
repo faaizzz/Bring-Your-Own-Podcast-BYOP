@@ -18,6 +18,7 @@ from byop.api import (
     shows,
     sources,
     speakers,
+    user_settings,
     voices,
 )
 from byop.api.deps import current_user
@@ -51,5 +52,6 @@ protected.include_router(costs.pricing_router)
 protected.include_router(history.router)
 protected.include_router(runs.router)
 protected.include_router(runs.show_router)
+protected.include_router(user_settings.router)
 protected.include_router(voices.router)
 api_router.include_router(protected)

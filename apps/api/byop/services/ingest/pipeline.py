@@ -27,6 +27,7 @@ from byop.services.ingest.collect import (
 )
 from byop.services.ingest.language import detect_language, matches_language
 from byop.services.ingest.store import Candidate, StoreResult, store_items
+from byop.services.user_settings import load_discovery_choice
 
 log = structlog.get_logger(__name__)
 
@@ -74,15 +75,18 @@ class IngestResult:
 
 
 async def _search_model(
-    resolver: CredentialResolver, settings: Settings, show: Show
+    session: AsyncSession, resolver: CredentialResolver, settings: Settings, show: Show
 ) -> SearchModel | None:
     """The model for `web_search` sources, or None when none is set up."""
+    chosen = await load_discovery_choice(session, show.user_id)
     request = DiscoveryRequest(
         user_id=show.user_id,
         show_id=show.id,
         topic=show.topic,
         llm_provider=show.llm_provider,
         llm_model=show.llm_model,
+        discovery_llm_provider=chosen.provider,
+        discovery_llm_model=chosen.model,
     )
     try:
         provider, model = pick_model(settings, request)
@@ -162,7 +166,7 @@ async def ingest_show(
     )
     result = IngestResult()
     search = (
-        await _search_model(resolver, settings, show)
+        await _search_model(session, resolver, settings, show)
         if any(s.kind is SourceKind.WEB_SEARCH for s in sources)
         else None
     )

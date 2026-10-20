@@ -71,10 +71,28 @@ How it works (`byop/services/discovery.py`, run by the Celery worker):
 3. One to three `web_search` queries are always proposed (a baseline is made from the topic if the
    model gave none).
 
-The model is chosen as: `DISCOVERY_LLM_PROVIDER` + `DISCOVERY_LLM_MODEL` if set, else the show's
-own model, else `DEFAULT_LLM_PROVIDER` + `DEFAULT_LLM_MODEL`. If none is set the job fails with
-a message saying so. The call is logged and attributed to the show with `stage=discovery`
+The model is chosen as: the **Discovery model** saved in Settings, else `DISCOVERY_LLM_PROVIDER` +
+`DISCOVERY_LLM_MODEL` from `.env`, else the show's own model, else `DEFAULT_LLM_PROVIDER` +
+`DEFAULT_LLM_MODEL`. If none is set the job fails with a message saying so. The call is logged and attributed to the show with `stage=discovery`
 (usage capture records it with the others).
+
+### The discovery model (Settings)
+
+**Settings › Integrations › Discovery model** (anchor `#discovery`) lets you pick the provider and
+model that search the web, with the same model list (prices, a *Web search* badge) as a show's
+model step. The card shows the model in use and where it comes from (*chosen here*, `.env`, the
+show, the instance default). *Save* checks that the model can search: a model that cannot is
+refused with the message below, one whose ability cannot be confirmed is saved with a warning.
+*Use the show's model* forgets the choice, so discovery falls back to `.env`, then the show, then
+the default. The choice belongs to your account and is read when a job runs, so the Discover
+dialog, the wizard, the worker and the ingest stage (web-search sources) all use it. A connection
+chosen here counts as in use: it cannot be deleted or switched off until you pick another model.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/settings/discovery-model` | the saved `provider`/`model` (null when unset), `effective` (what discovery would use now, with `source` `user_setting`, `discovery_setting`, `show` or `default`, and the web-search answer) |
+| `PUT /api/settings/discovery-model` | save `{provider, model}`; `422` when the model cannot search, `warnings` when that cannot be confirmed |
+| `DELETE /api/settings/discovery-model` | forget the choice |
 
 ### Can the model search?
 
