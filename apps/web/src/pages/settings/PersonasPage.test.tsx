@@ -183,4 +183,51 @@ describe('Personas page', () => {
       expect(screen.queryByRole('article', { name: 'Curious host' })).not.toBeInTheDocument();
     });
   });
+
+  it('fills the persona form from a sentence (Design with AI) and saves nothing until Save', async () => {
+    const { user, fetchMock } = await openPage({
+      ...server(),
+      'POST /api/assist/persona': () => ({
+        body: { name: 'Night owl', persona: 'The night owl. Quiet and warm.' },
+      }),
+    });
+
+    await user.click(screen.getByRole('button', { name: /Add persona/ }));
+    await user.click(await screen.findByRole('button', { name: /Design with AI/ }));
+    const designer = (await screen.findByText('Design a persona with AI')).closest(
+      '.modal',
+    ) as HTMLElement;
+    await user.type(within(designer).getByLabelText('What do you want?'), 'a quiet night owl');
+    await user.click(within(designer).getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Design a persona with AI')).not.toBeInTheDocument();
+    });
+    expect(screen.getByLabelText('Name')).toHaveValue('Night owl');
+    expect(screen.getByLabelText('Persona')).toHaveValue('The night owl. Quiet and warm.');
+    expect(requestBody(callsTo(fetchMock, 'POST /api/assist/persona')[0])).toEqual({
+      brief: 'a quiet night owl',
+    });
+    expect(callsTo(fetchMock, 'POST /api/personas')).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('article', { name: 'Night owl' })).toBeInTheDocument();
+  });
+
+  it('shows why a persona could not be designed', async () => {
+    const { user } = await openPage({
+      ...server(),
+      'POST /api/assist/persona': () => ({
+        status: 502,
+        body: { detail: 'OpenRouter did not return a usable persona draft.' },
+      }),
+    });
+
+    await user.click(screen.getByRole('button', { name: /Add persona/ }));
+    await user.click(await screen.findByRole('button', { name: /Design with AI/ }));
+    await user.type(screen.getByLabelText('What do you want?'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(await screen.findByText(/did not return a usable persona draft/)).toBeInTheDocument();
+  });
 });

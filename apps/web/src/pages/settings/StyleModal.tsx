@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { Alert, Button, Form, Modal } from 'react-bootstrap';
+import { FiZap } from 'react-icons/fi';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { Style, StyleBody } from '../../lib/styles';
+import { DesignWithAiModal } from '../assist/DesignWithAiModal';
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Enter a name').max(100, 'At most 100 characters'),
@@ -33,9 +35,11 @@ export function StyleModal({
   onSave,
 }: StyleModalProps): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
+  const [designing, setDesigning] = useState(false);
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -63,6 +67,17 @@ export function StyleModal({
         </Modal.Header>
         <Modal.Body>
           {error && <Alert variant="danger">{error}</Alert>}
+          <Button
+            variant="outline-primary"
+            size="sm"
+            className="mb-3"
+            onClick={() => {
+              setDesigning(true);
+            }}
+          >
+            <FiZap aria-hidden="true" className="me-1" />
+            Design with AI
+          </Button>
           <Form.Group className="mb-3" controlId="style-name">
             <Form.Label>Name</Form.Label>
             <Form.Control
@@ -115,6 +130,20 @@ export function StyleModal({
           </Button>
         </Modal.Footer>
       </Form>
+      {designing && (
+        <DesignWithAiModal
+          kind="style"
+          onClose={() => {
+            setDesigning(false);
+          }}
+          onDraft={(draft) => {
+            const options = { shouldDirty: true, shouldValidate: true };
+            setValue('name', draft.name, options);
+            setValue('description', draft.description, options);
+            setValue('instructions', draft.instructions, options);
+          }}
+        />
+      )}
     </Modal>
   );
 }

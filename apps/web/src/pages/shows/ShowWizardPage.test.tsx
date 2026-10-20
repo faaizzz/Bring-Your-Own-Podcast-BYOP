@@ -14,7 +14,7 @@ import {
   savedSpeakers,
   ttsProviders,
 } from '../../test/fixtures';
-import { callsTo, requestUrl, type Handler } from '../../test/mockApi';
+import { callsTo, requestBody, requestUrl, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
 import { choose, chosen } from '../../test/select';
 
@@ -873,6 +873,36 @@ describe('create-show wizard', () => {
       await userEvent.click(screen.getAllByLabelText('From library')[0] as HTMLElement);
 
       expect(screen.getAllByText('No personas in the library yet').length).toBeGreaterThan(0);
+    });
+
+    it('designs a persona with AI: fills the persona text, keeps the name, and stays on the step', async () => {
+      const { user, fetchMock } = await onSpeakers({
+        'POST /api/assist/persona': () => ({
+          body: { name: 'Night owl', persona: 'The night owl. Quiet and warm.' },
+        }),
+      });
+
+      await user.click(screen.getAllByRole('button', { name: 'Design with AI' })[0] as HTMLElement);
+      const designer = (await screen.findByText('Design a persona with AI')).closest(
+        '.modal',
+      ) as HTMLElement;
+      await user.type(within(designer).getByLabelText('What do you want?'), 'a quiet night owl');
+      await user.click(within(designer).getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(screen.getAllByLabelText('Persona')[0]).toHaveValue(
+          'The night owl. Quiet and warm.',
+        );
+      });
+      expect(screen.getAllByLabelText('Name')[0]).toHaveValue('Alex'); // the speaker keeps their name
+      expect(requestBody(callsTo(fetchMock, 'POST /api/assist/persona')[0])).toEqual({
+        brief: 'a quiet night owl',
+        language: 'en', // the show's language
+      });
+      // Generating is not "Next": the wizard is still on the speakers step, and nothing was saved.
+      expect(screen.getAllByTestId('speaker')).toHaveLength(2);
+      expect(callsTo(fetchMock, 'POST /api/shows')).toHaveLength(0);
+      expect(callsTo(fetchMock, 'POST /api/personas')).toHaveLength(0);
     });
 
     it('saves a speaker’s persona and voice to the library', async () => {

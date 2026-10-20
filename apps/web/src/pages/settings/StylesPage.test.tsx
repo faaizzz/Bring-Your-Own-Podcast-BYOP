@@ -2,9 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { Style } from '../../lib/styles';
-import { builtInStyles } from '../../test/fixtures';
+import { builtInStyles, formHandlers } from '../../test/fixtures';
 import { callsTo, requestBody, type Handler } from '../../test/mockApi';
 import { renderApp } from '../../test/render';
+import { choose } from '../../test/select';
 
 function custom(patch: Partial<Style> = {}): Style {
   return {
@@ -22,6 +23,7 @@ function custom(patch: Partial<Style> = {}): Style {
 function server(initial: Style[] = [], refuseDelete?: string) {
   let mine = initial;
   const handlers: Record<string, Handler> = {
+    ...formHandlers(),
     'GET /api/styles': () => ({ body: [...builtInStyles, ...mine] }),
     'POST /api/styles': ({ body }) => {
       const input = body as { name: string; description: string; instructions: string };
@@ -191,5 +193,128 @@ describe('Styles page', () => {
 
     expect(await screen.findByText(/used by 2 show\(s\): 'Alpha', 'Beta'/)).toBeInTheDocument();
     expect(screen.getByRole('article', { name: 'Late-night chat' })).toBeInTheDocument();
+  });
+
+  describe('Design with AI', () => {
+    const draft = {
+      name: 'Late-night radio',
+      description: 'Slow, warm and a little sleepy.',
+      instructions: 'Open like a late-night radio host.',
+    };
+
+    async function openDesigner(extra: Record<string, Handler> = {}) {
+      const opened = await openPage({ ...server(), ...extra });
+      await opened.user.click(screen.getByRole('button', { name: /Add style/ }));
+      await opened.user.click(await screen.findByRole('button', { name: /Design with AI/ }));
+      return opened;
+    }
+
+    it('fills the style form from a sentence and saves nothing until Save', async () => {
+      const { user, fetchMock } = await openDesigner({
+        'POST /api/assist/style': () => ({ body: draft }),
+      });
+      const dialog = (await screen.findByText('Design a style with AI')).closest(
+        '.modal',
+      ) as HTMLElement;
+
+      await user.type(
+        within(dialog).getByLabelText('What do you want?'),
+        'A calm show for people who cannot sleep',
+      );
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Design a style with AI')).not.toBeInTheDocument();
+      });
+      expect(screen.getByLabelText('Name')).toHaveValue('Late-night radio');
+      expect(screen.getByLabelText('Description (optional)')).toHaveValue(draft.description);
+      expect(screen.getByLabelText('Instructions')).toHaveValue(draft.instructions);
+      // The request carried the sentence and no model (the instance default designs it).
+      expect(requestBody(callsTo(fetchMock, 'POST /api/assist/style')[0])).toEqual({
+        brief: 'A calm show for people who cannot sleep',
+      });
+      expect(callsTo(fetchMock, 'POST /api/styles')).toHaveLength(0);
+
+      // The draft can be edited before it is saved.
+      await user.type(screen.getByLabelText('Name'), ' 2');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(
+        await screen.findByRole('article', { name: 'Late-night radio 2' }),
+      ).toBeInTheDocument();
+      expect(requestBody(callsTo(fetchMock, 'POST /api/styles')[0])).toMatchObject({
+        name: 'Late-night radio 2',
+        instructions: draft.instructions,
+      });
+    });
+
+    it('can ask a chosen model', async () => {
+      const { user, fetchMock } = await openDesigner({
+        'POST /api/assist/style': () => ({ body: draft }),
+        'GET /api/models': () => ({
+          body: [{ id: 'vendor/model', name: 'vendor/model', prompt_price_per_million: '1' }],
+        }),
+      });
+      const dialog = (await screen.findByText('Design a style with AI')).closest(
+        '.modal',
+      ) as HTMLElement;
+
+      await user.type(within(dialog).getByLabelText('What do you want?'), 'x');
+      await choose(user, within(dialog).getByLabelText('Model (optional)'), 'OpenRouter');
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+      expect(
+        await within(dialog).findByText('Choose a model, or use the instance default'),
+      ).toBeInTheDocument();
+      await choose(user, within(dialog).getByLabelText('Model'), /vendor\/model/);
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(requestBody(callsTo(fetchMock, 'POST /api/assist/style')[0])).toEqual({
+          brief: 'x',
+          provider: 'openrouter',
+          model: 'vendor/model',
+        });
+      });
+    });
+
+    it('needs a sentence, and keeps the dialog open with the reason when the model fails', async () => {
+      const { user, fetchMock } = await openDesigner({
+        'POST /api/assist/style': () => ({
+          status: 502,
+          body: { detail: 'OpenRouter is rate limiting requests. The provider said: slow down' },
+        }),
+      });
+      const dialog = (await screen.findByText('Design a style with AI')).closest(
+        '.modal',
+      ) as HTMLElement;
+
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+      expect(await within(dialog).findByText('Say what you want first')).toBeInTheDocument();
+      expect(callsTo(fetchMock, 'POST /api/assist/style')).toHaveLength(0);
+
+      await user.type(within(dialog).getByLabelText('What do you want?'), 'x');
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+
+      expect(await within(dialog).findByText(/rate limiting requests/)).toBeInTheDocument();
+      expect(screen.getByText('Design a style with AI')).toBeInTheDocument();
+      // The style form behind it is untouched.
+      expect(screen.getByLabelText('Name')).toHaveValue('');
+    });
+
+    it('tells how to set a model up when none is', async () => {
+      const { user } = await openDesigner({
+        'POST /api/assist/style': () => ({
+          status: 422,
+          body: { detail: 'No language model is set up for this. Choose a model in the dialog.' },
+        }),
+      });
+      const dialog = (await screen.findByText('Design a style with AI')).closest(
+        '.modal',
+      ) as HTMLElement;
+
+      await user.type(within(dialog).getByLabelText('What do you want?'), 'x');
+      await user.click(within(dialog).getByRole('button', { name: 'Generate' }));
+
+      expect(await within(dialog).findByText(/No language model is set up/)).toBeInTheDocument();
+    });
   });
 });

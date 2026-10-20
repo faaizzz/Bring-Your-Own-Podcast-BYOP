@@ -7,7 +7,7 @@ stage it belongs to, so you can see what each episode cost.
 
 One row per call (a structured reply that needed a repair counts as one call with the tokens of
 both requests): `kind` (`llm` or `tts`), `provider`, `model`, `stage` (`discovery`, `ingest`,
-`rank`, `script`, `tts`, ...), `input_tokens` / `output_tokens` (language models) or `characters`
+`rank`, `script`, `tts`, `assist` for "Design with AI", ...), `input_tokens` / `output_tokens` (language models) or `characters`
 (voices), `latency_ms`, `cost_usd` and where the cost came from (`cost_source`).
 
 Providers only *report* the call (`byop.providers.common.record_usage`); they never touch the

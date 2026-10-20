@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { Alert, Button, Form, Modal } from 'react-bootstrap';
+import { FiZap } from 'react-icons/fi';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { DesignWithAiModal } from '../assist/DesignWithAiModal';
 import type { Persona, PersonaBody } from '../../lib/personas';
 import { useProviderOptions } from '../shows/form/useProviderOptions';
 import { voiceParamsFor } from '../shows/form/schema';
@@ -36,6 +38,7 @@ export function PersonaModal({
   onSave,
 }: PersonaModalProps): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
+  const [designing, setDesigning] = useState(false);
   const [provider, setProvider] = useState(persona?.tts_provider ?? '');
   const [voice, setVoice] = useState(persona?.voice_id ?? '');
   const [params, setParams] = useState<Record<string, string | number | boolean>>(
@@ -48,6 +51,7 @@ export function PersonaModal({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -89,6 +93,17 @@ export function PersonaModal({
         </Modal.Header>
         <Modal.Body>
           {error && <Alert variant="danger">{error}</Alert>}
+          <Button
+            variant="outline-primary"
+            size="sm"
+            className="mb-3"
+            onClick={() => {
+              setDesigning(true);
+            }}
+          >
+            <FiZap aria-hidden="true" className="me-1" />
+            Design with AI
+          </Button>
           <Form.Group className="mb-3" controlId="persona-name">
             <Form.Label>Name</Form.Label>
             <Form.Control
@@ -178,6 +193,19 @@ export function PersonaModal({
           </Button>
         </Modal.Footer>
       </Form>
+      {designing && (
+        <DesignWithAiModal
+          kind="persona"
+          onClose={() => {
+            setDesigning(false);
+          }}
+          onDraft={(draft) => {
+            const options = { shouldDirty: true, shouldValidate: true };
+            setValue('name', draft.name, options);
+            setValue('persona', draft.persona, options);
+          }}
+        />
+      )}
     </Modal>
   );
 }

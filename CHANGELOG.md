@@ -18,6 +18,10 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
   speech model from a searchable list before the voice (`GET /api/voices/models`); OpenRouter's
   speech models and their voices come from its `output_modalities=speech` listing, and a model is
   required for OpenRouter speakers.
+- **Design with AI:** a button in the style editor, the persona editor and a speaker's persona
+  field drafts a style or persona from a sentence (`POST /api/assist/style`, `/persona`); the draft
+  fills the form and nothing is saved until you save. The cost is recorded under the stage
+  `assist` and traced in Langfuse.
 - **Persona library:** keep reusable speaker personas (with an optional default voice) under
   Settings › Personas; apply one to a speaker with *From library* or keep a speaker's with *Save to
   library*. Five starter personas for every user (`personas` table, migration `0015`;

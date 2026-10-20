@@ -88,7 +88,7 @@ class LangfuseTracer:
     prices: PriceBook
     trace_id: str
     run_id: uuid.UUID
-    show_id: uuid.UUID
+    show_id: uuid.UUID | None
     show_title: str
     show_slug: str
     style: str
@@ -116,11 +116,12 @@ class LangfuseTracer:
             {
                 "id": self.trace_id,
                 "name": self.show_title,
-                "sessionId": str(self.show_id),
-                "tags": [self.trigger, self.style],
+                # Work outside a show (designing a style) is not part of a show's session.
+                "sessionId": str(self.show_id) if self.show_id else None,
+                "tags": [tag for tag in (self.trigger, self.style) if tag],
                 "metadata": {
                     "run_id": str(self.run_id),
-                    "show_id": str(self.show_id),
+                    "show_id": str(self.show_id) if self.show_id else None,
                     "slug": self.show_slug,
                 },
                 "timestamp": self.created_at,
@@ -275,6 +276,35 @@ async def open_tracer(
         trigger=run.trigger.value,
         created_at=run.created_at.isoformat(),
         http=http,
+    )
+
+
+async def open_assist_tracer(
+    session: AsyncSession, resolver: CredentialResolver, user_id: uuid.UUID, kind: str
+) -> Tracer:
+    """A tracer for one call that belongs to no run, such as designing a style: its own trace.
+    Langfuse when it is set up, else one that does nothing."""
+    try:
+        config = await resolver.get(user_id, CredentialProvider.LANGFUSE)
+    except (ProviderNotConfigured, CredentialDecryptionError):
+        return NoopTracer()
+    except Exception:
+        log.warning("langfuse_config_failed", exc_info=True)
+        return NoopTracer()
+    if config.api_key is None or not config.extra.get("public_key") or not config.base_url:
+        return NoopTracer()
+    return LangfuseTracer(
+        config=config,
+        stage="assist",
+        prices=await price_book(session, user_id),
+        trace_id=uuid.uuid4().hex,
+        run_id=uuid.uuid4(),  # only names the span the call hangs under
+        show_id=None,
+        show_title=f"Assist: {kind}",
+        show_slug="",
+        style="",
+        trigger="assist",
+        created_at=_now(),
     )
 
 

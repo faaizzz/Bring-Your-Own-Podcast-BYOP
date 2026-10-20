@@ -26,6 +26,8 @@ export function SavePersonaModal({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    // Rendered inside the show form (React events cross portals): keep the submit to itself.
+    event.stopPropagation();
     const trimmed = value.trim();
     if (trimmed === '') {
       setError('Enter a name');

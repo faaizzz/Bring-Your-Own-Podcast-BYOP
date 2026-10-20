@@ -107,14 +107,19 @@ async def flush_current(session: AsyncSession, user_id: uuid.UUID) -> None:
 
 
 @asynccontextmanager
-async def capture_usage(session: AsyncSession, user_id: uuid.UUID) -> AsyncIterator[UsageCollector]:
+async def capture_usage(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    listener: Callable[[UsageRecord], None] | None = None,
+) -> AsyncIterator[UsageCollector]:
     """Collect the usage of provider calls made inside the block and write it afterwards, also
-    when the block fails. Inside another capture (a run) it joins that one."""
+    when the block fails. Inside another capture (a run) it joins that one. `listener` also sees
+    every record, as a tracer does."""
     outer = current_usage_sink()
     if isinstance(outer, UsageCollector):
         yield outer
         return
-    collector = UsageCollector()
+    collector = UsageCollector(listener=listener)
     token = set_usage_sink(collector)
     try:
         yield collector

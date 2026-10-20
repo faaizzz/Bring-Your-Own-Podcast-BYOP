@@ -18,6 +18,7 @@ import {
   type ParamField,
   type ShowFormValues,
 } from './schema';
+import { DesignWithAiModal } from '../../assist/DesignWithAiModal';
 import { SavePersonaModal } from './SavePersonaModal';
 import { VoiceModelPicker } from './VoiceModelPicker';
 import { VoicePicker, VoicePreview } from './VoicePicker';
@@ -75,6 +76,8 @@ function SpeakerEditor({
   const labelOf = useProviderLabel();
   const notify = useToast();
   const [savingPersona, setSavingPersona] = useState(false);
+  const [designing, setDesigning] = useState(false);
+  const language = useWatch({ control, name: 'language' });
   const modelField = voiceParamsFor(provider).find((f) => f.model);
   const model = modelField ? (speaker.params[modelField.name] ?? '') : '';
   const fallbackOptions = useProviderOptions('tts', fallbackProvider);
@@ -185,7 +188,16 @@ function SpeakerEditor({
               />
             </Form.Group>
           </div>
-          <div className="col-md-4 mb-2">
+          <div className="col-md-4 mb-2 d-flex flex-wrap gap-2">
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={() => {
+                setDesigning(true);
+              }}
+            >
+              Design with AI
+            </Button>
             <Button
               variant="outline-secondary"
               size="sm"
@@ -205,6 +217,22 @@ function SpeakerEditor({
           rows={2}
           hint="Role and speaking style, e.g. the curious lead host."
         />
+        {designing && (
+          <DesignWithAiModal
+            kind="persona"
+            language={language}
+            onClose={() => {
+              setDesigning(false);
+            }}
+            onDraft={(draft) => {
+              // The speaker keeps their own name; only the persona text is filled in.
+              setValue(`${prefix}.persona`, draft.persona, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+            }}
+          />
+        )}
         {savingPersona && (
           <SavePersonaModal
             name={speaker.name}

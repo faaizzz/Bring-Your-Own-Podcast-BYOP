@@ -113,6 +113,31 @@ speakers never point back at the library, so editing or deleting a persona chang
 | `POST /api/personas` | create `{name, persona, tts_provider?, voice_id?, voice_params?}`; names are unique per user (`409`); a voice needs a provider and a voice together and valid settings (`422`) |
 | `PATCH /api/personas/{id}`, `DELETE /api/personas/{id}` | change (omitted fields keep their value; `tts_provider` and `voice_id` set to null remove the voice) / delete |
 
+## Design with AI
+
+The style editor, the persona editor and the persona field of a speaker have a **Design with AI**
+button. Say in a sentence or two what you want (“a calm show for people who cannot sleep”, “a dry
+sceptic who likes numbers”), optionally pick the model that designs it (else the instance default,
+`DEFAULT_LLM_*`), and the draft fills the form fields for you to edit. **Nothing is saved until you
+save the form**; on a speaker only the persona text is filled in, never the speaker's name.
+
+| Method and path | Body and answer |
+| --- | --- |
+| `POST /api/assist/style` | `{brief, language?, provider?, model?}` → `{name, description, instructions}` |
+| `POST /api/assist/persona` | the same request → `{name, persona}` |
+
+`provider` and `model` go together. The call uses the same model clients as everything else, so the
+provider's [wait between requests](providers.md#rate-limits-wait-between-requests) applies. The
+prompts are `assist_style.md` (it shows one built-in style's instructions as the form to follow) and
+`assist_persona.md`; the answer is checked against the same limits as a saved style or persona, a
+reply that does not fit is repaired once, and after that the error says so (`502`). A style whose
+instructions could not be saved later is refused. With no model chosen or set up the answer is a
+`422` that says how to fix it; a provider's rejection (key, credit, rate limit, unknown model)
+comes back in plain words with the provider's own reason, as for [source discovery](sources.md).
+The call is recorded as usage with `stage=assist` and no show or run, so its cost is on the
+[Costs](costs.md) page, and it is traced in [Langfuse](langfuse.md) as its own trace when that is set
+up.
+
 ## Voice preview
 
 `POST /api/voices/preview` with `{"provider", "voice_id", "params"?, "text"?}` returns a

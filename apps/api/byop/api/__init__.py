@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from byop.api import (
+    assist,
     auth,
     connections,
     costs,
@@ -36,6 +37,7 @@ api_router.include_router(covers.public_router)
 # guard is the default; tests/api/test_guard.py fails if a route escapes it.
 protected = APIRouter(dependencies=[Depends(current_user)])
 protected.include_router(auth.protected_router)
+protected.include_router(assist.router)
 protected.include_router(integrations.router)
 protected.include_router(connections.router)
 protected.include_router(providers.router)

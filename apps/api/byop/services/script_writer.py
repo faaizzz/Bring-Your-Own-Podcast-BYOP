@@ -40,6 +40,9 @@ _templates = Environment(
     keep_trailing_newline=True,
 )
 
+# The prompt templates, for the other services that write prompts (assist).
+TEMPLATES = _templates
+
 SYSTEM_PROMPT = (
     "You are an experienced podcast script writer. You write lively, accurate, natural-sounding "
     "dialogue and you always answer with the JSON object that was asked for."
