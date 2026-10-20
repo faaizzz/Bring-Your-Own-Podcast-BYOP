@@ -123,6 +123,31 @@ test('a clean install makes a published episode that is in the feed', async ({ p
   await page.getByRole('link', { name: 'E2E Briefing' }).first().click();
   await expect(page.getByLabel('Feed address')).toBeVisible();
 
+  // 6b. Styles and personas: duplicate a built-in style, and design a persona with the mock model.
+  await page.goto('/settings/styles');
+  const conversational = page.getByRole('article', { name: 'Conversational' });
+  await conversational.getByRole('button', { name: 'View instructions' }).click();
+  await expect(conversational.getByTestId('instructions')).toContainText('friends talking');
+  await conversational.getByRole('button', { name: 'Duplicate' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('article', { name: 'Conversational (copy)' })).toBeVisible();
+
+  await page.goto('/settings/personas');
+  await expect(page.getByRole('article', { name: 'Curious host' })).toBeVisible(); // a starter
+  await page.getByRole('button', { name: /Add persona/ }).click();
+  await page.getByRole('button', { name: /Design with AI/ }).click();
+  const designer = page.getByRole('dialog').filter({ hasText: 'Design a persona with AI' });
+  await designer.getByLabel('What do you want?').fill('A dry sceptic who likes numbers');
+  await designer.getByLabel('Model (optional)').click();
+  await page.getByRole('option', { name: 'Mock model' }).click();
+  await designer.getByLabel('Model', { exact: true }).click();
+  await page.getByRole('option', { name: /mock-model/ }).click();
+  await designer.getByRole('button', { name: 'Generate' }).click();
+  await expect(designer).toBeHidden();
+  await expect(page.getByLabel('Persona', { exact: true })).toHaveValue(/deadpan/);
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('article', { name: 'Dry numbers sceptic' })).toBeVisible();
+
   // 7. The security headers are on, and nothing the app needed was blocked by them.
   const home = await request.get('/');
   const headers = home.headers();

@@ -79,8 +79,22 @@ connection under Settings › Integrations ([providers](providers.md#connections
 | Variable | Default | |
 | --- | --- | --- |
 | `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL` | empty | Model given to a new show that does not choose its own (used only as a pair; `openrouter`, `openai` or `conn:<id>` of a connection) |
-| `DEFAULT_SHOW_STYLE` | `news_briefing` | `news_briefing`, `conversational`, `deep_dive` or `interview` |
+| `DEFAULT_SHOW_STYLE` | `news_briefing` | `news_briefing`, `conversational`, `deep_dive` or `interview`. Your own styles ([shows](shows.md#styles)) are chosen per show in the app, not here |
 | `DISCOVERY_LLM_PROVIDER`, `DISCOVERY_LLM_MODEL` | empty | The model that searches the web for sources; empty uses the show's model, then the default above. A model chosen under Settings › Integrations › Discovery model comes first. On OpenRouter `:online` is added to the model id. The Discover dialog shows which model is used and whether it can search ([sources](sources.md#can-the-model-search)). `openrouter` with `perplexity/sonar` is a good choice |
+
+## Settings you change in the app instead
+
+Some choices are not environment variables but live in the database, per user, and take precedence
+over `.env` where both exist:
+
+| Where | What | Docs |
+| --- | --- | --- |
+| Settings › Integrations | provider keys (override the `*_API_KEY` values), a **wait between requests** per provider | [providers](providers.md#rate-limits-wait-between-requests) |
+| Settings › Integrations › connections | OpenAI-compatible servers, with headers and their own wait | [providers](providers.md#connections-any-openai-compatible-server) |
+| Settings › Integrations › Discovery model | the model that searches for sources (before `DISCOVERY_LLM_*`) | [sources](sources.md#the-discovery-model-settings) |
+| Settings › Styles | your own show styles; the built-in ones can be read and copied | [shows](shows.md#styles) |
+| Settings › Personas | reusable speaker personas, with a default voice | [shows](shows.md#persona-library) |
+| Settings › Pricing | prices for models and voices the price table lacks | [costs](costs.md) |
 
 ## Public routes
 

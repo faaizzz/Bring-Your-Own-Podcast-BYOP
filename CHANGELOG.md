@@ -9,6 +9,11 @@ heading with the date (see [docs/releasing.md](docs/releasing.md)).
 
 ### Added
 
+- **Documentation:** the README and the docs describe styles, personas, Design with AI, the voice
+  model, the wait between requests and the discovery model; `make screenshots` takes pictures of
+  them (Styles, Personas, the Design with AI dialog, the Voice model dropdown, the Discovery model
+  card).
+
 - **Discovery model in Settings:** choose the model that searches the web for sources under
   Settings › Integrations › Discovery model. It takes precedence over `DISCOVERY_LLM_*`, the show's
   model and the instance default, is checked for web search when saved, and is used by the Discover

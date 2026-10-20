@@ -21,6 +21,12 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${SHOTS ?? '.'}/${name}.png` });
 }
 
+/** Open a searchable dropdown by its label and click the option. */
+async function pickOption(page: Page, label: string, option: string): Promise<void> {
+  await page.getByLabel(label, { exact: true }).first().click();
+  await page.getByRole('option', { name: option }).click();
+}
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
   await page.getByPlaceholder('Email address').fill(EMAIL);
@@ -70,6 +76,8 @@ test('regenerates the documentation images', async ({ page }) => {
     api_key: 'sk-demo-studio-key-0000',
     llm: false,
     tts: true,
+    // A server with a low rate limit: BYOP waits between requests (shown on its card).
+    min_interval_s: 2,
   });
   const price = await api.put('/api/pricing/overrides', {
     data: { kind: 'llm', name: 'mock-model', input_per_million: '0.15', output_per_million: '0.6' },
@@ -169,6 +177,93 @@ test('regenerates the documentation images', async ({ page }) => {
   await expect(dialog.getByTestId('discovery-model')).toContainText('No web search');
   await page.waitForTimeout(600); // the dialog's fade-in
   await shot(page, 'discovery');
+
+  // v0.2: the voice model, chosen before the voice (this server lists the speech models it has).
+  await page.goto('/shows/new');
+  await page.getByLabel('Title').fill('Rust Weekly');
+  await page.getByLabel('Topic').fill('News about the Rust language and its ecosystem.');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await pickOption(page, 'Voice provider', 'Studio voices');
+  await page.getByLabel('Voice model', { exact: true }).first().click();
+  await expect(page.getByRole('option', { name: 'xtts-v2' })).toBeVisible();
+  await page.evaluate(() => window.scrollBy(0, 120));
+  await shot(page, 'voice-model');
+  await page.keyboard.press('Escape');
+
+  // v0.2: the discovery model, chosen in Settings (a gateway that can search the web).
+  const gateway = await post<{ id: string }>(api, '/api/connections', {
+    name: 'Search gateway',
+    base_url: MODEL_URL,
+    llm: true,
+    web_search: true,
+  });
+  const saved = await api.put('/api/settings/discovery-model', {
+    data: { provider: `conn:${gateway.id}`, model: 'sonar' },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  await page.goto('/settings/integrations#discovery');
+  const card = page.locator('#discovery');
+  await expect(card.getByTestId('discovery-effective')).toContainText('chosen here');
+  await expect(card.getByTestId('discovery-effective')).toContainText('Web search');
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await card.screenshot({ path: `${SHOTS ?? '.'}/discovery-model.png` });
+
+  // v0.2: styles. Two of your own next to the built-in ones, whose instructions can be read.
+  await post(api, '/api/styles', {
+    name: 'Late-night radio',
+    description: 'Slow, warm and unhurried: company for people who cannot sleep.',
+    instructions:
+      'The episode feels like a late-night radio programme with nothing to rush for. Open slowly, with a quiet remark about the hour, and tell each story in plain, unhurried words. Close gently, with one thought to fall asleep to.',
+  });
+  await post(api, '/api/styles', {
+    name: 'Conversational, but brisk',
+    description: 'A copy of Conversational, shortened to move faster.',
+    instructions:
+      'The episode feels like friends talking about what happened this week, but it keeps moving: open with one line of banter, give each story two or three exchanges, and close with a single takeaway.',
+  });
+  await page.goto('/settings/styles');
+  await page
+    .getByRole('article', { name: 'Conversational', exact: true })
+    .getByRole('button', { name: 'View instructions' })
+    .click();
+  await expect(page.getByTestId('instructions')).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Late-night radio' })).toBeVisible();
+  await page.mouse.move(0, 0);
+  await shot(page, 'styles');
+
+  // v0.2: personas. The starters, one of your own with a default voice, and "Design with AI".
+  await post(api, '/api/personas', {
+    name: 'Night owl',
+    persona:
+      'The night owl. Quiet and warm; speaks slowly, loves a small detail and never raises their voice.',
+    tts_provider: 'kokoro',
+    voice_id: 'af_heart',
+  });
+  await page.goto('/settings/personas');
+  await expect(page.getByRole('article', { name: 'Night owl' })).toBeVisible();
+  await expect(page.getByTestId('persona-voice').first()).toBeVisible();
+  await page.mouse.move(0, 0);
+  await shot(page, 'personas');
+
+  await page.getByRole('button', { name: /Add persona/ }).click();
+  await page.getByRole('button', { name: /Design with AI/ }).click();
+  const designer = page.getByRole('dialog').filter({ hasText: 'Design a persona with AI' });
+  await designer
+    .getByLabel('What do you want?')
+    .fill('A dry, well-read sceptic who likes numbers and hates hype.');
+  await designer.getByLabel('Model (optional)').click();
+  await page.getByRole('option', { name: 'Local Ollama' }).click();
+  await designer.getByLabel('Model', { exact: true }).click();
+  await page.getByRole('option', { name: /mock-model/ }).click();
+  await page.waitForTimeout(600); // the dialog's fade-in
+  // Just the dialog: behind it is the persona editor it was opened from.
+  await designer.locator('.modal-content').screenshot({
+    path: `${SHOTS ?? '.'}/design-with-ai.png`,
+  });
+  await designer.getByRole('button', { name: 'Generate' }).click();
+  await expect(designer).toBeHidden();
+  await expect(page.getByLabel('Persona', { exact: true })).toHaveValue(/deadpan/);
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
   // One picture in the dark theme.
   await page.goto('/');

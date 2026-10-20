@@ -11,13 +11,16 @@ control of your data.
 
 ## What you get
 
-- **Shows** with a topic, a style (news briefing, conversational, deep dive, interview), a schedule
-  and a cast of named speakers, each with their own voice.
+- **Shows** with a topic, a [style](docs/shows.md#styles) (four built-in ones you can read and
+  copy, or your own), a schedule and a cast of named speakers, each with their own voice and a
+  [persona](docs/shows.md#persona-library) from your library.
 - **Sources:** RSS feeds, web pages and web-search queries, found for you from just a topic, or
   hand-picked. Stories are collected, de-duplicated and ranked; the best ones are covered.
 - **Scripts** written by the model of your choice as a natural dialogue between your speakers.
-- **Voices** from OpenAI, ElevenLabs, OpenRouter or local Kokoro, mixed with ffmpeg: gaps,
-  intro/outro, a music bed, -16 LUFS loudness.
+- **Voices** from OpenAI, ElevenLabs, OpenRouter or local Kokoro, with the speech model chosen
+  from a list, mixed with ffmpeg: gaps, intro/outro, a music bed, -16 LUFS loudness.
+- **Design with AI:** describe a style or a persona in a sentence and edit the draft before you
+  save it ([how](docs/shows.md#design-with-ai)).
 - **Review before you publish:** edit the script, re-voice it, approve or reject. Or auto-publish.
 - **A public RSS feed** that works in Apple Podcasts, Spotify, Pocket Casts and every other app.
 - **On a schedule:** daily, weekly or monthly, in your time zone, with pause and catch-up.
@@ -32,12 +35,30 @@ control of your data.
 | --- | --- |
 | ![Costs: tiles, spend per month and per provider](docs/images/costs.png) | ![A show: topic, model, schedule, speakers and its podcast feed](docs/images/show.png) |
 
+### Styles, personas and AI help
+
+**Settings › Styles** shows exactly what each built-in style tells the model; duplicate one to make
+it yours, or write a new one. **Settings › Personas** keeps speakers you reuse (with a default
+voice), and every user starts with five. In a show's Speakers step, *From library* fills a speaker
+in, and a *Voice model* list sits between the provider and the voice. *Design with AI* drafts a
+style or persona from a sentence; nothing is saved until you save it.
+
+| Styles: built-in and your own | Personas: five starters and your own |
+| --- | --- |
+| ![Settings, Styles: two custom styles and the four built-in ones, with the instructions of Conversational shown](docs/images/styles.png) | ![Settings, Personas: starter personas and a custom one with a default voice](docs/images/personas.png) |
+
+| Design with AI | Choosing the voice model |
+| --- | --- |
+| ![The Design with AI dialog: a sentence about the persona and the model that drafts it](docs/images/design-with-ai.png) | ![The Voice model dropdown of a speaker, listing the speech models of the voice server](docs/images/voice-model.png) |
+
 ### Your own servers, and searchable dropdowns
 
 Add any number of OpenAI-compatible endpoints (Ollama, vLLM, a gateway, a second Kokoro) as
 [connections](docs/providers.md#connections-any-openai-compatible-server), each for models, voices
-or both, with the headers it needs. Every dropdown can be searched by typing, in light and dark
-mode, and source discovery tells you up front when a model cannot search the web.
+or both, with the headers it needs and, for servers with low rate limits, a wait between requests.
+Every dropdown can be searched by typing, in light and dark mode, and source discovery tells you up
+front when a model cannot search the web; the model that does the searching is chosen in Settings
+(*Discovery model*).
 
 | Connections | Editing one: key and custom headers stay masked |
 | --- | --- |
@@ -46,6 +67,8 @@ mode, and source discovery tells you up front when a model cannot search the web
 | A searchable dropdown | Discovery checks the model first |
 | --- | --- |
 | ![The voice dropdown of the create-show wizard, open, with language and gender per voice](docs/images/dropdown.png) | ![The Discover sources dialog warning that the show's model cannot search the web](docs/images/discovery.png) |
+
+![Settings, Integrations: the Discovery model card, choosing the model that searches the web for sources](docs/images/discovery-model.png)
 
 ![The dashboard in dark mode](docs/images/dashboard-dark.png)
 

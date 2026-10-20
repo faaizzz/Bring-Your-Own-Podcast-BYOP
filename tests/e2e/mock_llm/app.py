@@ -1,8 +1,8 @@
 """Stand-ins for everything BYOP talks to over the network in the end-to-end test, so the full
 product can run in CI without paid keys or a GPU:
 
-* an OpenAI-compatible chat API (`/v1/chat/completions`, `/v1/models`) that answers the ranking and
-  script prompts with canned but valid JSON built from what the prompt says;
+* an OpenAI-compatible chat API (`/v1/chat/completions`, `/v1/models`) that answers the ranking,
+  script and "Design with AI" prompts with canned but valid JSON built from what the prompt says;
 * a Kokoro-style speech API (`/v1/audio/speech`, `/v1/audio/voices`) that returns a short tone
   whose length follows the text;
 * a small news feed (`/feed.xml`) with a few articles, and a fuller one (`/demo-feed.xml`) that the
@@ -173,8 +173,12 @@ async def chat(request: Request) -> dict[str, object]:
     body = await request.json()
     messages = body.get("messages", [])
     prompt = "\n".join(str(m.get("content", "")) for m in messages if m.get("role") == "user")
-    if "Choose the" in prompt and "best stories" in prompt:
-        answer: dict[str, object] = _ranking(prompt)
+    if "design a show style" in prompt:
+        answer: dict[str, object] = STYLE_DRAFT
+    elif "create a speaker persona" in prompt:
+        answer = PERSONA_DRAFT
+    elif "Choose the" in prompt and "best stories" in prompt:
+        answer = _ranking(prompt)
     elif "script writer" in json.dumps(messages) or "## The speakers" in prompt:
         answer = _script(prompt)
     else:
@@ -196,9 +200,38 @@ async def chat(request: Request) -> dict[str, object]:
     }
 
 
+# What "Design with AI" is answered with (see docs/shows.md): a style and a persona, as the real
+# thing would draft them for the sentence the documentation screenshots type in.
+STYLE_DRAFT: dict[str, object] = {
+    "name": "Late-night radio",
+    "description": "Slow, warm and unhurried: company for people who cannot sleep.",
+    "instructions": (
+        "The episode feels like a late-night radio programme with nothing to rush for. Open slowly, "
+        "with a quiet remark about the hour and a light hint of what is coming. Tell each story in "
+        "plain, unhurried words; the other speaker answers with a soft reflection or a small piece "
+        "of context. Avoid exclamations, urgency and hype. Link stories with a calm pause rather "
+        "than an announcement, and close gently, with one thought to fall asleep to."
+    ),
+}
+PERSONA_DRAFT: dict[str, object] = {
+    "name": "Dry numbers sceptic",
+    "persona": (
+        "The resident sceptic. Dry, understated and well read; asks what the numbers actually say "
+        "and answers grand claims with a deadpan remark rather than a rant. Contributes the sober "
+        "counterweight to the other speakers' enthusiasm."
+    ),
+}
+
+SPEECH_MODELS = ["kokoro", "kokoro-v1.0", "xtts-v2", "piper-en-us"]
+
+
 @app.get("/v1/models")
-async def models() -> dict[str, object]:
-    return {"object": "list", "data": [{"id": "mock-model", "object": "model", "owned_by": "mock"}]}
+async def models(request: Request) -> dict[str, object]:
+    # A server reached under a voice-ish name (the documentation screenshots use `kokoro-gateway`)
+    # lists speech models; any other lists the one language model.
+    host = request.headers.get("host", "")
+    ids = SPEECH_MODELS if host.startswith("kokoro") else ["mock-model"]
+    return {"object": "list", "data": [{"id": i, "object": "model", "owned_by": "mock"} for i in ids]}
 
 
 # --- speech --------------------------------------------------------------------------------------
