@@ -9,6 +9,11 @@ control of your data.
 
 ![The dashboard: spend, episodes waiting for review, the latest episodes with a player and what is coming up](docs/images/dashboard.png)
 
+**See it in action** (49 seconds): create a show from a topic, run it, review the script and
+publish to your own feed.
+
+https://github.com/user-attachments/assets/9588637a-7267-4471-95b9-a75f81cb8ecf
+
 ## What you get
 
 - **Shows** with a topic, a [style](docs/shows.md#styles) (four built-in ones you can read and
@@ -27,14 +32,6 @@ control of your data.
 - **Know the cost:** every call is recorded; per-run, per-show and monthly spend with charts, an
   estimate before you generate, optional [Langfuse](docs/langfuse.md) tracing.
 
-| Run, live | Episode review |
-| --- | --- |
-| ![A run: stage timeline, live log and the cost of every call](docs/images/run.png) | ![Reviewing a draft episode: player, editable script with a speaker per line](docs/images/episode-review.png) |
-
-| Costs | A show and its feed |
-| --- | --- |
-| ![Costs: tiles, spend per month and per provider](docs/images/costs.png) | ![A show: topic, model, schedule, speakers and its podcast feed](docs/images/show.png) |
-
 ### Styles, personas and AI help
 
 **Settings › Styles** shows exactly what each built-in style tells the model; duplicate one to make
@@ -42,14 +39,6 @@ it yours, or write a new one. **Settings › Personas** keeps speakers you reuse
 voice), and every user starts with five. In a show's Speakers step, *From library* fills a speaker
 in, and a *Voice model* list sits between the provider and the voice. *Design with AI* drafts a
 style or persona from a sentence; nothing is saved until you save it.
-
-| Styles: built-in and your own | Personas: five starters and your own |
-| --- | --- |
-| ![Settings, Styles: two custom styles and the four built-in ones, with the instructions of Conversational shown](docs/images/styles.png) | ![Settings, Personas: starter personas and a custom one with a default voice](docs/images/personas.png) |
-
-| Design with AI | Choosing the voice model |
-| --- | --- |
-| ![The Design with AI dialog: a sentence about the persona and the model that drafts it](docs/images/design-with-ai.png) | ![The Voice model dropdown of a speaker, listing the speech models of the voice server](docs/images/voice-model.png) |
 
 ### Your own servers, and searchable dropdowns
 
@@ -60,19 +49,7 @@ Every dropdown can be searched by typing, in light and dark mode, and source dis
 front when a model cannot search the web; the model that does the searching is chosen in Settings
 (*Discovery model*).
 
-| Connections | Editing one: key and custom headers stay masked |
-| --- | --- |
-| ![Settings, Integrations: two OpenAI-compatible connections, one for models and one for voices, with their test results](docs/images/connections.png) | ![The edit dialog of a connection: name, base URL, API key, custom headers and what it is used for](docs/images/connection-edit.png) |
-
-| A searchable dropdown | Discovery checks the model first |
-| --- | --- |
-| ![The voice dropdown of the create-show wizard, open, with language and gender per voice](docs/images/dropdown.png) | ![The Discover sources dialog warning that the show's model cannot search the web](docs/images/discovery.png) |
-
-![Settings, Integrations: the Discovery model card, choosing the model that searches the web for sources](docs/images/discovery-model.png)
-
-![The dashboard in dark mode](docs/images/dashboard-dark.png)
-
-*(The pictures come from `make screenshots` and show the end-to-end test's mock model and voices.)*
+*(The screenshot comes from `make screenshots` and shows the end-to-end test's mock model and voices.)*
 
 ## Quickstart
 
